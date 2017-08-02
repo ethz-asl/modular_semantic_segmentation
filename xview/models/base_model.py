@@ -30,12 +30,14 @@ class BaseModel(object):
 
         self.output_dir = output_dir
 
-        # build the network
+        # Now we build the network.
         self.graph = tf.Graph()
         with self.graph.as_default():
             self._build_graph()
 
-            # check required attributes
+            # For any child class, we require the attributes specified in the docstring
+            # and defined in self.required_attributes. After self._build_graph(), we can
+            # check for their existance.
             missing_attrs = ["'%s'" % attr for attr in self.required_attributes
                              if not hasattr(self, attr)]
             if missing_attrs:
@@ -43,6 +45,7 @@ class BaseModel(object):
                                      ("s" * (len(missing_attrs) > 1),
                                       ", ".join(missing_attrs)))
 
+            # Loss will always be the cross-entropy.
             self.loss = tf.div(tf.reduce_sum(cross_entropy(self.Y,
                                                            self.class_probabilities)),
                                tf.reduce_sum(self.Y))
@@ -67,17 +70,17 @@ class BaseModel(object):
     def _load_and_enqueue(self, sess, data, coord, keep_prob):
         with self.graph.as_default():
             if not coord:
-                # there is no coordinator, enqueue simply one batch
+                # As there is no coordinator, enqueue simply one batch.
                 if isinstance(data, DataWrapper):
-                    # get batch from dataset
+                    # This gives one batch from the dataset.
                     batch = data.next()
                 else:
-                    # data is already a raw batch
+                    # We otherwise assume that data is already a batch-dict.
                     batch = data
                 batch['keep_prob'] = keep_prob
                 self._enqueue_batch(batch, sess)
             else:
-                # run as a loop
+                # If coord is set, we enqueue new data until it tells us to stop.
                 while not coord.should_stop():
                     batch = data.next()
                     self._enqueue_batch(batch, sess)
@@ -93,20 +96,19 @@ class BaseModel(object):
                 self.loss, global_step=self.global_step)
 
             with self.sess as sess:
-                # add summaries
+                # Merge all summary creation into one op. Add summary for loss.
                 tf.summary.scalar('loss', self.loss)
                 merged_summary = tf.summary.merge_all()
                 train_writer = tf.summary.FileWriter(self.output_dir, self.graph)
 
-                # create a thread to load data
+                # Create a thread to load data.
                 coord = tf.train.Coordinator()
                 t = threading.Thread(target=self._load_and_enqueue,
                                      args=(data, sess, coord,
                                            1 - self.config['dropout_probability']))
                 t.start()
 
-                # initialize variables
-
+                # Now we can make the graph read-only.
                 self.graph.finalize()
 
                 for i in range(iterations):

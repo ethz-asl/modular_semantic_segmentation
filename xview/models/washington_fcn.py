@@ -5,10 +5,10 @@ from .base_model import BaseModel
 class FCN(BaseModel):
 
     def _build_graph(self):
-        # set up the washington code
+        # We simply import the network from the washington library.
         self.net = vgg16_convs('RGBD', self.config['num_classes'], 64, [1])
 
-        # the input
+        # Now add input bindings.
         self.X_rgb = self.net.data  # rgb channel
         self.X_d = self.net.data_p  # depth channel
         self.Y = self.net.get_output("gt_label_2d")  # ground truth label
@@ -21,6 +21,7 @@ class FCN(BaseModel):
         self.class_probabilities = self.net.get_output('prob')
 
     def _enqueue_batch(self, batch, sess):
+        """Enqueue one batch into the input queue."""
         with self.graph.as_default():
 
             print(batch['labels'].shape)
