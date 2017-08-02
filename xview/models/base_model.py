@@ -1,11 +1,29 @@
 import tensorflow as tf
 import threading
-import time
+from abc import ABCMeta, abstractproperty, abstractmethod
 
-from utils import define_scope, cross_entropy
+from xview.models.utils import cross_entropy
 
 
 class BaseModel(object):
+    """Structure for network models. Handels basic training and IO operations."""
+
+    __metaclass__ = ABCMeta
+
+    @abstractproperty
+    def class_probabilities(self):
+        """The network output class probabiolity map."""
+        pass
+
+    @abstractproperty
+    def Y(self):
+        """The label the network output should be compared to."""
+        pass
+
+    @abstractproperty
+    def close_queue_op(self):
+        """TF op that closes the input queue."""
+        pass
 
     def __init__(self, config, output_dir):
 
@@ -23,16 +41,22 @@ class BaseModel(object):
         with self.graph.as_default():
             self._build_graph()
 
-            self.loss = tf.div(tf.reduce_sum(cross_entropy(self.Y, self.class_probabilities)),
+            self.loss = tf.div(tf.reduce_sum(cross_entropy(self.Y,
+                                                           self.class_probabilities)),
                                tf.reduce_sum(self.Y))
 
             self.global_step = tf.Variable(0, trainable=False)
 
+    @abstractmethod
+    def _build_graph(self):
+        """Set up the whole network here."""
+        raise NotImplementedError
+
+    @abstractmethod
     def _load_and_enqueue(self, data, sess, coord, keep_prob):
         """Load the given data into the occrect inputs."""
-
         raise NotImplementedError
-    
+
     def fit(self, data, iterations, output=True):
         """Train the model for given number of iterations."""
 
@@ -40,7 +64,8 @@ class BaseModel(object):
         momentum = self.config.get('momentum', 0)
 
         with self.graph.as_default():
-            trainer = tf.train.AdamOptimizer(learning_rate).minimize(self.loss)  # global_step=self.global_step
+            trainer = tf.train.AdamOptimizer(learning_rate).minimize(
+                self.loss, global_step=self.global_step)
 
             with tf.Session() as sess:
                 # add summaries
@@ -51,7 +76,8 @@ class BaseModel(object):
                 # create a thread to load data
                 coord = tf.train.Coordinator()
                 t = threading.Thread(target=self._load_and_enqueue,
-                                     args=(data, sess, coord, 1 - self.config['dropout_probability']))
+                                     args=(data, sess, coord,
+                                           1 - self.config['dropout_probability']))
                 t.start()
 
                 # initialize variables
@@ -68,3 +94,11 @@ class BaseModel(object):
                 sess.run(self.close_queue_op)
                 coord.request_stop()
                 coord.join([t])
+
+    def predict(self, data):
+        with self.graph.as_default():
+            with tf.Session() as sess:
+                self._load_and_enqueue(data, sess, False, 1.0)
+                prediction = sess.run(self.class_probabilities)
+                sess.run(self.close_queue_op)
+                return prediction

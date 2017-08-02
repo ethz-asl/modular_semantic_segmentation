@@ -1,10 +1,8 @@
-import tensorflow as tf
-
 from lib_darnn.networks.vgg16_convs import vgg16_convs
-from base_model import BaseModel
+from .base_model import BaseModel
+
 
 class FCN(BaseModel):
-
 
     def _build_graph(self):
         # set up the washington code
@@ -21,12 +19,11 @@ class FCN(BaseModel):
         # the output
         self.class_probabilities = self.net.get_output('prob')
 
-
     def _load_and_enqueue(self, data, sess, coord, keep_prob):
-        
+
         print('hi')
         print('data loading started')
-        
+
         with self.graph.as_default():
 
             while not coord.should_stop():
@@ -41,7 +38,3 @@ class FCN(BaseModel):
                              self.net.gt_label_2d: blobs['labels'],
                              self.keep_prob: keep_prob}
                 sess.run(self.net.enqueue_op, feed_dict=feed_dict)
-
-    def predict(self, rgb=None, depth=None):
-        with self.graph.as_default():
-            self.sess.run(self.class_probabilities)

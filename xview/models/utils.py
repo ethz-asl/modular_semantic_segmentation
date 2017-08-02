@@ -1,6 +1,7 @@
 import tensorflow as tf
 import functools
 
+
 def doublewrap(function):
     """
     A decorator decorator, allowing to use the decorator to be used without
@@ -13,6 +14,7 @@ def doublewrap(function):
         else:
             return lambda wrapee: function(wrapee, *args, **kwargs)
     return decorator
+
 
 @doublewrap
 def define_scope(function, scope=None, *args, **kwargs):
@@ -27,6 +29,7 @@ def define_scope(function, scope=None, *args, **kwargs):
     """
     attribute = '_cache_' + function.__name__
     name = scope or function.__name__
+
     @property
     @functools.wraps(function)
     def decorator(self):
@@ -38,4 +41,7 @@ def define_scope(function, scope=None, *args, **kwargs):
 
 
 def cross_entropy(predictions, labels):
-    return -tf.reduce_sum(labels * predictions, len(labels.shape) - 1, name='cross_entropy')
+    """Tensorflow calculation of cross-entropy between prediction probabilities and
+    labels."""
+    return -tf.reduce_sum(labels * predictions, len(labels.shape) - 1,
+                          name='cross_entropy')
