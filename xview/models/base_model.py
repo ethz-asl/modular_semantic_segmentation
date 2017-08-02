@@ -8,7 +8,7 @@ from xview.models.utils import cross_entropy
 class BaseModel(object):
     """Structure for network models. Handels basic training and IO operations."""
 
-    __metaclass__ = ABCMeta
+    # __metaclass__ = ABCMeta
 
     @abstractproperty
     def class_probabilities(self):
@@ -47,6 +47,9 @@ class BaseModel(object):
 
             self.global_step = tf.Variable(0, trainable=False)
 
+            self.sess = tf.Session()
+            self.sess.run(tf.global_variables_initializer())
+
     @abstractmethod
     def _build_graph(self):
         """Set up the whole network here."""
@@ -67,7 +70,7 @@ class BaseModel(object):
             trainer = tf.train.AdamOptimizer(learning_rate).minimize(
                 self.loss, global_step=self.global_step)
 
-            with tf.Session() as sess:
+            with self.sess as sess:
                 # add summaries
                 tf.summary.scalar('loss', self.loss)
                 merged_summary = tf.summary.merge_all()
@@ -81,7 +84,7 @@ class BaseModel(object):
                 t.start()
 
                 # initialize variables
-                sess.run(tf.global_variables_initializer())
+
                 self.graph.finalize()
 
                 for i in range(iterations):
@@ -97,8 +100,26 @@ class BaseModel(object):
 
     def predict(self, data):
         with self.graph.as_default():
-            with tf.Session() as sess:
-                self._load_and_enqueue(data, sess, False, 1.0)
-                prediction = sess.run(self.class_probabilities)
-                sess.run(self.close_queue_op)
-                return prediction
+            self._load_and_enqueue(data, self.sess, False, 1.0)
+            prediction = self.sess.run(self.class_probabilities)
+            self.sess.run(self.close_queue_op)
+            return prediction
+
+    def load(self, path):
+        """Load pretrained weights."""
+        saver = tf.train.Saver()
+        saver.restore(self.sess, path)
+
+    def close(self):
+        """Close session of this model."""
+        self.sess.close()
+
+    def __exit__(self, *args):
+        """Contexthandler for convenience.
+
+        Use like this
+            With Model() as net:
+                net.fit()
+                net.predict()
+        """
+        self.close()
