@@ -1,29 +1,23 @@
 import tensorflow as tf
 import threading
-from abc import ABCMeta, abstractproperty, abstractmethod
+from abc import ABCMeta, abstractmethod
 
 from xview.models.utils import cross_entropy
+from xview.data.wrapper import DataWrapper
 
 
 class BaseModel(object):
-    """Structure for network models. Handels basic training and IO operations."""
+    """Structure for network models. Handels basic training and IO operations.
 
-    # __metaclass__ = ABCMeta
+    requires the following attributes:
+        class_probabilities: tensor output of shape [batch_size, , , num_classes]
+        Y: tensor output of the ground-truth label to compare class_probabilities against
+        prediction: usually argmax of class_probabilites
+        close_queue_op: tensorflow op to close the input queue
+    """
 
-    @abstractproperty
-    def class_probabilities(self):
-        """The network output class probabiolity map."""
-        pass
-
-    @abstractproperty
-    def Y(self):
-        """The label the network output should be compared to."""
-        pass
-
-    @abstractproperty
-    def close_queue_op(self):
-        """TF op that closes the input queue."""
-        pass
+    __metaclass__ = ABCMeta
+    required_attributes = ["class_probabilities", "Y", "prediction", "close_queue_op"]
 
     def __init__(self, config, output_dir):
 
@@ -41,11 +35,21 @@ class BaseModel(object):
         with self.graph.as_default():
             self._build_graph()
 
+            # check required attributes
+            missing_attrs = ["'%s'" % attr for attr in self.required_attributes
+                             if not hasattr(self, attr)]
+            if missing_attrs:
+                raise AttributeError("Model class requires attribute%s %s" %
+                                     ("s" * (len(missing_attrs) > 1),
+                                      ", ".join(missing_attrs)))
+
             self.loss = tf.div(tf.reduce_sum(cross_entropy(self.Y,
                                                            self.class_probabilities)),
                                tf.reduce_sum(self.Y))
 
             self.global_step = tf.Variable(0, trainable=False)
+
+            self.saver = tf.train.Saver()
 
             self.sess = tf.Session()
             self.sess.run(tf.global_variables_initializer())
@@ -56,9 +60,27 @@ class BaseModel(object):
         raise NotImplementedError
 
     @abstractmethod
-    def _load_and_enqueue(self, data, sess, coord, keep_prob):
+    def _enqueue_batch(self, batch, sess):
         """Load the given data into the occrect inputs."""
         raise NotImplementedError
+
+    def _load_and_enqueue(self, sess, data, coord, keep_prob):
+        with self.graph.as_default():
+            if not coord:
+                # there is no coordinator, enqueue simply one batch
+                if isinstance(data, DataWrapper):
+                    # get batch from dataset
+                    batch = data.next()
+                else:
+                    # data is already a raw batch
+                    batch = data
+                batch['keep_prob'] = keep_prob
+                self._enqueue_batch(batch, sess)
+            else:
+                # run as a loop
+                while not coord.should_stop():
+                    batch = data.next()
+                    self._enqueue_batch(batch, sess)
 
     def fit(self, data, iterations, output=True):
         """Train the model for given number of iterations."""
@@ -100,15 +122,14 @@ class BaseModel(object):
 
     def predict(self, data):
         with self.graph.as_default():
-            self._load_and_enqueue(data, self.sess, False, 1.0)
-            prediction = self.sess.run(self.class_probabilities)
+            self._load_and_enqueue(self.sess, data, False, 1.0)
+            prediction = self.sess.run(self.prediction)
             self.sess.run(self.close_queue_op)
             return prediction
 
     def load(self, path):
         """Load pretrained weights."""
-        saver = tf.train.Saver()
-        saver.restore(self.sess, path)
+        self.saver.restore(self.sess, path)
 
     def close(self):
         """Close session of this model."""
@@ -123,3 +144,6 @@ class BaseModel(object):
                 net.predict()
         """
         self.close()
+
+    def __enter__(self):
+        return self

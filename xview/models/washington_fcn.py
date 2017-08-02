@@ -12,6 +12,7 @@ class FCN(BaseModel):
         self.X_rgb = self.net.data  # rgb channel
         self.X_d = self.net.data_p  # depth channel
         self.Y = self.net.get_output("gt_label_2d")  # ground truth label
+        self.prediction = self.net.get_output("label_2d")
         self.keep_prob = self.net.keep_prob
         self.enqueue_op = self.net.enqueue_op
         self.close_queue_op = self.net.close_queue_op
@@ -19,22 +20,14 @@ class FCN(BaseModel):
         # the output
         self.class_probabilities = self.net.get_output('prob')
 
-    def _load_and_enqueue(self, data, sess, coord, keep_prob):
-
-        print('hi')
-        print('data loading started')
-
+    def _enqueue_batch(self, batch, sess):
         with self.graph.as_default():
 
-            while not coord.should_stop():
-                blobs = data.next()
+            print(batch['labels'].shape)
+            print(batch["rgb"].shape)
+            print(batch['depth'].shape)
 
-                print("now I got a blob")
-                print(blobs['labels'].shape)
-                print(blobs["rgb"].shape)
-                print(blobs['depth'].shape)
-
-                feed_dict = {self.X_rgb: blobs['rgb'], self.X_d: blobs['depth'],
-                             self.net.gt_label_2d: blobs['labels'],
-                             self.keep_prob: keep_prob}
-                sess.run(self.net.enqueue_op, feed_dict=feed_dict)
+            feed_dict = {self.X_rgb: batch['rgb'], self.X_d: batch['depth'],
+                         self.net.gt_label_2d: batch['labels'],
+                         self.keep_prob: batch['keep_prob']}
+            sess.run(self.net.enqueue_op, feed_dict=feed_dict)
