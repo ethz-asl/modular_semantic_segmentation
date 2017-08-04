@@ -3,7 +3,7 @@ import threading
 from abc import ABCMeta, abstractmethod
 
 from xview.models.utils import cross_entropy
-from xview.data.wrapper import DataWrapper
+from xview.datasets.wrapper import DataWrapper
 
 
 class BaseModel(object):
@@ -19,7 +19,7 @@ class BaseModel(object):
     __metaclass__ = ABCMeta
     required_attributes = ["class_probabilities", "Y", "prediction", "close_queue_op"]
 
-    def __init__(self, config, output_dir):
+    def __init__(self, output_dir=False, **config):
 
         standard_config = {
             'image_width': 640,
@@ -85,7 +85,7 @@ class BaseModel(object):
                     batch = data.next()
                     self._enqueue_batch(batch, sess)
 
-    def fit(self, data, iterations, output=True):
+    def _fit(self, data, iterations, output=True):
         """Train the model for given number of iterations."""
 
         learning_rate = self.config.get('learning_rate', 0.1)
@@ -99,7 +99,8 @@ class BaseModel(object):
                 # Merge all summary creation into one op. Add summary for loss.
                 tf.summary.scalar('loss', self.loss)
                 merged_summary = tf.summary.merge_all()
-                train_writer = tf.summary.FileWriter(self.output_dir, self.graph)
+                if self.output_dir:
+                    train_writer = tf.summary.FileWriter(self.output_dir, self.graph)
 
                 # Create a thread to load data.
                 coord = tf.train.Coordinator()
