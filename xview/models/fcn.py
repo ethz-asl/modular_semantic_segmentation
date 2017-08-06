@@ -7,6 +7,9 @@ from .custom_layers import deconv2d, log_softmax, softmax
 
 class FCN(BaseModel):
 
+    def __init__(self, output_dir=None, **config):
+        BaseModel.__init__(self, 'FCN', output_dir=output_dir, **config)
+
     def _build_graph(self):
         # the input
         # rgb channel

@@ -4,6 +4,9 @@ from .base_model import BaseModel
 
 class FCN(BaseModel):
 
+    def __init__(self, output_dir=None, **config):
+        BaseModel.__init__(self, 'Washington_FCN', output_dir=output_dir, **config)
+
     def _build_graph(self):
         # We simply import the network from the washington library.
         self.net = vgg16_convs('RGBD', self.config['num_classes'], 64, [1])
@@ -30,5 +33,5 @@ class FCN(BaseModel):
 
             feed_dict = {self.X_rgb: batch['rgb'], self.X_d: batch['depth'],
                          self.net.gt_label_2d: batch['labels'],
-                         self.keep_prob: batch['keep_prob']}
+                         self.keep_prob: 1 - batch['dropout_rate']}
             sess.run(self.net.enqueue_op, feed_dict=feed_dict)
