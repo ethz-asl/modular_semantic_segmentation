@@ -133,7 +133,7 @@ class BaseModel(object):
             self.sess.run(self.close_queue_op)
             return prediction
 
-    def load(self, path):
+    def load_weights(self, path):
         """Load pretrained weights."""
         self.saver.restore(self.sess, path)
 
@@ -167,7 +167,6 @@ class BaseModel(object):
             for variable in tf.global_variables():
                 value = self.sess.run(variable)
                 save_dict[variable.op.name] = value
-                print(value.shape)
 
             output_path = save_dir
             if output_path is None:
@@ -180,7 +179,7 @@ class BaseModel(object):
             print('INFO: Weights saved to {}'.format(output_path))
             return output_path
 
-    def load_weights(self, file):
+    def import_weights(self, file):
         with self.graph.as_default():
             weights = np.load(file)
             for variable in tf.global_variables():

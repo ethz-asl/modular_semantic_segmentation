@@ -6,8 +6,8 @@ def test_can_build_model():
     net.close()
     assert True
 
-def test_can_export_and_load_weights():
+def test_can_export_and_import_weights():
     with FCN(num_classes=1, num_units=64) as net:
         path = net.export_weights(save_dir='/tmp/')
-        net.load_weights(path)
+        net.import_weights(path)
         assert False
