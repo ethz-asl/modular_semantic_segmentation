@@ -31,7 +31,7 @@ def deconv2d(inputs,
              padding='valid',
              data_format='channels_last',
              activation=None,
-             use_bias=True,
+             use_bias=False,
              bias_initializer=tf.zeros_initializer(),
              kernel_regularizer=None,
              bias_regularizer=None,
@@ -39,6 +39,7 @@ def deconv2d(inputs,
              trainable=True,
              name=None,
              reuse=None):
+    """Deconvolutional Layer. Upsamples a given image with a bilinear interpolation."""
     # Compute the shape of the kernel on basis of the input tensor.
     if isinstance(kernel_size, int):
         kernel_size = [kernel_size, kernel_size]
