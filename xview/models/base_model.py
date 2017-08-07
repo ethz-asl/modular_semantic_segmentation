@@ -61,8 +61,7 @@ class BaseModel(object):
                                                            self.class_probabilities)),
                                tf.reduce_sum(self.Y))
 
-            self.global_step = tf.get_variable('global_step', [1], trainable=False,
-                                               initializer=tf.constant_initializer(0))
+            self.global_step = tf.Variable(0, trainable=False)
 
             self.saver = tf.train.Saver()
 
@@ -228,17 +227,21 @@ class BaseModel(object):
             print('INFO: Weights saved to {}'.format(output_path))
             return output_path
 
-    def import_weights(self, filepath):
+    def import_weights(self, filepath, translation=None):
         """Import weights given by a numpy file. Variables are assigned to arrays which's
         key matches the variable name.
 
         Args:
             filepath: Full path to the file containing the weights.
+            translation: Dictionary mapping variables in the network on differently named
+                keys in the file.
         """
         with self.graph.as_default():
             weights = np.load(filepath)
             for variable in tf.global_variables():
                 name = variable.op.name
+                if name not in weights and translation is not None:
+                    name = translation[name]
                 if name not in weights:
                     print('WARNING: {} not found in saved weights'.format(name))
                 else:
