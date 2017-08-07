@@ -6,6 +6,7 @@ from .custom_layers import deconv2d, log_softmax, softmax
 
 
 class FCN(BaseModel):
+    """FCN implementation following DA-RNN architecture and using tf.layers."""
 
     def __init__(self, output_dir=None, **config):
         BaseModel.__init__(self, 'FCN', output_dir=output_dir, **config)
@@ -30,10 +31,10 @@ class FCN(BaseModel):
         depth = tf.reshape(depth, tf.shape(self.X_d))
         self.close_queue_op = q.close(cancel_pending_enqueues=True)
 
-        def vgg16(input, prefix):
+        def vgg16(inputs, prefix):
             # common parameters
             params = {'activation': tf.nn.relu}
-            net = conv2d(input, 64, [3, 3], name='{}_conv1_1'.format(prefix), **params)
+            net = conv2d(inputs, 64, [3, 3], name='{}_conv1_1'.format(prefix), **params)
             net = conv2d(net, 64, [3, 3], name='{}_conv1_2'.format(prefix), **params)
             net = max_pooling2d(net, [2, 2], [2, 2], name='{}_pool1'.format(prefix))
             net = conv2d(net, 128, [3, 3], name='{}_conv2_1'.format(prefix), **params)

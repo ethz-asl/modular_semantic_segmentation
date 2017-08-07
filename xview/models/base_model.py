@@ -22,6 +22,15 @@ class BaseModel(object):
     required_attributes = ["class_probabilities", "Y", "prediction", "close_queue_op"]
 
     def __init__(self, name, output_dir=None, **config):
+        """Set configuration and build the model.
+
+        Requires method _build_model to build the tensorflow graph.
+
+        Args:
+            name: The name of this model. Is used to name output files.
+            output_dir: If specified, diagnostics will be saved here.
+            config as key-value arguments: model-specific configurations
+        """
         self.name = name
         self.output_dir = output_dir
 
@@ -67,10 +76,18 @@ class BaseModel(object):
 
     @abstractmethod
     def _enqueue_batch(self, batch, sess):
-        """Load the given data into the occrect inputs."""
+        """Load the given data into the correct inputs."""
         raise NotImplementedError
 
     def _load_and_enqueue(self, sess, data, coord, dropout_rate):
+        """Internal handler method for the input data queue. May run in a seperate thread.
+
+        Args:
+            sess: The current session, needs to be the same as in the main thread.
+            data: The data to load. See method predict for specifications.
+            coord: The training coordinator (from tensorflow)
+            dropout_rate: The dropout-rate that should be enqueued with the data
+        """
         with self.graph.as_default():
             if not coord:
                 # As there is no coordinator, enqueue simply one batch.
@@ -88,8 +105,14 @@ class BaseModel(object):
                     batch = data.next()
                     self._enqueue_batch(batch, sess)
 
-    def _fit(self, data, iterations, output=True):
-        """Train the model for given number of iterations."""
+    def fit(self, data, iterations, output=True):
+        """Train the model for given number of iterations.
+
+        Args:
+            data: A handler inheriting from DataWrapper
+            iterations: The number of training iterations
+            output: Boolean specifiying whether to output the loss progress
+        """
 
         learning_rate = self.config.get('learning_rate', 0.1)
         momentum = self.config.get('momentum', 0)
@@ -127,15 +150,29 @@ class BaseModel(object):
                 coord.join([t])
 
     def predict(self, data):
+        """Perform semantic segmentation on the input data.
+
+        Args:
+            data: Either a handler to a dataclass inheriting from DataWrapper or a
+                dictionary {'rgb': <array of shape [num_images, width, height]>
+                            'depth': <array of shape [num_images, width, height]>}
+        Returns:
+            per-pixel classification of the input image in form
+                <array of shape [num_images, width, height]>
+        """
         with self.graph.as_default():
             self._load_and_enqueue(self.sess, data, False, 1.0)
             prediction = self.sess.run(self.prediction)
             self.sess.run(self.close_queue_op)
             return prediction
 
-    def load_weights(self, path):
-        """Load pretrained weights."""
-        self.saver.restore(self.sess, path)
+    def load_weights(self, filepath):
+        """Load model weights stored in a tensorflow checkpoint.
+
+        Args:
+            filepath: Full path to the ckeckpoint
+        """
+        self.saver.restore(self.sess, filepath)
 
     def close(self):
         """Close session of this model."""
@@ -152,9 +189,19 @@ class BaseModel(object):
         self.close()
 
     def __enter__(self):
+        """Contexthandler for convenience. See __exit__ for more information."""
         return self
 
     def export_weights(self, save_dir=None):
+        """Export weights as numpy arrays and write them into a file. The key to each
+        array is the name of the variable.
+
+        Args:
+            save_dir: Directory the weights are saved to. Only need to specify if
+                output_dir was not set at model instantiation. Overwrites output_dir.
+        Returns:
+            Full path to the output file.
+        """
         # Check if there is a location to write to.
         if save_dir is None and self.output_dir is None:
             print('ERROR: No path specified to save weights to.')
@@ -179,9 +226,15 @@ class BaseModel(object):
             print('INFO: Weights saved to {}'.format(output_path))
             return output_path
 
-    def import_weights(self, file):
+    def import_weights(self, filepath):
+        """Import weights given by a numpy file. Variables are assigned to arrays which's
+        key matches the variable name.
+
+        Args:
+            filepath: Full path to the file containing the weights.
+        """
         with self.graph.as_default():
-            weights = np.load(file)
+            weights = np.load(filepath)
             for variable in tf.global_variables():
                 name = variable.op.name
                 if name not in weights:
