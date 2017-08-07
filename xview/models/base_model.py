@@ -89,7 +89,7 @@ class BaseModel(object):
             dropout_rate: The dropout-rate that should be enqueued with the data
         """
         with self.graph.as_default():
-            if not coord:
+            if coord is None:
                 # As there is no coordinator, enqueue simply one batch.
                 if isinstance(data, DataWrapper):
                     # This gives one batch from the dataset.
@@ -103,6 +103,7 @@ class BaseModel(object):
                 # If coord is set, we enqueue new data until it tells us to stop.
                 while not coord.should_stop():
                     batch = data.next()
+                    batch['dropout_rate'] = dropout_rate
                     self._enqueue_batch(batch, sess)
 
     def fit(self, data, iterations, output=True):
@@ -121,33 +122,34 @@ class BaseModel(object):
             trainer = tf.train.AdamOptimizer(learning_rate).minimize(
                 self.loss, global_step=self.global_step)
 
-            with self.sess as sess:
-                # Merge all summary creation into one op. Add summary for loss.
-                tf.summary.scalar('loss', self.loss)
-                merged_summary = tf.summary.merge_all()
-                if self.output_dir is not None:
-                    train_writer = tf.summary.FileWriter(self.output_dir, self.graph)
+            # Merge all summary creation into one op. Add summary for loss.
+            tf.summary.scalar('loss', self.loss)
+            merged_summary = tf.summary.merge_all()
+            if self.output_dir is not None:
+                train_writer = tf.summary.FileWriter(self.output_dir, self.graph)
 
-                # Create a thread to load data.
-                coord = tf.train.Coordinator()
-                t = threading.Thread(target=self._load_and_enqueue,
-                                     args=(data, sess, coord,
-                                           self.config['dropout_rate']))
-                t.start()
+            self.sess.run(tf.global_variables_initializer())
 
-                # Now we can make the graph read-only.
-                self.graph.finalize()
+            # Create a thread to load data.
+            coord = tf.train.Coordinator()
+            t = threading.Thread(target=self._load_and_enqueue,
+                                 args=(self.sess, data, coord,
+                                       self.config['dropout_rate']))
+            t.start()
 
-                for i in range(iterations):
-                    summary, loss, _ = sess.run([merged_summary, self.loss, trainer])
-                    train_writer.add_summary(summary, i)
+            # Now we can make the graph read-only.
+            self.graph.finalize()
 
-                    if output:
-                        print("{:4d}: loss {:.4f}".format(i, loss))
+            for i in range(iterations):
+                summary, loss, _ = self.sess.run([merged_summary, self.loss, trainer])
+                train_writer.add_summary(summary, i)
 
-                sess.run(self.close_queue_op)
-                coord.request_stop()
-                coord.join([t])
+                if output:
+                    print("{:4d}: loss {:.4f}".format(i, loss))
+
+            self.sess.run(self.close_queue_op)
+            coord.request_stop()
+            coord.join([t])
 
     def predict(self, data):
         """Perform semantic segmentation on the input data.
@@ -161,7 +163,7 @@ class BaseModel(object):
                 <array of shape [num_images, width, height]>
         """
         with self.graph.as_default():
-            self._load_and_enqueue(self.sess, data, False, 1.0)
+            self._load_and_enqueue(self.sess, data, None, 0.0)
             prediction = self.sess.run(self.prediction)
             self.sess.run(self.close_queue_op)
             return prediction
