@@ -19,7 +19,7 @@ class BaseModel(object):
     """
 
     __metaclass__ = ABCMeta
-    required_attributes = ["class_probabilities", "Y", "prediction", "close_queue_op"]
+    required_attributes = ["Y", "prediction", "close_queue_op"]
 
     def __init__(self, name, output_dir=None, **config):
         """Set configuration and build the model.
@@ -44,6 +44,8 @@ class BaseModel(object):
         # Now we build the network.
         self.graph = tf.Graph()
         with self.graph.as_default():
+            self.global_step = tf.Variable(0, trainable=False)
+
             self._build_graph()
 
             # For any child class, we require the attributes specified in the docstring
@@ -56,12 +58,15 @@ class BaseModel(object):
                                      ("s" * (len(missing_attrs) > 1),
                                       ", ".join(missing_attrs)))
 
-            # Loss will always be the cross-entropy.
-            self.loss = tf.div(tf.reduce_sum(cross_entropy(self.Y,
-                                                           self.class_probabilities)),
-                               tf.reduce_sum(self.Y))
-
-            self.global_step = tf.Variable(0, trainable=False)
+            # In case there is not custom training, loss is cross-entropy with class
+            # probabilities
+            if not hasattr(self, '_train_step'):
+                if not hasattr(self, 'class_probabilities'):
+                    raise AttributeError("Model class requires either attribute "
+                                         "class_probabilities or method _train_step")
+                self.loss = tf.div(tf.reduce_sum(cross_entropy(self.Y,
+                                                               self.class_probabilities)),
+                                   tf.reduce_sum(self.Y))
 
             self.saver = tf.train.Saver()
 
@@ -140,7 +145,10 @@ class BaseModel(object):
             self.graph.finalize()
 
             for i in range(iterations):
-                summary, loss, _ = self.sess.run([merged_summary, self.loss, trainer])
+                if hasattr(self, '_train_step'):
+                    summary, loss = self._train_step(merged_summary)
+                else:
+                    summary, loss, _ = self.sess.run([merged_summary, self.loss, trainer])
                 train_writer.add_summary(summary, i)
 
                 if output:
@@ -166,6 +174,23 @@ class BaseModel(object):
             prediction = self.sess.run(self.prediction)
             self.sess.run(self.close_queue_op)
             return prediction
+
+    def run(self, data, dropout_rate=0.0):
+        """Perform one training run with the given data.
+
+        Args:
+            data: Either a handler to a dataclass inheriting from DataWrapper or a
+                dictionary {'rgb': <array of shape [num_images, width, height]>
+                            'depth': <array of shape [num_images, width, height]>}
+        Returns:
+            per-pixel class probabilities of the input image in form
+                <array of shape [num_images, width, height, #classes]>
+        """
+        with self.graph.as_default():
+            self._load_and_enqueue(self.sess, data, None, dropout_rate)
+            distribution = self.sess.run(self.class_probabilities)
+            self.sess.run(self.close_queue_op)
+            return distribution
 
     def load_weights(self, filepath):
         """Load model weights stored in a tensorflow checkpoint.
