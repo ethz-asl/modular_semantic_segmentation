@@ -16,3 +16,4 @@ pytz==2012rc0
 scipy==0.19.1
 six==1.10.0
 tensorflow==1.2.1
+pypng
