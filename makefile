@@ -6,3 +6,4 @@ install:
 
 test:
 	pytest .
+	flake8
