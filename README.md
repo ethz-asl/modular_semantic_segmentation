@@ -2,13 +2,11 @@
 
 Requires python 2.7, python3 is not tested
 
-    cd .../xview/semantic-segmentation
-    pip install -r requirements.txt
-    pip install .
+    make install
 
-If you want to use the package while developing, consider installing it (instead than the last line above) like this:
-    
-    pip install -e .
+Preferably call this from a virtualenvironment to avoid conflicts with system-wide python packets
+
+Tests can be triggered with `make test`. Make sure you install the test-requirements before.
 
 #Usage
 

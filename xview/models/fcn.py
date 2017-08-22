@@ -12,26 +12,34 @@ class FCN(BaseModel):
         BaseModel.__init__(self, 'FCN', output_dir=output_dir, **config)
 
     def _build_graph(self):
-        # the input
+        # First we define placeholders for the input into the input-queue.
+        # This is not the direct input into the network, the enqueue-op has to be called
+        # to evaluate any data that is fed here.
         # rgb channel
         self.X_rgb = tf.placeholder(tf.float32, shape=[None, None, None, 3])
         # depth channel
         self.X_d = tf.placeholder(tf.float32, shape=[None, None, None, 3])
-        # ground truth label
+        # ground truth labels
         self.Y_in = tf.placeholder(tf.float32, shape=[None, None, None,
                                                       self.config['num_classes']])
-        # dropout keep probability
+        # dropout keep probability (This is also an input as it will be different between
+        # training and evaluation)
         self.dropout_rate = tf.placeholder(tf.float32)
-        # queue
+        # An input queue is defined to load the data for several batches in advance and
+        # keep the gpu as busy as we can.
         q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32])
         self.enqueue_op = q.enqueue([self.X_rgb, self.X_d, self.Y_in, self.dropout_rate])
         rgb, depth, training_labels, dropout_rate = q.dequeue()
-        # The queue output does not have a defined shape, so we have to define it here.
+        # The queue output does not have a defined shape, so we have to define it here to
+        # be compatible with tf.layers.
         rgb.set_shape([None, None, None, 3])
         depth.set_shape([None, None, None, 3])
+        # This operation has to be called to close the input queue and free the space it
+        # occupies in memory.
         self.close_queue_op = q.close(cancel_pending_enqueues=True)
 
-        # standard parameters for convolutions
+        # These parameters are shared between many/all layers and therefore defined here
+        # for convenience.
         params = {'activation': tf.nn.relu, 'padding': 'same'}
 
         def vgg16(inputs, prefix):
@@ -56,7 +64,7 @@ class FCN(BaseModel):
             conv5 = conv2d(net, 512, [3, 3], name='{}_conv5_3'.format(prefix), **params)
             return conv5, conv4
 
-        # each modality encoded by vgg 16
+        # Each input modality is encoded by a seperate VGG16 encoder.
         rgb_conv5, rgb_conv4 = vgg16(rgb, 'rgb')
         depth_conv5, depth_conv4 = vgg16(depth, 'depth')
 
