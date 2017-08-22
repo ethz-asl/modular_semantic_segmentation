@@ -3,11 +3,12 @@ from os import path
 
 
 def test_can_find_data():
-    data = Synthia(['UNITTEST-SEQUENCE'])
+    data = Synthia(['UNITTEST-SEQUENCE'], 64)
     assert len(data.testset) > 0
 
+
 def test_preprocessing_produces_all_ouputs():
-    data = Synthia(['UNITTEST-SEQUENCE'], force_preprocessing=True)
+    Synthia(['UNITTEST-SEQUENCE'], 64, force_preprocessing=True)
     assert path.exists(path.join(SYNTHIA_BASEPATH, 'UNITTEST-SEQUENCE/resized_rgb'))
     assert path.exists(path.join(SYNTHIA_BASEPATH,
                                  'UNITTEST-SEQUENCE/resized_rgb/000000.png'))
@@ -17,9 +18,9 @@ def test_preprocessing_produces_all_ouputs():
 
 
 def test_can_open_data():
-    data = Synthia(['UNITTEST-SEQUENCE'])
+    data = Synthia(['UNITTEST-SEQUENCE'], 64)
     test_image = data.testset[0]
     print('test_image: {}'.format(test_image['image_name']))
-    blob = data._get_data(**test_image)
+    blob = data.next()
     # We test that dimensions match between resized image and resized labels.
-    assert blob['rgb'].shape[:2] == blob['labels'].shape[:2]
+    assert blob['rgb'].shape[:3] == blob['labels'].shape[:3]
