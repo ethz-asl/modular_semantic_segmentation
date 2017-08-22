@@ -8,7 +8,7 @@ import itertools
 import shutil
 import json
 
-from xview import DATA_BASEPATH
+from xview.settings import DATA_BASEPATH
 from .baseclass import DataBaseclass
 
 
@@ -16,6 +16,9 @@ SYNTHIA_BASEPATH = path.join(DATA_BASEPATH, 'synthia')
 
 
 class Synthia(DataBaseclass):
+    """Driver for SYNTHIA dataset (http://synthia-dataset.net/).
+    Preprocessing resizes images to 640x380 and performs a static 20% test-split for all
+    given sequences."""
 
     def __init__(self, seqs, batchsize, base_path=SYNTHIA_BASEPATH,
                  force_preprocessing=False):
@@ -30,9 +33,11 @@ class Synthia(DataBaseclass):
 
         self.base_path = base_path
 
+        # For some sequences, preprocessing may be necessary.
         for sequence in seqs:
-            if force_preprocessing or not path.exists(path.join(base_path,
-                    '{}/resized_rgb'.format(sequence))):
+            if force_preprocessing or \
+                    not path.exists(path.join(base_path,
+                                              '{}/resized_rgb'.format(sequence))):
                 self._preprocessing(sequence)
 
         # Every sequence got their own train/test split during preprocessing. According
@@ -41,10 +46,9 @@ class Synthia(DataBaseclass):
         trainset = []
         testset = []
         for sequence in seqs:
-            train_test_names = path.join(self.base_path,
-                                         '{}/train_test_split.json'.format(sequence))
-            print(train_test_names)
-            with open(train_test_names, 'r') as f:
+            train_test_file = path.join(self.base_path,
+                                        '{}/train_test_split.json'.format(sequence))
+            with open(train_test_file, 'r') as f:
                 split = json.load(f)
                 trainset.extend([{'sequence': sequence, 'image_name': filename}
                                  for filename in split['trainset']])
@@ -55,7 +59,8 @@ class Synthia(DataBaseclass):
         DataBaseclass.__init__(self, trainset, testset, batchsize)
 
     def _preprocessing(self, sequence):
-        print('INFO: Preprocessing started for SYNTHIA Dataset. This may take a while.')
+        print('INFO: Preprocessing started for {}. This may take a while.'
+              .format(sequence))
         sequence_basepath = path.join(self.base_path, sequence)
         # Dependent on iamge type, we have to use different resize filters.
         interpolation_method_for_modality = {
@@ -78,8 +83,8 @@ class Synthia(DataBaseclass):
                                             .format(modality))
                 for filename in listdir(original_images):
                     image = Image.open(path.join(original_images, filename))
-                    resized = image.resize([640, 380],
-                        resample=interpolation_method_for_modality[modality])
+                    resized = image.resize(
+                        [640, 380], resample=interpolation_method_for_modality[modality])
                     resized.save(path.join(new_images, filename))
                 continue
 
@@ -94,14 +99,15 @@ class Synthia(DataBaseclass):
                 np.save(path.join(new_images, filename.split('.')[0]),
                         np.array(resized))
 
-        filenames = [filename.split('.')[0]
-                     for filename in listdir(path.join(sequence_basepath, 'resized_rgb'))]
+        filenames = [filename.split('.')[0] for filename
+                     in listdir(path.join(sequence_basepath, 'resized_rgb'))]
         trainset, testset = train_test_split(filenames, test_size=0.2)
         with open('{}/train_test_split.json'.format(sequence_basepath), 'w') as f:
             json.dump({'trainset': trainset, 'testset': testset}, f)
         print('INFO: Preprocessing finished.')
 
     def _get_data(self, sequence, image_name):
+        """Returns data for one given image number from the specified sequence."""
         filetype = {'rgb': 'png', 'depth': 'png', 'labels': 'npy'}
         rgb_filename, depth_filename, groundtruth_filename = (
             path.join(self.base_path, '{}/resized_{}/{}.{}'
