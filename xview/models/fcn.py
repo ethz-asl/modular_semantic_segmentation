@@ -1,15 +1,19 @@
 import tensorflow as tf
-from tensorflow.python.layers.layers import conv2d, max_pooling2d, dropout
+from tensorflow.python.layers.layers import max_pooling2d, dropout
 
 from .base_model import BaseModel
-from .custom_layers import deconv2d, log_softmax, softmax
+from .custom_layers import conv2d, deconv2d, log_softmax, softmax
 
 
 class FCN(BaseModel):
     """FCN implementation following DA-RNN architecture and using tf.layers."""
 
     def __init__(self, output_dir=None, **config):
-        BaseModel.__init__(self, 'FCN', output_dir=output_dir, **config)
+        standard_config = {
+            'batch_normalization': True
+        }
+        standard_config.update(config)
+        BaseModel.__init__(self, 'FCN', output_dir=output_dir, **standard_config)
 
     def _build_graph(self):
         # First we define placeholders for the input into the input-queue.
@@ -25,11 +29,14 @@ class FCN(BaseModel):
         # dropout keep probability (This is also an input as it will be different between
         # training and evaluation)
         self.dropout_rate = tf.placeholder(tf.float32)
+        # training indicator, necessary for batch normalization, is a bool
+        self.is_training = tf.placeholder(tf.bool)
         # An input queue is defined to load the data for several batches in advance and
         # keep the gpu as busy as we can.
-        q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32])
-        self.enqueue_op = q.enqueue([self.X_rgb, self.X_d, self.Y_in, self.dropout_rate])
-        rgb, depth, training_labels, dropout_rate = q.dequeue()
+        q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.bool])
+        self.enqueue_op = q.enqueue([self.X_rgb, self.X_d, self.Y_in, self.dropout_rate,
+                                     self.is_training])
+        rgb, depth, training_labels, dropout_rate, is_training = q.dequeue()
         # The queue output does not have a defined shape, so we have to define it here to
         # be compatible with tf.layers.
         rgb.set_shape([None, None, None, 3])
@@ -40,7 +47,9 @@ class FCN(BaseModel):
 
         # These parameters are shared between many/all layers and therefore defined here
         # for convenience.
-        params = {'activation': tf.nn.relu, 'padding': 'same'}
+        params = {'activation': tf.nn.relu, 'padding': 'same',
+                  'batch_normalization': self.config['batch_normalization'],
+                  'training': is_training}
 
         def vgg16(inputs, prefix):
             """VGG16 image encoder."""
