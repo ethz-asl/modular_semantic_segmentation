@@ -129,6 +129,8 @@ do
     done
     echo "INFO: ${sequences[$i]} successfully extracted"
 done
+# remove the downloaded archive file
+rm "$basedir/synthia/data.rar"
 
 echo "INFO: Data successfully downloaded."
 
