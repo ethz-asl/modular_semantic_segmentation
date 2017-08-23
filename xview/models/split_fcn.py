@@ -1,8 +1,8 @@
 import tensorflow as tf
-from tensorflow.python.layers.layers import conv2d, max_pooling2d, dropout
+from tensorflow.python.layers.layers import max_pooling2d, dropout
 
 from .base_model import BaseModel
-from .custom_layers import deconv2d, log_softmax, softmax
+from .custom_layers import conv2d, deconv2d, log_softmax, softmax
 from .utils import cross_entropy
 
 
@@ -12,33 +12,47 @@ class FCN(BaseModel):
     def __init__(self, output_dir=None, **config):
         standard_config = {
             'num_samples': 20,
-            'learning_rate': 0.01
+            'learning_rate': 0.01,
+            'batch_normalization': True
         }
         standard_config.update(config)
         BaseModel.__init__(self, 'FCN', output_dir=output_dir, **standard_config)
 
     def _build_graph(self):
-        # the input
+        # First we define placeholders for the input into the input-queue.
+        # This is not the direct input into the network, the enqueue-op has to be called
+        # to evaluate any data that is fed here.
         # rgb channel
         self.X_rgb = tf.placeholder(tf.float32, shape=[None, None, None, 3])
         # depth channel
         self.X_d = tf.placeholder(tf.float32, shape=[None, None, None, 3])
-        # ground truth label
+        # ground truth labels
         self.Y_in = tf.placeholder(tf.float32, shape=[None, None, None,
                                                       self.config['num_classes']])
-        # dropout keep probability
+        # dropout keep probability (This is also an input as it will be different between
+        # training and evaluation)
         self.dropout_rate = tf.placeholder(tf.float32)
-        # queue
-        q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32])
-        self.enqueue_op = q.enqueue([self.X_rgb, self.X_d, self.Y_in, self.dropout_rate])
-        rgb, depth, training_labels, dropout_rate = q.dequeue()
-        # The queue output does not have a defined shape, so we have to define it here.
+        # training indicator, necessary for batch normalization, is a bool
+        self.is_training = tf.placeholder(tf.bool)
+        # An input queue is defined to load the data for several batches in advance and
+        # keep the gpu as busy as we can.
+        q = tf.FIFOQueue(100, [tf.float32, tf.float32, tf.float32, tf.float32, tf.bool])
+        self.enqueue_op = q.enqueue([self.X_rgb, self.X_d, self.Y_in, self.dropout_rate,
+                                     self.is_training])
+        rgb, depth, training_labels, dropout_rate, is_training = q.dequeue()
+        # The queue output does not have a defined shape, so we have to define it here to
+        # be compatible with tf.layers.
         rgb.set_shape([None, None, None, 3])
         depth.set_shape([None, None, None, 3])
+        # This operation has to be called to close the input queue and free the space it
+        # occupies in memory.
         self.close_queue_op = q.close(cancel_pending_enqueues=True)
 
-        # standard parameters for convolutions
-        params = {'activation': tf.nn.relu, 'padding': 'same'}
+        # These parameters are shared between many/all layers and therefore defined here
+        # for convenience.
+        params = {'activation': tf.nn.relu, 'padding': 'same',
+                  'batch_normalization': self.config['batch_normalization'],
+                  'training': is_training}
 
         def vgg16(inputs, prefix):
             """VGG16 image encoder."""
@@ -86,7 +100,7 @@ class FCN(BaseModel):
                            name='{}_score'.format(prefix), **decoder_params)
             return score
 
-        # each modality encoded by vgg 16
+        # Each input modality is encoded by a seperate VGG16 encoder.
         rgb_features = vgg16(rgb, 'rgb')
         depth_features = vgg16(depth, 'depth')
 
@@ -151,7 +165,8 @@ class FCN(BaseModel):
         with self.graph.as_default():
             feed_dict = {self.X_rgb: batch['rgb'], self.X_d: batch['depth'],
                          self.Y_in: batch['labels'],
-                         self.dropout_rate: batch['dropout_rate']}
+                         self.dropout_rate: batch['dropout_rate'],
+                         self.is_training: batch['is_training']}
             sess.run(self.enqueue_op, feed_dict=feed_dict)
 
     def _train_step(self, summaries):

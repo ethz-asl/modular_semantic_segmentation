@@ -64,9 +64,9 @@ class BaseModel(object):
                 if not hasattr(self, 'class_probabilities'):
                     raise AttributeError("Model class requires either attribute "
                                          "class_probabilities or method _train_step")
-                self.loss = tf.div(tf.reduce_sum(cross_entropy(self.Y,
-                                                               self.class_probabilities)),
-                                   tf.reduce_sum(self.Y))
+                self.loss = tf.div(tf.reduce_sum(
+                    cross_entropy(self.Y, self.class_probabilities)),
+                    tf.reduce_sum(self.Y))
 
             self.saver = tf.train.Saver()
 
@@ -83,7 +83,7 @@ class BaseModel(object):
         """Load the given data into the correct inputs."""
         raise NotImplementedError
 
-    def _load_and_enqueue(self, sess, data, coord, dropout_rate):
+    def _load_and_enqueue(self, sess, data, coord, dropout_rate, training=False):
         """Internal handler method for the input data queue. May run in a seperate thread.
 
         Args:
@@ -91,6 +91,8 @@ class BaseModel(object):
             data: The data to load. See method predict for specifications.
             coord: The training coordinator (from tensorflow)
             dropout_rate: The dropout-rate that should be enqueued with the data
+            training: Bool indicator whether batch_normalization should be applied in
+                training (batch average) or testing (moving average) mode
         """
         with self.graph.as_default():
             if coord is None:
@@ -101,14 +103,14 @@ class BaseModel(object):
                 else:
                     # We otherwise assume that data is already a batch-dict.
                     batch = data
-                batch['dropout_rate'] = dropout_rate
-                self._enqueue_batch(batch, sess)
             else:
                 # If coord is set, we enqueue new data until it tells us to stop.
                 while not coord.should_stop():
                     batch = data.next()
-                    batch['dropout_rate'] = dropout_rate
-                    self._enqueue_batch(batch, sess)
+            # Add additional information to the batch.
+            batch['dropout_rate'] = dropout_rate
+            batch['is_training'] = training
+            self._enqueue_batch(batch, sess)
 
     def fit(self, data, iterations, output=True):
         """Train the model for given number of iterations.
@@ -138,7 +140,8 @@ class BaseModel(object):
             coord = tf.train.Coordinator()
             t = threading.Thread(target=self._load_and_enqueue,
                                  args=(self.sess, data, coord,
-                                       self.config['dropout_rate']))
+                                       self.config['dropout_rate']),
+                                 kwargs={'training': True})
             t.start()
 
             # Now we can make the graph read-only.
@@ -148,7 +151,8 @@ class BaseModel(object):
                 if hasattr(self, '_train_step'):
                     summary, loss = self._train_step(merged_summary)
                 else:
-                    summary, loss, _ = self.sess.run([merged_summary, self.loss, trainer])
+                    summary, loss, _ = self.sess.run([merged_summary, self.loss,
+                                                      trainer])
                 train_writer.add_summary(summary, i)
 
                 if output:
@@ -158,7 +162,7 @@ class BaseModel(object):
             coord.request_stop()
             coord.join([t])
 
-    def predict(self, data):
+    def predict(self, data, dropout_rate=0.0):
         """Perform semantic segmentation on the input data.
 
         Args:
@@ -170,12 +174,12 @@ class BaseModel(object):
                 <array of shape [num_images, width, height]>
         """
         with self.graph.as_default():
-            self._load_and_enqueue(self.sess, data, None, 0.0)
+            self._load_and_enqueue(self.sess, data, None, dropout_rate, training=False)
             prediction = self.sess.run(self.prediction)
             self.sess.run(self.close_queue_op)
             return prediction
 
-    def run(self, data, dropout_rate=0.0):
+    def train_run(self, data, dropout_rate=0.0):
         """Perform one training run with the given data.
 
         Args:
@@ -187,7 +191,7 @@ class BaseModel(object):
                 <array of shape [num_images, width, height, #classes]>
         """
         with self.graph.as_default():
-            self._load_and_enqueue(self.sess, data, None, dropout_rate)
+            self._load_and_enqueue(self.sess, data, None, dropout_rate, training=True)
             distribution = self.sess.run(self.class_probabilities)
             self.sess.run(self.close_queue_op)
             return distribution
