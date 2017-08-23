@@ -25,7 +25,7 @@ class FCN(BaseModel):
         # rgb channel
         self.X_rgb = tf.placeholder(tf.float32, shape=[None, None, None, 3])
         # depth channel
-        self.X_d = tf.placeholder(tf.float32, shape=[None, None, None, 3])
+        self.X_d = tf.placeholder(tf.float32, shape=[None, None, None, 1])
         # ground truth labels
         self.Y_in = tf.placeholder(tf.float32, shape=[None, None, None,
                                                       self.config['num_classes']])
@@ -163,7 +163,8 @@ class FCN(BaseModel):
 
     def _enqueue_batch(self, batch, sess):
         with self.graph.as_default():
-            feed_dict = {self.X_rgb: batch['rgb'], self.X_d: batch['depth'],
+            feed_dict = {self.X_rgb: batch['rgb'],
+                         self.X_d: batch['depth'][:, :, :, 0],
                          self.Y_in: batch['labels'],
                          self.dropout_rate: batch['dropout_rate'],
                          self.is_training: batch['is_training']}
