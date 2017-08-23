@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 
-from tensorflow.python.layers.layers import conv2d_transpose
+from tensorflow import layers as tfl
 
 
 def bilinear_filter_initializer(filter_shape):
@@ -38,29 +38,58 @@ def deconv2d(inputs,
              activity_regularizer=None,
              trainable=True,
              name=None,
-             reuse=None):
+             reuse=None,
+             batch_normalization=True,
+             training=False):
     """Deconvolutional Layer. Upsamples a given image with a bilinear interpolation."""
     # Compute the shape of the kernel on basis of the input tensor.
     if isinstance(kernel_size, int):
         kernel_size = [kernel_size, kernel_size]
     kernel_dims = [kernel_size[0], kernel_size[1], filters, inputs.shape[-1]]
 
-    return conv2d_transpose(inputs,
-                            filters,
-                            kernel_size,
-                            strides=strides,
-                            padding=padding,
-                            data_format=data_format,
-                            activation=activation,
-                            use_bias=use_bias,
-                            kernel_initializer=bilinear_filter_initializer(kernel_dims),
-                            bias_initializer=bias_initializer,
-                            kernel_regularizer=kernel_regularizer,
-                            bias_regularizer=bias_regularizer,
-                            activity_regularizer=activity_regularizer,
-                            trainable=trainable,
-                            name=name,
-                            reuse=reuse)
+    def _deconv2d(inputs, activation):
+        return tfl.conv2d_transpose(
+            inputs,
+            filters,
+            kernel_size,
+            strides=strides,
+            padding=padding,
+            data_format=data_format,
+            activation=activation,
+            use_bias=use_bias,
+            kernel_initializer=bilinear_filter_initializer(kernel_dims),
+            bias_initializer=bias_initializer,
+            kernel_regularizer=kernel_regularizer,
+            bias_regularizer=bias_regularizer,
+            activity_regularizer=activity_regularizer,
+            trainable=trainable,
+            name=name,
+            reuse=reuse)
+
+    if batch_normalization:
+        # Apply batch_normalization after convolution and activation only afterwards
+        out = _deconv2d(inputs, None)
+        out = tfl.batch_normalization(out, training=training)
+        if activation is not None:
+            out = activation(out)
+    else:
+        out = _deconv2d(inputs, activation)
+    return out
+
+
+def conv2d(inputs, filters, kernel_size, batch_normalization=True, training=False,
+           **kwargs):
+    if batch_normalization:
+        # Apply batch_normalization after convolution and activation only afterwards
+        activation = kwargs.get('activation', None)
+        kwargs.update({'activation': None})
+        out = tfl.conv2d(inputs, filters, kernel_size, **kwargs)
+        out = tfl.batch_normalization(out, training=training)
+        if activation is not None:
+            out = activation(out)
+    else:
+        out = tfl.conv2d(inputs, filters, kernel_size, **kwargs)
+    return out
 
 
 def log_softmax(inputs, num_classes, name=None):
