@@ -56,7 +56,8 @@ class Synthia(DataBaseclass):
                                 for filename in split['testset']])
 
         # Intitialize Baseclass
-        DataBaseclass.__init__(self, trainset, testset, batchsize)
+        DataBaseclass.__init__(self, trainset, testset, batchsize,
+                               ['rgb', 'depth', 'labels'])
 
     def _preprocessing(self, sequence):
         print('INFO: Preprocessing started for {}. This may take a while.'
