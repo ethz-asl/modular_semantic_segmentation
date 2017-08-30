@@ -4,6 +4,7 @@ from tensorflow.python.layers.layers import max_pooling2d, dropout
 from .base_model import BaseModel
 from .custom_layers import conv2d, deconv2d, log_softmax, softmax
 from .utils import cross_entropy
+from .vgg16 import vgg16
 
 
 class FCN(BaseModel):
@@ -86,31 +87,9 @@ class FCN(BaseModel):
                   'batch_normalization': self.config['batch_normalization'],
                   'training': is_training}
 
-        def vgg16(inputs, prefix):
-            """VGG16 image encoder."""
-            # common parameters
-            net = conv2d(inputs, 64, [3, 3], name='{}_conv1_1'.format(prefix), **params)
-            net = conv2d(net, 64, [3, 3], name='{}_conv1_2'.format(prefix), **params)
-            net = max_pooling2d(net, [2, 2], [2, 2], name='{}_pool1'.format(prefix))
-            net = conv2d(net, 128, [3, 3], name='{}_conv2_1'.format(prefix), **params)
-            net = conv2d(net, 128, [3, 3], name='{}_conv2_2'.format(prefix), **params)
-            net = max_pooling2d(net, [2, 2], [2, 2], name='{}_pool2'.format(prefix))
-            net = conv2d(net, 256, [3, 3], name='{}_conv3_1'.format(prefix), **params)
-            net = conv2d(net, 256, [3, 3], name='{}_conv3_2'.format(prefix), **params)
-            net = conv2d(net, 256, [3, 3], name='{}_conv3_3'.format(prefix), **params)
-            net = max_pooling2d(net, [2, 2], [2, 2], name='{}_pool3'.format(prefix))
-            net = conv2d(net, 512, [3, 3], name='{}_conv4_1'.format(prefix), **params)
-            net = conv2d(net, 512, [3, 3], name='{}_conv4_2'.format(prefix), **params)
-            conv4 = conv2d(net, 512, [3, 3], name='{}_conv4_3'.format(prefix), **params)
-            net = max_pooling2d(conv4, [2, 2], [2, 2], name='{}_pool4'.format(prefix))
-            net = conv2d(net, 512, [3, 3], name='{}_conv5_1'.format(prefix), **params)
-            net = conv2d(net, 512, [3, 3], name='{}_conv5_2'.format(prefix), **params)
-            conv5 = conv2d(net, 512, [3, 3], name='{}_conv5_3'.format(prefix), **params)
-            return conv5, conv4
-
         # Each input modality is encoded by a seperate VGG16 encoder.
-        rgb_conv5, rgb_conv4 = vgg16(rgb, 'rgb')
-        depth_conv5, depth_conv4 = vgg16(depth, 'depth')
+        rgb_conv4, rgb_conv5 = vgg16(rgb, 'rgb', params)
+        depth_conv4, depth_conv5 = vgg16(depth, 'depth', params)
 
         # At the output of stages conv4_3 and conv5_3, stack the 2 modalities together.
         conv4 = tf.concat([rgb_conv4, depth_conv4], 3, name='concat_conv4')
