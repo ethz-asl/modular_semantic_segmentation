@@ -8,11 +8,12 @@ class DataBaseclass(DataWrapper):
     """A basic, abstract class for splitting data into batches, compliant with DataWrapper
     interface."""
 
-    def __init__(self, trainset, testset, batchsize):
+    def __init__(self, trainset, testset, batchsize, modalities):
         self.testset = testset
         self.trainset = shuffle(trainset)
         self.batch_idx = 0
         self.batchsize = batchsize
+        self.modalities = modalities
 
     def _get_data(self, **kwargs):
         """Returns data for one item in trainset or testset. kwargs is the unfolded dict
@@ -30,33 +31,31 @@ class DataBaseclass(DataWrapper):
 
     def next(self):
         """As specified by DataWrapper, returns a new training batch."""
-        batch = {}
-        i = 0
-        while i < self.batchsize:
+        # Dependent on the batchsize, we collect a list of datablobs and group them by
+        # modality
+        batch = {mod: [] for mod in self.modalities}
+        i = 1
+        while i <= self.batchsize:
             item = self._get_data(**self.trainset[self.batch_idx])
-            for key in item:
-                if key not in batch:
-                    # this is the first item, generate lists for every key
-                    batch[key] = [item[key]]
-                batch[key].append(item[key])
+            for mod in self.modalities:
+                batch[mod].append(item[mod])
             i = i + 1
             self._increment_batch_idx()
         # Now translate lists of arrays into arrays with first dimension the batch index
-        # for each key.
-        for key in batch:
-            batch[key] = np.array(batch[key])
+        # for each modality.
+        for mod in self.modalities:
+            batch[mod] = np.stack(batch[mod])
         return batch
 
     def get_test_data(self):
         """Return the test-data in one big batch."""
-        testdata = {}
+        testdata = {mod: [] for mod in self.modalities}
         for item in self.testset:
             data = self._get_data(**item)
-            for key in data:
-                if key not in testdata:
-                    # This is the first item and we have to add the key to the testdata
-                    # dict.
-                    testdata[key] = item[key]
-                else:
-                    testdata[key].append(item[key])
+            for mod in self.modalities:
+                testdata[mod].append(data[mod])
+        # Now translate lists of arrays into arrays with first dimension the batch index
+        # for each modality.
+        for mod in self.modalities:
+            testdata[mod] = np.stack(testdata[mod])
         return testdata
