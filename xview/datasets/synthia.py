@@ -1,8 +1,9 @@
 import numpy as np
 from os import listdir, path, mkdir
-from scipy.misc import imread, imresize
+from scipy.misc import imread
+from scipy.ndimage import zoom
 from sklearn.model_selection import train_test_split
-from png import Reader
+from png import Reader, Writer
 from PIL import Image
 import itertools
 import shutil
@@ -17,7 +18,7 @@ SYNTHIA_BASEPATH = path.join(DATA_BASEPATH, 'synthia')
 
 class Synthia(DataBaseclass):
     """Driver for SYNTHIA dataset (http://synthia-dataset.net/).
-    Preprocessing resizes images to 640x380 and performs a static 20% test-split for all
+    Preprocessing resizes images to 640x368 and performs a static 20% test-split for all
     given sequences."""
 
     def __init__(self, seqs, batchsize, base_path=SYNTHIA_BASEPATH,
@@ -59,16 +60,37 @@ class Synthia(DataBaseclass):
         DataBaseclass.__init__(self, trainset, testset, batchsize,
                                ['rgb', 'depth', 'labels'])
 
+    @property
+    def one_hot_lookup(self):
+        """For some reason, synthia consists of the labels 0-12 and 15. to create a
+        onw-hot vector of these 14 classes, one can compare agains the following array,
+            e.g. the one-hot version of class 4 is:
+                (self.one_hot_lookup == 4).astype(int)
+                -->     [0, 0, 0, 0, 1, 0, 0, 0, 0, 0,  0,  0,  0,  0]"""
+        return np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15])
+
     def _preprocessing(self, sequence):
+        """Preprocessing of SYNTHIA data.
+
+        Performs several steps:
+            - Original images are of size 1280x760. To make training and data loading
+              faster, we resize them to a width of 640 (factor 2). However, picture
+              dimensions need to be a multiple of 16 to pass through 4 levels of
+              pooling in VGG16, therefore we have to crop the image a little bit in
+              height and end up at a size of 640x368
+            - Resizing is done with boilinear interpolation for RGB and taking the upper-
+              left corner of every group of pixels for depth and label.
+            - Labels are stored in a crude version of the png format. We open this,
+              extract the label integer from the first channel (we omit the item ID as we
+              do not use it) and store it as numpy file.
+            - From the available images, we select a random 20% sample as a test-set and
+              store the indexes of the train/test split so they are consistent between
+              training runs.
+        """
         print('INFO: Preprocessing started for {}. This may take a while.'
               .format(sequence))
         sequence_basepath = path.join(self.base_path, sequence)
-        # Dependent on iamge type, we have to use different resize filters.
-        interpolation_method_for_modality = {
-            'RGB': Image.BILINEAR,
-            'Depth': Image.NEAREST,
-            'labels': 'nearest'
-        }
+
         # First we create directories for the downsamples images.
         for modality in ['RGB', 'Depth', 'labels']:
             new_images = path.join(sequence_basepath,
@@ -82,23 +104,47 @@ class Synthia(DataBaseclass):
             if modality in ['RGB', 'Depth']:
                 original_images = path.join(sequence_basepath, '{}/Stereo_Right/Omni_F'
                                             .format(modality))
+
+                # As we have to handle different bitdepths and cropped images, we use
+                # pypng for writing the new files.
+                bitdepth = 8 if modality == 'RGB' else 16
+                writer = Writer(width=640, height=368, bitdepth=bitdepth,
+                                greyscale=(modality == 'Depth'))
+
                 for filename in listdir(original_images):
-                    image = Image.open(path.join(original_images, filename))
-                    resized = image.resize(
-                        [640, 380], resample=interpolation_method_for_modality[modality])
-                    resized.save(path.join(new_images, filename))
+                    if modality == 'RGB':
+                        image = Image.open(path.join(original_images, filename))
+                        resized = image.resize([640, 380], resample=Image.BILINEAR)
+                        resized = np.asarray(resized, dtype=np.uint8)
+                    elif modality == 'Depth':
+                        image = one_channel_image_reader(
+                            path.join(original_images, filename), np.uint16)
+                        resized = zoom(image, 0.5, mode='nearest', order=0)
+                    # The image has to get cropped, see docstring of crop method
+                    cropped = crop_resized_image(resized)
+                    # Now save again accoding to different formats
+                    with open(path.join(new_images, filename), 'wb') as f:
+                        # The writer is expecting a consecutive list of RGBRGBR... values
+                        if modality == 'RGB':
+                            val_list = cropped.reshape(368, 640*3).tolist()
+                        elif modality == 'Depth':
+                            val_list = cropped.tolist()
+                        writer.write(f, val_list)
                 continue
 
-            # Label image format cannot be decoded by standard libraries. We save the
-            # extracted information as numpy array.
+            # Label image has a weird format. We save the extracted information as numpy
+            # array.
             original_images = path.join(sequence_basepath,
                                         'GT/LABELS/Stereo_Right/Omni_F')
             for filename in listdir(original_images):
-                array = decode_labels(path.join(original_images, filename))
-                resized = imresize(array, [380, 640],
-                                   interpolation_method_for_modality['labels'])
-                np.save(path.join(new_images, filename.split('.')[0]),
-                        np.array(resized))
+                # Labels are stored in the 1st channel of the png file
+                array = one_channel_image_reader(path.join(original_images, filename),
+                                                 np.uint8)
+                resized = zoom(array, 0.5, mode='nearest', order=0)
+                # The image has to get cropped, se docstring of crop method
+                cropped = crop_resized_image(resized)
+                # Now we can save it as a numpy array
+                np.save(path.join(new_images, filename.split('.')[0]), cropped)
 
         filenames = [filename.split('.')[0] for filename
                      in listdir(path.join(sequence_basepath, 'resized_rgb'))]
@@ -117,20 +163,36 @@ class Synthia(DataBaseclass):
 
         blob = {}
         blob['rgb'] = imread(rgb_filename.format('.png'))
-        blob['depth'] = imread(depth_filename.format('png'))
-        blob['labels'] = np.load(groundtruth_filename.format('.npy'))
+        depth = one_channel_image_reader(depth_filename.format('png'), np.uint16,
+                                         input_has_three_channels=False)
+        # We have to add a dimension for the channels, as there is only one and the
+        # dimension is omitted
+        blob['depth'] = np.expand_dims(depth, 3)
+        labels = np.load(groundtruth_filename.format('.npy'))
+        # Labels still have to get converted to one-hot
+        one_hot = np.array(self.one_hot_lookup == labels[:, :, None]).astype(int)
+        blob['labels'] = one_hot
         return blob
 
 
-def decode_labels(filepath):
+def one_channel_image_reader(filepath, datatype, input_has_three_channels=True):
     """Labels are stored in a crude way into the png format that cannot be handled by
     standard libraries. Therefore, we have to create this decoder."""
     im = Reader(filepath)
     _, _, array, _ = im.asDirect()
-    array = np.vstack(itertools.imap(np.uint8, array))
-    # This image array is now in 'boxed row flat pixel' format, meaning that each row
-    # is just a continuous list of R, G, B, R, G, B, R, ... values.
-    # We are in this case only interested in the first component, which holds the
-    # class label, therefore we take every third value.
-    array = array[:, range(0, 3 * 1280, 3)]
-    return np.uint8(array)
+    array = np.vstack(itertools.imap(datatype, array))
+    if input_has_three_channels:
+        # This image array is now in 'boxed row flat pixel' format, meaning that each row
+        # is just a continuous list of R, G, B, R, G, B, R, ... values.
+        # We are in this case only interested in the first component, which holds the
+        # class label, therefore we take every third value.
+        array = array[:, range(0, array.shape[1], 3)]
+    return datatype(array)
+
+
+def crop_resized_image(image):
+    """We resize the images to half of their original size, 640x380. However, in order
+    to use the image with VGG16, each dimension should be devisible by 16 as we have 4
+    pooling layers. We therefore need to crop the images in a consistant way to the size
+    of 640x368."""
+    return image[6:374]
