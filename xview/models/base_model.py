@@ -3,6 +3,7 @@ import numpy as np
 import threading
 from os import path
 from abc import ABCMeta, abstractmethod
+from time import sleep
 
 from xview.models.utils import cross_entropy
 from xview.datasets.wrapper import DataWrapper
@@ -12,14 +13,14 @@ class BaseModel(object):
     """Structure for network models. Handels basic training and IO operations.
 
     requires the following attributes:
-        class_probabilities: tensor output of shape [batch_size, , , num_classes]
-        Y: tensor output of the ground-truth label to compare class_probabilities against
-        prediction: usually argmax of class_probabilites
+        loss: a scalar value that should be minimized during training
+        prediction: usually argmax of class_probabilites, i.e. a 2D array of pixelwise
+            classification
         close_queue_op: tensorflow op to close the input queue
     """
 
     __metaclass__ = ABCMeta
-    required_attributes = ["class_probabilities", "Y", "prediction", "close_queue_op"]
+    required_attributes = ["loss", "prediction", "close_queue_op"]
 
     def __init__(self, name, output_dir=None, **config):
         """Set configuration and build the model.
@@ -56,11 +57,6 @@ class BaseModel(object):
                                      ("s" * (len(missing_attrs) > 1),
                                       ", ".join(missing_attrs)))
 
-            # Loss will always be the cross-entropy.
-            self.loss = tf.div(tf.reduce_sum(cross_entropy(self.Y,
-                                                           self.class_probabilities)),
-                               tf.reduce_sum(self.Y))
-
             self.global_step = tf.Variable(0, trainable=False)
 
             self.saver = tf.train.Saver()
@@ -75,34 +71,27 @@ class BaseModel(object):
 
     @abstractmethod
     def _enqueue_batch(self, batch, sess):
-        """Load the given data into the correct inputs."""
+        """Load the given training data into the correct inputs."""
         raise NotImplementedError
 
-    def _load_and_enqueue(self, sess, data, coord, dropout_rate):
-        """Internal handler method for the input data queue. May run in a seperate thread.
+    @abstractmethod
+    def _evaluation_food(self, data):
+        """Return a feed_dict for a prediction run on the network."""
+        raise NotImplementedError
+
+    def _load_and_enqueue(self, sess, data, coord):
+        """Internal handler method for the input data queue. Will run in a seperate thread.
 
         Args:
             sess: The current session, needs to be the same as in the main thread.
             data: The data to load. See method predict for specifications.
             coord: The training coordinator (from tensorflow)
-            dropout_rate: The dropout-rate that should be enqueued with the data
         """
         with self.graph.as_default():
-            if coord is None:
-                # As there is no coordinator, enqueue simply one batch.
-                if isinstance(data, DataWrapper):
-                    # This gives one batch from the dataset.
-                    batch = data.next()
-                else:
-                    # We otherwise assume that data is already a batch-dict.
-                    batch = data
-                batch['dropout_rate'] = dropout_rate
-                self._enqueue_batch(batch, sess)
-            else:
-                # If coord is set, we enqueue new data until it tells us to stop.
-                while not coord.should_stop():
-                    batch = data.next()
-                    batch['dropout_rate'] = dropout_rate
+            # We enqueue new data until it tells us to stop.
+            while not coord.should_stop():
+                batch = data.next()
+                if not coord.should_stop():
                     self._enqueue_batch(batch, sess)
 
     def fit(self, data, iterations, output=True):
@@ -114,11 +103,10 @@ class BaseModel(object):
             output: Boolean specifiying whether to output the loss progress
         """
 
-        learning_rate = self.config.get('learning_rate', 0.1)
-        momentum = self.config.get('momentum', 0)
+        learning_rate = self.config['learning_rate']
 
         with self.graph.as_default():
-            trainer = tf.train.AdamOptimizer(learning_rate).minimize(
+            trainer = tf.train.AdagradOptimizer(learning_rate).minimize(
                 self.loss, global_step=self.global_step)
 
             # Merge all summary creation into one op. Add summary for loss.
@@ -132,23 +120,33 @@ class BaseModel(object):
             # Create a thread to load data.
             coord = tf.train.Coordinator()
             t = threading.Thread(target=self._load_and_enqueue,
-                                 args=(self.sess, data, coord,
-                                       self.config['dropout_rate']))
+                                 args=(self.sess, data, coord))
             t.start()
 
             # Now we can make the graph read-only.
             self.graph.finalize()
 
+            print('INFO: Start training')
             for i in range(iterations):
-                summary, loss, _ = self.sess.run([merged_summary, self.loss, trainer])
-                train_writer.add_summary(summary, i)
+                try:
+                    summary, loss, _ = self.sess.run([merged_summary, self.loss,
+                                                      trainer])
+                    if self.output_dir is not None:
+                        train_writer.add_summary(summary, i)
 
-                if output:
-                    print("{:4d}: loss {:.4f}".format(i, loss))
+                    if output:
+                        print("{:4d}: loss {:.4f}".format(i, loss))
+                except KeyboardInterrupt:
+                    print('ERROR: Keyboard Interrupt')
+                    break
 
-            self.sess.run(self.close_queue_op)
             coord.request_stop()
+            # Before we can close the queue, wait that the enqueue process stopped,
+            # otherwise it will produce an error.
+            sleep(20)
+            self.sess.run(self.close_queue_op)
             coord.join([t])
+            print('INFO: Training finished.')
 
     def predict(self, data):
         """Perform semantic segmentation on the input data.
@@ -162,9 +160,15 @@ class BaseModel(object):
                 <array of shape [num_images, width, height]>
         """
         with self.graph.as_default():
-            self._load_and_enqueue(self.sess, data, None, 0.0)
-            prediction = self.sess.run(self.prediction)
-            self.sess.run(self.close_queue_op)
+            # As there is no coordinator, enqueue simply one batch.
+            if isinstance(data, DataWrapper):
+                # This gives one batch from the dataset.
+                batch = data.next()
+            else:
+                # We otherwise assume that data is already a batch-dict.
+                batch = data
+            prediction = self.sess.run(self.prediction,
+                                       feed_dict=self._evaluation_food(batch))
             return prediction
 
     def load_weights(self, filepath):
@@ -227,7 +231,7 @@ class BaseModel(object):
             print('INFO: Weights saved to {}'.format(output_path))
             return output_path
 
-    def import_weights(self, filepath, translation=None):
+    def import_weights(self, filepath, translation=None, chill_mode=False):
         """Import weights given by a numpy file. Variables are assigned to arrays which's
         key matches the variable name.
 
@@ -235,6 +239,8 @@ class BaseModel(object):
             filepath: Full path to the file containing the weights.
             translation: Dictionary mapping variables in the network on differently named
                 keys in the file.
+            chill_mode: If True, ignores variables that do not match in shape and leaves
+                them unassigned
         """
         with self.graph.as_default():
             weights = np.load(filepath)
@@ -245,4 +251,8 @@ class BaseModel(object):
                 if name not in weights:
                     print('WARNING: {} not found in saved weights'.format(name))
                 else:
-                    self.sess.run(variable.assign(weights[name]))
+                    if not variable.shape == weights[name].shape:
+                        print('WARNING: wrong shape found for {}, but ignored in chill '
+                              'mode'.format(name))
+                    else:
+                        self.sess.run(variable.assign(weights[name]))
