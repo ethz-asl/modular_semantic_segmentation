@@ -24,3 +24,4 @@ def test_can_open_data():
     blob = data.next()
     # We test that dimensions match between resized image and resized labels.
     assert blob['rgb'].shape[:3] == blob['labels'].shape[:3]
+    assert blob['depth'].shape[:3] == blob['labels'].shape[:3]

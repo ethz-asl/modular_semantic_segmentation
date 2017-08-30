@@ -21,4 +21,7 @@ class WashingtonData(DataWrapper):
     def next(self):
         batch = self.train_shuffle_layer.forward()
 
+        # we only need one channel, they are all equal
+        batch['depth'] = batch['depth'][:, :, :, 0:1]
+
         return batch
