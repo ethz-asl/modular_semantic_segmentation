@@ -107,6 +107,7 @@ class SimpleFCN(BaseModel):
                             trainable=False, **params)
         score = conv2d(features, self.config['num_classes'], [1, 1],
                        name='{}_score'.format(prefix), **params)
+        tf.summary.histogram('score_layer', score)
         return score
 
     def _enqueue_batch(self, batch, sess):
