@@ -72,6 +72,12 @@ class SimpleFCN(BaseModel):
         label = softmax(score, self.config['num_classes'], name='prob_normalized')
         self.prediction = tf.argmax(label, 3, name='label_2d')
 
+        # Add summaries for some weights
+        variable_names = ['rgb_score/kernel:0', 'rgb_score/bias:0']
+        for name in variable_names:
+            var = next(v for v in tf.global_variables() if v.name == name)
+            tf.summary.histogram(name, var)
+
     def _encoder(self, inputs, prefix, is_training=False, reuse=True):
         """VGG16 image encoder with fusion of conv4_3 and conv5_3 features."""
         # These parameters are shared between many/all layers and therefore defined here
@@ -107,7 +113,6 @@ class SimpleFCN(BaseModel):
                             trainable=False, **params)
         score = conv2d(features, self.config['num_classes'], [1, 1],
                        name='{}_score'.format(prefix), **params)
-        tf.summary.histogram('score_layer', score)
         return score
 
     def _enqueue_batch(self, batch, sess):

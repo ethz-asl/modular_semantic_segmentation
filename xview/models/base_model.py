@@ -159,7 +159,7 @@ class BaseModel(object):
                         print("{:4d}: loss {:.4f}, accuracy {:.2f}".format(
                             i, loss, score['mean_accuracy']))
                     if self.output_dir is not None:
-                        train_writer.add_summary(accuracy)
+                        train_writer.add_summary(accuracy, i)
 
             coord.request_stop()
             # Before we can close the queue, wait that the enqueue process stopped,
