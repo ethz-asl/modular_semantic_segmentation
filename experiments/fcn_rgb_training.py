@@ -11,15 +11,18 @@ from experiments.utils import get_mongo_observer
 ex = Experiment()
 ex.observers.append(get_mongo_observer())
 
-
 @ex.automain
-def my_main(data_config, fcn_config, num_iterations):
+def my_main(data_config, fcn_config, num_iterations, _run):
     # create temporary directory for output files
-    output_dir = '/tmp/fcn_train'
-    if os.path.exists(output_dir):
+    if os.path.exists('/tmp/fcn_train'):
         # Remove old data
-        shutil.rmtree(output_dir)
+        shutil.rmtree('/tmp/fcn_train')
+    os.mkdir('/tmp/fcn_train')
+    # The id of this experiment is stored in the magical _run object we get from the
+    # decorator.
+    output_dir = '/tmp/fcn_train/{}'.format(_run._id)
     os.mkdir(output_dir)
+    print(output_dir)
 
     # Load the dataset, we expect config to include the arguments
     data = Synthia(data_config['sequences'], data_config['batchsize'])
