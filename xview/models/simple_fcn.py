@@ -66,11 +66,9 @@ class SimpleFCN(BaseModel):
         # directly, e.g. with a feed_dict created by _evaluation_food
         # rgb channel
         self.test_X_rgb = tf.placeholder(tf.float32, shape=[None, None, None, 3])
-        # dropout rate
-        self.test_dropout_rate = tf.placeholder(tf.float32)
 
         features = self._encoder(self.test_X_rgb, 'rgb')
-        score = self._decoder(features, 'rgb', train_dropout_rate)
+        score = self._decoder(features, 'rgb', tf.constant(0.0))
         label = softmax(score, self.config['num_classes'], name='prob_normalized')
         self.prediction = tf.argmax(label, 3, name='label_2d')
 
@@ -118,6 +116,5 @@ class SimpleFCN(BaseModel):
             sess.run(self.enqueue_op, feed_dict=feed_dict)
 
     def _evaluation_food(self, data):
-        feed_dict = {self.test_X_rgb: data['rgb'],
-                     self.test_dropout_rate: self.config['sample_dropout_rate']}
+        feed_dict = {self.test_X_rgb: data['rgb']}
         return feed_dict
