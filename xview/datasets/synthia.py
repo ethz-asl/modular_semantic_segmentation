@@ -153,7 +153,7 @@ class Synthia(DataBaseclass):
             json.dump({'trainset': trainset, 'testset': testset}, f)
         print('INFO: Preprocessing finished.')
 
-    def _get_data(self, sequence, image_name):
+    def _get_data(self, sequence, image_name, one_hot=True):
         """Returns data for one given image number from the specified sequence."""
         filetype = {'rgb': 'png', 'depth': 'png', 'labels': 'npy'}
         rgb_filename, depth_filename, groundtruth_filename = (
@@ -169,9 +169,10 @@ class Synthia(DataBaseclass):
         # dimension is omitted
         blob['depth'] = np.expand_dims(depth, 3)
         labels = np.load(groundtruth_filename.format('.npy'))
-        # Labels still have to get converted to one-hot
-        one_hot = np.array(self.one_hot_lookup == labels[:, :, None]).astype(int)
-        blob['labels'] = one_hot
+        if one_hot:
+            # Labels still have to get converted to one-hot
+            labels = np.array(self.one_hot_lookup == labels[:, :, None]).astype(int)
+        blob['labels'] = labels
         return blob
 
 

@@ -22,40 +22,39 @@ class DataBaseclass(DataWrapper):
         """
         raise NotImplementedError
 
-    def _increment_batch_idx(self):
+    def _next_batch_idx(self):
         """Increments the index of the next training item. Makes sure the index is reset
         as all training items were used once."""
         self.batch_idx = self.batch_idx + 1
         if self.batch_idx == len(self.trainset):
             self.batch_idx = 0
+        return self.batch_idx
 
     def next(self):
         """As specified by DataWrapper, returns a new training batch."""
+        return self._get_batch([self.trainset[self._next_batch_idx()]
+                                for _ in range(self.batchsize)])
+
+    def get_test_data(self, num_items=None):
+        """Return the test-data in one big batch."""
+        if num_items is None:
+            return self._get_batch(self.testset, one_hot=False)
+        else:
+            # generate given number of random indizes
+            idx = np.random.choice(range(len(self.testset)), size=num_items,
+                                   replace=False)
+            return self._get_batch(self.testset[idx], one_hot=False)
+
+    def _get_batch(self, items, one_hot=True):
         # Dependent on the batchsize, we collect a list of datablobs and group them by
         # modality
         batch = {mod: [] for mod in self.modalities}
-        i = 1
-        while i <= self.batchsize:
-            item = self._get_data(**self.trainset[self.batch_idx])
+        for item in items:
+            data = self._get_data(one_hot=one_hot, **item)
             for mod in self.modalities:
-                batch[mod].append(item[mod])
-            i = i + 1
-            self._increment_batch_idx()
+                batch[mod].append(data[mod])
         # Now translate lists of arrays into arrays with first dimension the batch index
         # for each modality.
         for mod in self.modalities:
             batch[mod] = np.stack(batch[mod])
         return batch
-
-    def get_test_data(self):
-        """Return the test-data in one big batch."""
-        testdata = {mod: [] for mod in self.modalities}
-        for item in self.testset:
-            data = self._get_data(**item)
-            for mod in self.modalities:
-                testdata[mod].append(data[mod])
-        # Now translate lists of arrays into arrays with first dimension the batch index
-        # for each modality.
-        for mod in self.modalities:
-            testdata[mod] = np.stack(testdata[mod])
-        return testdata
