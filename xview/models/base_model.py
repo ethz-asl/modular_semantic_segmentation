@@ -38,12 +38,7 @@ class BaseModel(object):
         self.name = name
         self.output_dir = output_dir
 
-        standard_config = {
-            'image_width': 640,
-            'image_height': 480
-        }
-        standard_config.update(config)
-        self.config = standard_config
+        self.config = config
 
         # Now we build the network.
         self.graph = tf.Graph()
@@ -153,7 +148,7 @@ class BaseModel(object):
             coord.join([t])
             print('INFO: Training finished.')
 
-    def predict(self, data, dropout_rate=0.0):
+    def predict(self, data):
         """Perform semantic segmentation on the input data.
 
         Args:
@@ -176,17 +171,6 @@ class BaseModel(object):
                                        feed_dict=self._evaluation_food(batch))
             return prediction
 
-    def train_run(self, data, dropout_rate=0.0):
-        """Perform one training run with the given data.
-
-        Args:
-            data: Either a handler to a dataclass inheriting from DataWrapper or a
-                dictionary {'rgb': <array of shape [num_images, width, height]>
-                            'depth': <array of shape [num_images, width, height]>}
-        Returns:
-            per-pixel class probabilities of the input image in form
-                <array of shape [num_images, width, height, #classes]>
-        """
         with self.graph.as_default():
             self._load_and_enqueue(self.sess, data, None, dropout_rate, training=True)
             distribution = self.sess.run(self.class_probabilities)
