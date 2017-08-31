@@ -43,7 +43,7 @@ class DataBaseclass(DataWrapper):
             # generate given number of random indizes
             idx = np.random.choice(range(len(self.testset)), size=num_items,
                                    replace=False)
-            return self._get_batch(self.testset[idx], one_hot=False)
+            return self._get_batch(self.testset[i] for i in idx, one_hot=False)
 
     def _get_batch(self, items, one_hot=True):
         # Dependent on the batchsize, we collect a list of datablobs and group them by
