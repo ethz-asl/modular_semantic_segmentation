@@ -59,12 +59,21 @@ class BaseModel(object):
                                   else " one of the attributes {}".format(attrs)
                                   for attrs in missing_attrs]))
 
+            # To evaluate accuracy atc, we have to define soem structures here
+            self.evaluation_labels = tf.placeholder(tf.float32, shape=[None, None, None])
+            self.confusion_matrix = tf.confusion_matrix(
+                labels=tf.reshape(self.evaluation_labels, [-1]),
+                predictions=tf.reshape(self.prediction, [-1]),
+                num_classes=self.config['num_classes'])
+
             self.global_step = tf.Variable(0, trainable=False)
 
             self.saver = tf.train.Saver()
 
             self.sess = tf.Session()
             self.sess.run(tf.global_variables_initializer())
+            # There are local variables in the metrics
+            self.sess.run(tf.local_variables_initializer())
 
     @abstractmethod
     def _build_graph(self):
@@ -96,7 +105,8 @@ class BaseModel(object):
                 if not coord.should_stop():
                     self._enqueue_batch(batch, sess)
 
-    def fit(self, data, iterations, output=True):
+    def fit(self, data, iterations, output=True, validation_data=None,
+            validation_interval=100):
         """Train the model for given number of iterations.
 
         Args:
@@ -137,8 +147,19 @@ class BaseModel(object):
                                                       trainer])
                 if self.output_dir is not None:
                     train_writer.add_summary(summary, i)
-                if output:
-                    print("{:4d}: loss {:.4f}".format(i, loss))
+
+                # Every validation_interval, we add a summary of validation values
+                if i % validation_interval == 0 and validation_data is not None:
+                    score = self.score(validation_data)
+                    accuracy = tf.Summary(
+                        value=[tf.Summary.Value(tag='accuracy',
+                                                simple_value=score['mean_accuracy'])])
+
+                    if output:
+                        print("{:4d}: loss {:.4f}, accuracy {:.2f}".format(
+                            i, loss, score['mean_accuracy']))
+                    if self.output_dir is not None:
+                        train_writer.add_summary(accuracy)
 
             coord.request_stop()
             # Before we can close the queue, wait that the enqueue process stopped,
@@ -171,11 +192,23 @@ class BaseModel(object):
                                        feed_dict=self._evaluation_food(batch))
             return prediction
 
+    def score(self, data):
+        """Measure the performance of the model with respect to the given data."""
         with self.graph.as_default():
-            self._load_and_enqueue(self.sess, data, None, dropout_rate, training=True)
-            distribution = self.sess.run(self.class_probabilities)
-            self.sess.run(self.close_queue_op)
-            return distribution
+            feed_dict = self._evaluation_food(data)
+            feed_dict.update({self.evaluation_labels: data['labels']})
+            confusion = self.sess.run(self.confusion_matrix, feed_dict=feed_dict)
+            confusion = np.array(confusion).astype(np.float32)
+
+        # Now we compute several mesures from the confusion matrix
+        measures = {}
+        measures['confusion_matrix'] = confusion
+        measures['accuracy'] = np.diag(confusion) / confusion.sum(1)
+        measures['mean_accuracy'] = np.nanmean(measures['accuracy'])
+        measures['IU'] = np.diag(confusion) / \
+            (confusion.sum(1) + confusion.sum(0) - np.diag(confusion))
+        measures['mean_IU'] = np.nanmean(measures['IU'])
+        return measures
 
     def load_weights(self, filepath):
         """Load model weights stored in a tensorflow checkpoint.
