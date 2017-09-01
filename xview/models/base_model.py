@@ -40,6 +40,8 @@ class BaseModel(object):
 
         self.config = config
 
+        tf.reset_default_graph()
+
         # Now we build the network.
         self.graph = tf.Graph()
         with self.graph.as_default():
@@ -66,7 +68,11 @@ class BaseModel(object):
                 predictions=tf.reshape(self.prediction, [-1]),
                 num_classes=self.config['num_classes'])
 
-            self.global_step = tf.Variable(0, trainable=False)
+            if not hasattr(self, '_train_step'):
+                self.global_step = tf.Variable(0, trainable=False, name='global_step')
+                self.trainer = tf.train.AdagradOptimizer(
+                    self.config['learning_rate']).minimize(
+                        self.loss, global_step=self.global_step)
 
             self.saver = tf.train.Saver()
 
@@ -117,20 +123,12 @@ class BaseModel(object):
             iterations: The number of training iterations
             output: Boolean specifiying whether to output the loss progress
         """
-
-        learning_rate = self.config['learning_rate']
-
         with self.graph.as_default():
-            trainer = tf.train.AdagradOptimizer(learning_rate).minimize(
-                self.loss, global_step=self.global_step)
-
             # Merge all summary creation into one op. Add summary for loss.
             tf.summary.scalar('loss', self.loss)
             merged_summary = tf.summary.merge_all()
             if self.output_dir is not None:
                 train_writer = tf.summary.FileWriter(self.output_dir, self.graph)
-
-            self.sess.run(tf.global_variables_initializer())
 
             # Create a thread to load data.
             coord = tf.train.Coordinator()
@@ -147,7 +145,7 @@ class BaseModel(object):
                     summary, loss = self._train_step(merged_summary)
                 else:
                     summary, loss, _ = self.sess.run([merged_summary, self.loss,
-                                                      trainer])
+                                                      self.trainer])
                 if self.output_dir is not None:
                     train_writer.add_summary(summary, i)
 
@@ -199,7 +197,7 @@ class BaseModel(object):
         """Measure the performance of the model with respect to the given data."""
         with self.graph.as_default():
             feed_dict = self._evaluation_food(data)
-            feed_dict.update({self.evaluation_labels: data['labels']})
+            feed_dict[self.evaluation_labels] = data['labels']
             confusion = self.sess.run(self.confusion_matrix, feed_dict=feed_dict)
             confusion = np.array(confusion).astype(np.float32)
 
