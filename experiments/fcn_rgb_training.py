@@ -22,7 +22,9 @@ def my_main(data_config, fcn_config, num_iterations, starting_weights, _run):
     # decorator.
     output_dir = '/tmp/fcn_train/{}'.format(_run._id)
     os.mkdir(output_dir)
-    print(output_dir)
+
+    # Tell the experiment that this output dir is also used for tensorflow summaries
+    ex.info.setdefault("tensorflow", {}).setdefault("logdirs", []).append(output_dir)
 
     # Load the dataset, we expect config to include the arguments
     data = Synthia(data_config['sequences'], data_config['batchsize'])
@@ -37,6 +39,8 @@ def my_main(data_config, fcn_config, num_iterations, starting_weights, _run):
             # load the washington weights
             weights = os.path.join(DATA_BASEPATH, 'darnn/FCN_weights_40000.npz')
         elif isinstance(starting_weights, dict):
+            print('INFO: Loading weights from experiment {}'.format(
+                starting_weights['experiment_id']))
             # load weights from previous experiment
             previous_exp = ExperimentData(starting_weights['experiment_id'])
             weights = previous_exp.get_artifact(starting_weights['filename'])
