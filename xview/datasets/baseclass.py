@@ -8,12 +8,13 @@ class DataBaseclass(DataWrapper):
     """A basic, abstract class for splitting data into batches, compliant with DataWrapper
     interface."""
 
-    def __init__(self, trainset, testset, batchsize, modalities):
+    def __init__(self, trainset, testset, batchsize, modalities, labelinfo):
         self.testset = testset
         self.trainset = shuffle(trainset)
         self.batch_idx = 0
         self.batchsize = batchsize
         self.modalities = modalities
+        self.labelinfo = labelinfo
 
     def _get_data(self, **kwargs):
         """Returns data for one item in trainset or testset. kwargs is the unfolded dict
@@ -58,3 +59,10 @@ class DataBaseclass(DataWrapper):
         for mod in self.modalities:
             batch[mod] = np.stack(batch[mod])
         return batch
+
+    def coloured_labels(self, labels):
+        """Return a coloured picture according to set label colours."""
+        # To efficiently map class label to color, we create a lookup table
+        lookup = np.array([self.labelinfo[i]['color']
+                           for i in range(max(self.labelinfo.keys()) + 1)]).astype(int)
+        return np.array(lookup[labels[:, :]])
