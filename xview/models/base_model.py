@@ -125,7 +125,7 @@ class BaseModel(object):
         """
         with self.graph.as_default():
             # Merge all summary creation into one op. Add summary for loss.
-            tf.summary.scalar('loss', self.loss)
+            loss_summary = tf.summary.scalar('loss', self.loss)
             merged_summary = tf.summary.merge_all()
             if self.output_dir is not None:
                 train_writer = tf.summary.FileWriter(self.output_dir, self.graph)
@@ -142,9 +142,9 @@ class BaseModel(object):
             print('INFO: Start training')
             for i in range(iterations):
                 if hasattr(self, '_train_step'):
-                    summary, loss = self._train_step(merged_summary)
+                    summary, loss = self._train_step(loss_summary)
                 else:
-                    summary, loss, _ = self.sess.run([merged_summary, self.loss,
+                    summary, loss, _ = self.sess.run([loss_summary, self.loss,
                                                       self.trainer])
                 if self.output_dir is not None:
                     train_writer.add_summary(summary, i)
@@ -152,6 +152,7 @@ class BaseModel(object):
                 # Every validation_interval, we add a summary of validation values
                 if i % validation_interval == 0 and validation_data is not None:
                     score = self.score(validation_data)
+                    summary = self.sess.run([merged_summary])
                     accuracy = tf.Summary(
                         value=[tf.Summary.Value(tag='accuracy',
                                                 simple_value=score['mean_accuracy'])])
@@ -161,6 +162,7 @@ class BaseModel(object):
                             i, loss, score['mean_accuracy']))
                     if self.output_dir is not None:
                         train_writer.add_summary(accuracy, i)
+                        train_writer.add_summary(summary, i)
 
             coord.request_stop()
             # Before we can close the queue, wait that the enqueue process stopped,
