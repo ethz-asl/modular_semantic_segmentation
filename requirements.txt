@@ -20,3 +20,4 @@ pypng
 sacred
 pymongo
 GitPython
+pandas

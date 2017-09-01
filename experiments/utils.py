@@ -1,6 +1,8 @@
 from sacred.observers import MongoObserver
+from pandas import Series
 from pymongo import MongoClient
 from gridfs import GridFS
+from tensorflow.python.summary.summary_iterator import summary_iterator
 from xview.settings import EXPERIMENT_DB_HOST, EXPERIMENT_DB_USER, EXPERIMENT_DB_PWD,\
     EXPERIMENT_DB_NAME
 
@@ -33,3 +35,23 @@ class ExperimentData:
                            if artifact['name'] == name)
         return self.fs.get(artifact_id)
 
+    def get_summary(self, tag):
+        search = [artifact['name'] for artifact in self.record['artifacts']
+                  if 'events' in artifact['name']]
+        if not len(search) > 0:
+            raise UserWarning('ERROR: Could not find summary file')
+        summary_file = search[0]
+        tmp_file = '/tmp/summary'
+        with open(tmp_file, 'wb') as f:
+            f.write(self.get_artifact(summary_file).read())
+        iterator = summary_iterator(tmp_file)
+
+        # go through all the values and store them
+        step = []
+        value = []
+        for event in iterator:
+              for measurement in event.summary.value:
+                    if (measurement.tag == tag):
+                        step.append(event.step)
+                        value.append(measurement.simple_value)
+        return Series(value, index=step)
