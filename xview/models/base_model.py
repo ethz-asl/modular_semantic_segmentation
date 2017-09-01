@@ -290,6 +290,9 @@ class BaseModel(object):
                     name = translation[name]
                 if name not in weights:
                     print('WARNING: {} not found in saved weights'.format(name))
+                # Optimizers like Adagrad have their own variables, do not load these
+                if 'grad' in name:
+                    continue
                 else:
                     if not variable.shape == weights[name].shape:
                         print('WARNING: wrong shape found for {}, but ignored in chill '
