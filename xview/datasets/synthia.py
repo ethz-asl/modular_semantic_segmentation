@@ -67,7 +67,7 @@ class Synthia(DataBaseclass):
             e.g. the one-hot version of class 4 is:
                 (self.one_hot_lookup == 4).astype(int)
                 -->     [0, 0, 0, 0, 1, 0, 0, 0, 0, 0,  0,  0,  0,  0]"""
-        return np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15])
+        return np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
 
     def _preprocessing(self, sequence):
         """Preprocessing of SYNTHIA data.
@@ -169,6 +169,8 @@ class Synthia(DataBaseclass):
         # dimension is omitted
         blob['depth'] = np.expand_dims(depth, 3)
         labels = np.load(groundtruth_filename.format('.npy'))
+        # Dirty fix for the class 15
+        labels[labels == 15] = 13
         if one_hot:
             # Labels still have to get converted to one-hot
             labels = np.array(self.one_hot_lookup == labels[:, :, None]).astype(int)
