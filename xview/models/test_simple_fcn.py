@@ -19,5 +19,5 @@ def test_can_build_model():
 def test_can_run_training():
     data = Synthia(['UNITTEST-SEQUENCE'], 2)
 
-    with FCN(**config) as net:
+    with FCN('/dev/null/', **config) as net:
         net.fit(data, 1)
