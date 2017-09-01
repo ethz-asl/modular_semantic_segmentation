@@ -35,7 +35,7 @@ def my_main(data_config, fcn_config, num_iterations, starting_weights, _run):
     # create the network
     with SimpleFCN(output_dir=output_dir, **fcn_config) as net:
 
-        if starting_weights is not None:
+        if starting_weights:
             # load startign weights
             if starting_weights == 'washington':
                 # load the washington weights
