@@ -11,7 +11,11 @@ class SimpleFCN(BaseModel):
     """FCN implementation following DA-RNN architecture and using tf.layers."""
 
     def __init__(self, output_dir=None, **config):
-        BaseModel.__init__(self, 'SimpleFCN', output_dir=output_dir, **config)
+        standard_config = {
+            'train_encoder': True
+        }
+        standard_config.update(config)
+        BaseModel.__init__(self, 'SimpleFCN', output_dir=output_dir, **standard_config)
 
     def _build_graph(self):
         """Builds the whole network. Network is split into 2 similar pipelines with shared
@@ -82,7 +86,7 @@ class SimpleFCN(BaseModel):
         # for convenience.
         params = {'activation': tf.nn.relu, 'padding': 'same', 'reuse': reuse,
                   'batch_normalization': self.config['batch_normalization'],
-                  'training': is_training}
+                  'training': is_training, 'trainable': self.config['train_encoder']}
 
         conv4, conv5 = vgg16(inputs, prefix, params)
 
@@ -91,9 +95,10 @@ class SimpleFCN(BaseModel):
                        name='{}_score_conv4'.format(prefix), **params)
         conv5 = conv2d(conv5, self.config['num_units'], [1, 1],
                        name='{}_score_conv5'.format(prefix), **params)
+        # The deconvolution is always set static.
+        params['trainable'] = False
         conv5 = deconv2d(conv5, self.config['num_units'], [4, 4], strides=[2, 2],
-                         name='{}_upscore_conv5'.format(prefix), trainable=False,
-                         **params)
+                         name='{}_upscore_conv5'.format(prefix), **params)
 
         fused = tf.add_n([conv4, conv5], name='{}_add_score'.format(prefix))
         return fused
