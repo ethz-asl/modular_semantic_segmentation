@@ -11,13 +11,7 @@ class SimpleFCN(BaseModel):
     """FCN implementation following DA-RNN architecture and using tf.layers."""
 
     def __init__(self, output_dir=None, **config):
-        standard_config = {
-            'num_samples': 20,
-            'learning_rate': 0.01,
-            'batch_normalization': True
-        }
-        standard_config.update(config)
-        BaseModel.__init__(self, 'SimpleFCN', output_dir=output_dir, **standard_config)
+        BaseModel.__init__(self, 'SimpleFCN', output_dir=output_dir, **config)
 
     def _build_graph(self):
         """Builds the whole network. Network is split into 2 similar pipelines with shared
@@ -28,7 +22,8 @@ class SimpleFCN(BaseModel):
         # This is not the direct input into the network, the enqueue-op has to be called
         # to evaluate any data that is fed here.
         # rgb channel
-        self.train_X_rgb = tf.placeholder(tf.float32, shape=[None, None, None, 3])
+        self.train_X = tf.placeholder(tf.float32,shape=[None, None, None,
+                                                        self.config['num_channels']])
         # ground truth labels
         self.train_Y = tf.placeholder(tf.float32, shape=[None, None, None,
                                                          self.config['num_classes']])
@@ -40,10 +35,10 @@ class SimpleFCN(BaseModel):
         # IMPORTANT: The size of this queue can grow big very easily with growing
         # batchsize, therefore do not make the queue too long, otherwise we risk getting
         # killed by the OS
-        q = tf.FIFOQueue(5, [tf.float32, tf.float32, tf.float32])
-        self.enqueue_op = q.enqueue([self.train_X_rgb, self.train_Y,
+        q = tf.FIFOQueue(3, [tf.float32, tf.float32, tf.float32])
+        self.enqueue_op = q.enqueue([self.train_X, self.train_Y,
                                      self.train_dropout_rate])
-        train_rgb, training_labels, train_dropout_rate = q.dequeue()
+        train_x, training_labels, train_dropout_rate = q.dequeue()
 
         # This operation has to be called to close the input queue and free the space it
         # occupies in memory.
@@ -51,10 +46,11 @@ class SimpleFCN(BaseModel):
 
         # The queue output does not have a defined shape, so we have to define it here to
         # be compatible with tf.layers.
-        train_rgb.set_shape([None, None, None, 3])
+        train_x.set_shape([None, None, None, self.config['num_channels']])
 
-        features = self._encoder(train_rgb, 'rgb', is_training=True, reuse=False)
-        score = self._decoder(features, 'rgb', train_dropout_rate,
+        features = self._encoder(train_x, self.config['modality'], is_training=True,
+                                 reuse=False)
+        score = self._decoder(features, self.config['modality'], train_dropout_rate,
                               is_training=True, reuse=False)
         prob = log_softmax(score, self.config['num_classes'], name='prob')
         # The loss is given by the cross-entropy with the ground-truth
@@ -65,15 +61,17 @@ class SimpleFCN(BaseModel):
         # As before, we define placeholders for the input. These here now can be fed
         # directly, e.g. with a feed_dict created by _evaluation_food
         # rgb channel
-        self.test_X_rgb = tf.placeholder(tf.float32, shape=[None, None, None, 3])
+        self.test_X = tf.placeholder(tf.float32, shape=[None, None, None,
+                                                        self.config['num_channels']])
 
-        features = self._encoder(self.test_X_rgb, 'rgb')
-        score = self._decoder(features, 'rgb', tf.constant(0.0))
+        features = self._encoder(self.test_X, self.config['modality'])
+        score = self._decoder(features, self.config['modality'], tf.constant(0.0))
         label = softmax(score, self.config['num_classes'], name='prob_normalized')
         self.prediction = tf.argmax(label, 3, name='label_2d')
 
         # Add summaries for some weights
-        variable_names = ['rgb_score/kernel:0', 'rgb_score/bias:0']
+        variable_names = [x.format(self.config['modality'])
+                          for x in ['{}_score/kernel:0', '{}_score/bias:0']]
         for name in variable_names:
             var = next(v for v in tf.global_variables() if v.name == name)
             tf.summary.histogram(name, var)
@@ -117,10 +115,11 @@ class SimpleFCN(BaseModel):
 
     def _enqueue_batch(self, batch, sess):
         with self.graph.as_default():
-            feed_dict = {self.train_X_rgb: batch['rgb'], self.train_Y: batch['labels'],
+            feed_dict = {self.train_X: batch[self.config['modality']],
+                         self.train_Y: batch['labels'],
                          self.train_dropout_rate: self.config['dropout_rate']}
             sess.run(self.enqueue_op, feed_dict=feed_dict)
 
     def _evaluation_food(self, data):
-        feed_dict = {self.test_X_rgb: data['rgb']}
+        feed_dict = {self.test_X: data[self.config['modality']]}
         return feed_dict
