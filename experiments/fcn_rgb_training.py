@@ -1,4 +1,5 @@
 from sacred import Experiment
+from sacred.utils import TimeoutInterrupt
 from xview.datasets.synthia import Synthia
 from xview.models.simple_fcn import SimpleFCN
 from xview.settings import DATA_BASEPATH
@@ -46,8 +47,13 @@ def my_main(data_config, fcn_config, num_iterations, starting_weights, _run):
             weights = previous_exp.get_artifact(starting_weights['filename'])
         net.import_weights(weights, chill_mode=True)
 
-        # finetune on synthia
-        net.fit(data, num_iterations, validation_data=validation_set)
+        try:
+            # finetune on synthia
+            net.fit(data, num_iterations, validation_data=validation_set)
+            timeout = False
+        except KeyboardInterrupt:
+            print('WARNING: Got Keyboard Interrupt, will save weights and close')
+            timeout = True
 
         # Store the weights into the standard output directory
         net.export_weights()
@@ -55,3 +61,6 @@ def my_main(data_config, fcn_config, num_iterations, starting_weights, _run):
     # To end the experiment, we collect all produced output files and store them.
     for filename in os.listdir(output_dir):
         ex.add_artifact(os.path.join(output_dir, filename))
+
+    if timeout:
+        raise TimeoutInterrupt

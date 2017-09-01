@@ -100,10 +100,13 @@ class BaseModel(object):
         """
         with self.graph.as_default():
             # We enqueue new data until it tells us to stop.
-            while not coord.should_stop():
-                batch = data.next()
-                if not coord.should_stop():
-                    self._enqueue_batch(batch, sess)
+            try:
+                while not coord.should_stop():
+                    batch = data.next()
+                    if not coord.should_stop():
+                        self._enqueue_batch(batch, sess)
+            except tf.errors.CancelledError:
+                print('INFO: Input queue is closed, cannot enqueue any more data.')
 
     def fit(self, data, iterations, output=True, validation_data=None,
             validation_interval=100):
