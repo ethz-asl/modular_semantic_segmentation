@@ -35,17 +35,18 @@ def my_main(data_config, fcn_config, num_iterations, starting_weights, _run):
     # create the network
     with SimpleFCN(output_dir=output_dir, **fcn_config) as net:
 
-        # load startign weights
-        if starting_weights == 'washington':
-            # load the washington weights
-            weights = os.path.join(DATA_BASEPATH, 'darnn/FCN_weights_40000.npz')
-        elif isinstance(starting_weights, dict):
-            print('INFO: Loading weights from experiment {}'.format(
-                starting_weights['experiment_id']))
-            # load weights from previous experiment
-            previous_exp = ExperimentData(starting_weights['experiment_id'])
-            weights = previous_exp.get_artifact(starting_weights['filename'])
-        net.import_weights(weights, chill_mode=True)
+        if starting_weights is not None:
+            # load startign weights
+            if starting_weights == 'washington':
+                # load the washington weights
+                weights = os.path.join(DATA_BASEPATH, 'darnn/FCN_weights_40000.npz')
+            elif isinstance(starting_weights, dict):
+                print('INFO: Loading weights from experiment {}'.format(
+                    starting_weights['experiment_id']))
+                # load weights from previous experiment
+                previous_exp = ExperimentData(starting_weights['experiment_id'])
+                weights = previous_exp.get_artifact(starting_weights['filename'])
+            net.import_weights(weights, chill_mode=True)
 
         try:
             # finetune on synthia
