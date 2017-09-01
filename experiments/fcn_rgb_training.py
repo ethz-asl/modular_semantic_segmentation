@@ -5,14 +5,14 @@ from xview.settings import DATA_BASEPATH
 import os
 import shutil
 
-from experiments.utils import get_mongo_observer
+from experiments.utils import get_mongo_observer, ExperimentData
 
 
 ex = Experiment()
 ex.observers.append(get_mongo_observer())
 
 @ex.automain
-def my_main(data_config, fcn_config, num_iterations, _run):
+def my_main(data_config, fcn_config, num_iterations, starting_weights, _run):
     # create temporary directory for output files
     if os.path.exists('/tmp/fcn_train'):
         # Remove old data
@@ -32,12 +32,15 @@ def my_main(data_config, fcn_config, num_iterations, _run):
     # create the network
     with SimpleFCN(output_dir=output_dir, **fcn_config) as net:
 
-        # load the washington weights
-        washington_weights = os.path.join(DATA_BASEPATH,
-                                          'darnn/FCN_weights_40000.npz')
-        net.import_weights(washington_weights, chill_mode=True)
-        # We also tell the experiment that we used this resource
-        ex.add_resource(washington_weights)
+        # load startign weights
+        if starting_weights == 'washington':
+            # load the washington weights
+            weights = os.path.join(DATA_BASEPATH, 'darnn/FCN_weights_40000.npz')
+        elif isinstance(starting_weights, dict):
+            # load weights from previous experiment
+            previous_exp = ExperimentData(starting_weights['experiment_id'])
+            weights = previous_exp.get_artifact(starting_weights['filename'])
+        net.import_weights(weights, chill_mode=True)
 
         # finetune on synthia
         net.fit(data, num_iterations, validation_data=validation_set)
