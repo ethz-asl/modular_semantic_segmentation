@@ -6,8 +6,10 @@ import numpy as np
 import os
 import shutil
 
+
 ex = Experiment()
 ex.observers.append(get_mongo_observer())
+
 
 @ex.automain
 def my_main(data_config, modelname, net_config, starting_weights, _run):
@@ -24,12 +26,22 @@ def my_main(data_config, modelname, net_config, starting_weights, _run):
     # This is an independent experiment, but still we want to set a connection to the
     # training run.
     _run.info['training_id'] = starting_weights['experiment_id']
+    # Load the training experiment
+    training_experiment = ExperimentData(starting_weights['experiment_id'])
+    # We take the network configuration from this experiment as a basis and overwrite
+    # any given new values.
+    model_config = training_experiment.get_record()['config']['fcn_config']
+    model_config.update(net_config)
+
+    # save this
+    _run.config['net_config'] = model_config
+    print('Running with net_config:')
+    print(model_config)
 
     # Create the network
     model = get_model(modelname)
-    with model(**net_config) as net:
+    with model(**model_config) as net:
         # import the weights
-        training_experiment = ExperimentData(starting_weights['experiment_id'])
         weights = training_experiment.get_artifact(starting_weights['filename'])
         net.import_weights(weights)
 
