@@ -30,7 +30,7 @@ def my_main(data_config, fcn_config, num_iterations, starting_weights, _run):
     # Load the dataset, we expect config to include the arguments
     data = Synthia(data_config['sequences'], data_config['batchsize'])
     # get validation set
-    validation_set = data.get_test_data(num_items=10)
+    validation_set = data.get_validation_data(num_items=10)
 
     # create the network
     with SimpleFCN(output_dir=output_dir, **fcn_config) as net:

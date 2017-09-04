@@ -1,5 +1,5 @@
 import numpy as np
-from sklearn.utils import shuffle
+from sklearn.model_selection import train_test_split
 
 from .wrapper import DataWrapper
 
@@ -9,8 +9,8 @@ class DataBaseclass(DataWrapper):
     interface."""
 
     def __init__(self, trainset, testset, batchsize, modalities, labelinfo):
-        self.testset = testset
-        self.trainset = shuffle(trainset)
+        self.testset, self.validation_set = train_test_split(testset, test_size=10)
+        self.trainset = trainset
         self.batch_idx = 0
         self.batchsize = batchsize
         self.modalities = modalities
@@ -36,15 +36,20 @@ class DataBaseclass(DataWrapper):
         return self._get_batch([self.trainset[self._next_batch_idx()]
                                 for _ in range(self.batchsize)])
 
-    def get_test_data(self, num_items=None):
+    def get_test_data(self, batch_size=10):
+        """Return generator for test-data."""
+        for start_idx in range(0, len(self.testset), batch_size):
+            yield self._get_batch((self.testset[idx]
+                                   for idx in range(start_idx, start_idx + batch_size)),
+                                  one_hot=False)
+
+    def get_validation_data(self, num_items=None):
         """Return the test-data in one big batch."""
         if num_items is None:
-            return self._get_batch(self.testset, one_hot=False)
-        else:
-            # generate given number of random indizes
-            idx = np.random.choice(range(len(self.testset)), size=num_items,
-                                   replace=False)
-            return self._get_batch((self.testset[i] for i in idx), one_hot=False)
+            num_items = len(self.validation_set)
+
+        return self._get_batch((self.validation_set[i] for i in range(num_items)),
+                               one_hot=False)
 
     def _get_batch(self, items, one_hot=True):
         # Dependent on the batchsize, we collect a list of datablobs and group them by
