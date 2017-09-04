@@ -122,10 +122,16 @@ class SplitFCN(BaseModel):
         # corresponding prediction
         rgb_available = tf.greater(tf.reduce_sum(self.test_X_rgb), 0.0)
         depth_available = tf.greater(tf.reduce_sum(self.test_X_d), 0.0)
+
         self.prediction = tf.cond(rgb_available, lambda: tf.cond(depth_available,
                                                                  lambda: label,
                                                                  lambda: rgb_label),
                                   lambda: depth_label)
+        # To understand what"s going on under the hood, we expose a lot of intermediate
+        # results for evaluation
+        self.rgb_branch = {'mean': rgb_mean, 'variance': rgb_var, 'label': rgb_label}
+        self.depth_branch = {'mean': depth_mean, 'variance': depth_var,
+                             'label': depth_label}
 
     def _encoder(self, inputs, prefix, is_training=False, reuse=True):
         """VGG16 image encoder with fusion of conv4_3 and conv5_3 features."""
@@ -182,3 +188,21 @@ class SplitFCN(BaseModel):
         summaries, loss, _, _ = self.sess.run([summaries, self.loss, self.rgb_trainer,
                                                self.depth_trainer])
         return summaries, loss
+
+    def prediction_difference(self, data):
+        """Evaluate prediction of the different individual branches for the given data.
+        """
+        with self.graph.as_default():
+            outputs = self.sess.run([self.rgb_branch['mean'],
+                                     self.rgb_branch['variance'],
+                                     self.rgb_branch['label'],
+                                     self.depth_branch['mean'],
+                                     self.depth_branch['variance'],
+                                     self.depth_branch['label'],
+                                     self.prediction],
+                                    feed_dict=self._evaluation_food(data))
+        return {
+            'rgb_mean': outputs[0], 'rgb_variance': outputs[1], 'rgb_label': outputs[2],
+            'depth_mean': outputs[3], 'depth_variance': outputs[4],
+            'depth_label': outputs[5], 'fused_label': outputs[6]
+        }
