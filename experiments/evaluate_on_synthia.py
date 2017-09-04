@@ -1,5 +1,5 @@
 from sacred import Experiment
-from .utils import ExperimentData, get_mongo_observer
+from experiments.utils import ExperimentData, get_mongo_observer
 from xview.datasets.synthia import Synthia
 from xview.models import get_model
 import numpy as np
