@@ -4,6 +4,7 @@ import threading
 from os import path
 from abc import ABCMeta, abstractmethod
 from time import sleep
+from types import GeneratorType
 
 from xview.models.utils import cross_entropy
 from xview.datasets.wrapper import DataWrapper
@@ -176,42 +177,51 @@ class BaseModel(object):
         """Perform semantic segmentation on the input data.
 
         Args:
-            data: Either a handler to a dataclass inheriting from DataWrapper or a
-                dictionary {'rgb': <array of shape [num_images, width, height]>
-                            'depth': <array of shape [num_images, width, height]>}
+            data: a dictionary {'rgb': <array of shape [num_images, width, height]>
+                                'depth': <array of shape [num_images, width, height]>}
         Returns:
             per-pixel classification of the input image in form
                 <array of shape [num_images, width, height]>
         """
         with self.graph.as_default():
-            # As there is no coordinator, enqueue simply one batch.
-            if isinstance(data, DataWrapper):
-                # This gives one batch from the dataset.
-                batch = data.next()
-            else:
-                # We otherwise assume that data is already a batch-dict.
-                batch = data
-            prediction = self.sess.run(self.prediction,
-                                       feed_dict=self._evaluation_food(batch))
-            return prediction
+            return self.sess.run(self.prediction, feed_dict=self._evaluation_food(data))
 
     def score(self, data):
-        """Measure the performance of the model with respect to the given data."""
-        with self.graph.as_default():
-            feed_dict = self._evaluation_food(data)
-            feed_dict[self.evaluation_labels] = data['labels']
-            confusion = self.sess.run(self.confusion_matrix, feed_dict=feed_dict)
-            confusion = np.array(confusion).astype(np.float32)
+        """Measure the performance of the model with respect to the given data.
+
+        Args:
+            data: either a dictionary as for 'predict', containing keys 'rgb', 'depth'
+                and 'labels', or a generator for several such dictionaries.
+        Returns:
+            dictionary of some measures, total confusion matrix
+        """
+
+        def get_confusion_matrix(batch):
+            """Evaluate confusion matrix of network for given batch of data."""
+            with self.graph.as_default():
+                feed_dict = self._evaluation_food(batch)
+                feed_dict[self.evaluation_labels] = batch['labels']
+                confusion = self.sess.run(self.confusion_matrix, feed_dict=feed_dict)
+                return np.array(confusion).astype(np.float32)
+
+        if isinstance(data, GeneratorType):
+            confusion_matrix = np.zeros((self.config['num_classes'],
+                                         self.config['num_classes']))
+            for batch in data:
+                confusion_matrix += get_confusion_matrix(batch)
+        else:
+            confusion_matrix = get_confusion_matrix(data)
 
         # Now we compute several mesures from the confusion matrix
         measures = {}
-        measures['confusion_matrix'] = confusion
-        measures['accuracy'] = np.diag(confusion) / confusion.sum(1)
+        measures['confusion_matrix'] = confusion_matrix
+        measures['accuracy'] = np.diag(confusion_matrix) / confusion_matrix.sum(1)
         measures['mean_accuracy'] = np.nanmean(measures['accuracy'])
-        measures['IU'] = np.diag(confusion) / \
-            (confusion.sum(1) + confusion.sum(0) - np.diag(confusion))
+        measures['IU'] = np.diag(confusion_matrix) / \
+            (confusion_matrix.sum(1) + confusion_matrix.sum(0) -
+             np.diag(confusion_matrix))
         measures['mean_IU'] = np.nanmean(measures['IU'])
-        return measures
+        return measures, confusion_matrix
 
     def load_weights(self, filepath):
         """Load model weights stored in a tensorflow checkpoint.
