@@ -95,6 +95,7 @@ class SplitFCN(BaseModel):
             samples = tf.stack([self._decoder(features, prefix, self.test_dropout_rate)
                                 for _ in range(self.config['num_samples'])], axis=4)
             mean, variance = tf.nn.moments(samples, [4])
+            variance = tf.nn.l2_normalize(variance, 3, epsilon=1e-12)
             return mean, variance
 
         rgb_mean, rgb_var = test_pipeline(self.test_X_rgb, 'rgb')
