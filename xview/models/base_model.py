@@ -299,7 +299,7 @@ class BaseModel(object):
             for variable in tf.global_variables():
                 name = variable.op.name
                 # Optimizers like Adagrad have their own variables, do not load these
-                if 'grad' in name:
+                if 'grad' in name or 'Adam' in name:
                     continue
                 if name not in weights and translation is not None:
                     name = translation[name]
