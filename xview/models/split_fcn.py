@@ -92,7 +92,7 @@ class SplitFCN(BaseModel):
             features = self._encoder(inputs, prefix)
             # For classification, we sample distributions with Dropout-Monte-Carlo and
             # fuse output according to variance
-            samples = tf.stack([self._decoder(features, 'rgb', self.test_dropout_rate)
+            samples = tf.stack([self._decoder(features, prefix, self.test_dropout_rate)
                                 for _ in range(self.config['num_samples'])], axis=4)
             mean, variance = tf.nn.moments(samples, [4])
             return mean, variance
@@ -100,8 +100,11 @@ class SplitFCN(BaseModel):
         rgb_mean, rgb_var = test_pipeline(self.test_X_rgb, 'rgb')
         depth_mean, depth_var = test_pipeline(self.test_X_d, 'depth')
 
+        eps = tf.constant(1e-12, name='epsilon')
+
         fused_score = tf.multiply((rgb_var + depth_var),
-                                  (rgb_mean / rgb_var + depth_mean / depth_var),
+                                  (rgb_mean / (rgb_var + eps) +
+                                   depth_mean / (depth_var + eps)),
                                   name='variance_weighted_fusion')
         label = softmax(fused_score, self.config['num_classes'], name='prob_normalized')
         label = tf.argmax(label, 3, name='label_2d')
@@ -151,7 +154,9 @@ class SplitFCN(BaseModel):
                   'batch_normalization': self.config['batch_normalization'],
                   'training': is_training}
 
-        features = dropout(features, rate=dropout_rate,
+        # Dropout defaults to training=False, where dropout is not applied.
+        # We trigger dropout by setting the dropout-rate, not by this boolean.
+        features = dropout(features, rate=dropout_rate, training=True,
                            name='{}_dropout'.format(prefix))
         # Upsample the fused features to the output classification size
         features = deconv2d(features, self.config['num_units'], [16, 16],
