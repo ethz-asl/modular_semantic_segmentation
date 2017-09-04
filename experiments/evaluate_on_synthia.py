@@ -37,6 +37,26 @@ def evaluate(net, sequences):
     ex.add_artifact('/tmp/eval/confusion_matrix.npy')
 
 
+@ex.command
+def multiple_weights(data_config, modelname, net_config, starting_weights, _run):
+    """Special command in case we want to import weights from multiple experiments after
+    each other"""
+    train_ids = []
+
+    model = get_model(modelname)
+    with model(**net_config) as net:
+        for weights_descriptor in starting_weights:
+            training_experiment = ExperimentData(weights_descriptor['experiment_id'])
+            train_ids.append(weights_descriptor['experiment_id'])
+            weights = training_experiment.get_artifact(weights_descriptor['filename'])
+            net.import_weights(weights)
+
+        evaluate(net, data_config['sequences'])
+
+    # save the reference to the experiments
+    _run.info['training_ids'] = train_ids
+
+
 @ex.automain
 def my_main(data_config, modelname, net_config, starting_weights, _run):
     """Standard command"""
@@ -65,21 +85,4 @@ def my_main(data_config, modelname, net_config, starting_weights, _run):
         evaluate(net, data_config['sequences'])
 
 
-@ex.command
-def multiple_weights(data_config, modelname, net_config, starting_weights, _run):
-    """Special command in case we want to import weights from multiple experiments after
-    each other"""
-    train_ids = []
 
-    model = get_model(modelname)
-    with model(**net_config) as net:
-        for weights_descriptor in starting_weights:
-            training_experiment = ExperimentData(weights_descriptor['experiment_id'])
-            train_ids.append(weights_descriptor['experiment_id'])
-            weights = training_experiment.get_artifact(weights_descriptor['filename'])
-            net.import_weights(weights)
-
-        evaluate(net, data_config['sequences'])
-
-    # save the reference to the experiments
-    _run.info['training_ids'] = train_ids
