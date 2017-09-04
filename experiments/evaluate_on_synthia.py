@@ -36,8 +36,11 @@ def my_main(data_config, modelname, net_config, starting_weights, _run):
         measures, confusion_matrix = net.score(testdata)
 
     print('Evaluated network on Synthia:')
-    for key, value in measures.iteritems():
-        print('{}: {:.3f}'.format(key, value))
+    print('MEAN accuracy {:.2f} IU {:.2f}'.format(measures['mean_accuracy'],
+                                                  measures['mean_IU']))
+    for label in data.labelinfo:
+        print("{:>15}: {:.2f} accuracy".format(data.labelinfo[label]['name'],
+                                               measures['accuracy'][label]))
 
     # As this evaluation will take quite some time, we store the confusion matrix for
     # possible later use.
