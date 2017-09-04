@@ -38,9 +38,10 @@ class DataBaseclass(DataWrapper):
 
     def get_test_data(self, batch_size=10):
         """Return generator for test-data."""
-        for start_idx in range(0, len(self.testset), batch_size):
-            yield self._get_batch((self.testset[idx]
-                                   for idx in range(start_idx, start_idx + batch_size)),
+        testset_size = len(self.testset)
+        for start_idx in range(0, testset_size, batch_size):
+            yield self._get_batch((self.testset[idx] for idx in range(start_idx,
+                                   max(start_idx + batch_size, testset_size))),
                                   one_hot=False)
 
     def get_validation_data(self, num_items=None):
