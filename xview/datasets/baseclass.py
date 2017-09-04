@@ -41,7 +41,7 @@ class DataBaseclass(DataWrapper):
         testset_size = len(self.testset)
         for start_idx in range(0, testset_size, batch_size):
             yield self._get_batch((self.testset[idx] for idx in range(start_idx,
-                                   max(start_idx + batch_size, testset_size))),
+                                   min(start_idx + batch_size, testset_size))),
                                   one_hot=False)
 
     def get_validation_data(self, num_items=None):
