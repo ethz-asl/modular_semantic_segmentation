@@ -5,6 +5,7 @@ from xview.models import get_model
 import numpy as np
 import os
 import shutil
+from sys import stdout
 
 
 ex = Experiment()
@@ -35,6 +36,9 @@ def evaluate(net, sequences):
     # possible later use.
     np.save('/tmp/eval/confusion_matrix.npy', confusion_matrix)
     ex.add_artifact('/tmp/eval/confusion_matrix.npy')
+
+    # There seems to be a problem with capturing the print output, flush it for security.
+    stdout.flush()
 
 
 @ex.command
@@ -83,6 +87,3 @@ def my_main(data_config, modelname, net_config, starting_weights, _run):
         net.import_weights(weights)
 
         evaluate(net, data_config['sequences'])
-
-
-
