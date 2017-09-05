@@ -14,7 +14,7 @@ ex.observers.append(get_mongo_observer())
 def evaluate(net, sequences):
     # Load the dataset, we expect config to include the arguments
     data = Synthia(sequences, 1)
-    testdata = data.get_test_data(batch_size=5)
+    testdata = data.get_test_data(batch_size=1)
 
     measures, confusion_matrix = net.score(testdata)
 
