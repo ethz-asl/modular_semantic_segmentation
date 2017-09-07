@@ -152,7 +152,7 @@ class BaseModel(object):
 
                 # Every validation_interval, we add a summary of validation values
                 if i % validation_interval == 0 and validation_data is not None:
-                    score = self.score(validation_data)
+                    score, _ = self.score(validation_data)
                     summary = self.sess.run(merged_summary)
                     accuracy = tf.Summary(
                         value=[tf.Summary.Value(tag='accuracy',
