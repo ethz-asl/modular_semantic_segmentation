@@ -283,7 +283,8 @@ class BaseModel(object):
             print('INFO: Weights saved to {}'.format(output_path))
             return output_path
 
-    def import_weights(self, filepath, translation=None, chill_mode=False):
+    def import_weights(self, filepath, translation=None, chill_mode=False,
+                       warnings=True):
         """Import weights given by a numpy file. Variables are assigned to arrays which's
         key matches the variable name.
 
@@ -304,10 +305,12 @@ class BaseModel(object):
                 if name not in weights and translation is not None:
                     name = translation[name]
                 if name not in weights:
-                    print('WARNING: {} not found in saved weights'.format(name))
+                    if warnings:
+                        print('WARNING: {} not found in saved weights'.format(name))
                 else:
                     if not variable.shape == weights[name].shape:
-                        print('WARNING: wrong shape found for {}, but ignored in chill '
-                              'mode'.format(name))
+                        if warnings:
+                            print('WARNING: wrong shape found for {}, but ignored in '
+                                  'chill mode'.format(name))
                     else:
                         self.sess.run(variable.assign(weights[name]))
