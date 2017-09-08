@@ -36,6 +36,14 @@ class DataBaseclass(DataWrapper):
         return self._get_batch([self.trainset[self._next_batch_idx()]
                                 for _ in range(self.batchsize)])
 
+    def get_train_data(self, batch_size=10):
+        """Return generator for train-data."""
+        trainset_size = len(self.trainset)
+        for start_idx in range(0, trainset_size, batch_size):
+            yield self._get_batch((self.trainset[idx] for idx in range(start_idx,
+                                   min(start_idx + batch_size, trainset_size))),
+                                  one_hot=False)
+
     def get_test_data(self, batch_size=10):
         """Return generator for test-data."""
         testset_size = len(self.testset)
