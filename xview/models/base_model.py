@@ -160,7 +160,7 @@ class BaseModel(object):
 
                     if output:
                         print("{:4d}: loss {:.4f}, accuracy {:.2f}".format(
-                            i, loss, score['mean_accuracy']))
+                            i, loss, score['total_accuracy']))
                     if self.output_dir is not None:
                         train_writer.add_summary(accuracy, i)
                         train_writer.add_summary(summary, i)
@@ -217,6 +217,8 @@ class BaseModel(object):
         measures['confusion_matrix'] = confusion_matrix
         measures['accuracy'] = np.diag(confusion_matrix) / confusion_matrix.sum(1)
         measures['mean_accuracy'] = np.nanmean(measures['accuracy'])
+        measures['total_accuracy'] = np.diag(confusion_matrix).sum() / \
+            confusion_matrix.sum()
         measures['IU'] = np.diag(confusion_matrix) / \
             (confusion_matrix.sum(1) + confusion_matrix.sum(0) -
              np.diag(confusion_matrix))
