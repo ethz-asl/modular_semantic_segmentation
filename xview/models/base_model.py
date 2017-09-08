@@ -186,7 +186,7 @@ class BaseModel(object):
         with self.graph.as_default():
             return self.sess.run(self.prediction, feed_dict=self._evaluation_food(data))
 
-    def score(self, data):
+    def score(self, data, max_iterations=None):
         """Measure the performance of the model with respect to the given data.
 
         Args:
@@ -207,8 +207,13 @@ class BaseModel(object):
         if isinstance(data, GeneratorType):
             confusion_matrix = np.zeros((self.config['num_classes'],
                                          self.config['num_classes']))
+            i = 0
             for batch in data:
                 confusion_matrix += get_confusion_matrix(batch)
+                if max_iterations is not None:
+                    i = i + 1
+                    if i == max_iterations:
+                        break
         else:
             confusion_matrix = get_confusion_matrix(data)
 
