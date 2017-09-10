@@ -1,6 +1,6 @@
 from sacred import Experiment
 from experiments.utils import ExperimentData, get_mongo_observer
-from xview.datasets.synthia import Synthia
+from xview.datasets import get_dataset
 from xview.models import get_model
 import numpy as np
 import os
@@ -12,16 +12,21 @@ ex = Experiment()
 ex.observers.append(get_mongo_observer())
 
 
-def evaluate(net, sequences):
+def evaluate(net, data_config):
     # Load the dataset, we expect config to include the arguments
-    data = Synthia(sequences, 1)
-    testdata = data.get_test_data(batch_size=1)
+    dataset = get_dataset(data_config['dataset'])
+    data = dataset(data_config['sequences'], 1)
+    if data_config.get('use_trainset', False):
+        print('INFO: Evaluating against trainset')
+        batches = data.get_train_data(batch_size=1)
+    else:
+        batches = data.get_test_data(batch_size=1)
 
-    measures, confusion_matrix = net.score(testdata)
+    measures, confusion_matrix = net.score(batches)
 
-    print('Evaluated network on Synthia:')
-    print('MEAN accuracy {:.2f} IU {:.2f}'.format(measures['mean_accuracy'],
-                                                  measures['mean_IU']))
+    print('Evaluated network on {}:'.format(data_config['dataset']))
+    print('TOTAL accuracy {:.2f} MEAN accuracy {:.2f} IU {:.2f}'.format(
+        measures['total_accuracy'], measures['mean_accuracy'], measures['mean_IU']))
     for label in data.labelinfo:
         print("{:>15}: {:.2f} accuracy".format(data.labelinfo[label]['name'],
                                                measures['accuracy'][label]))
@@ -55,7 +60,7 @@ def multiple_weights(data_config, modelname, net_config, starting_weights, _run)
             weights = training_experiment.get_artifact(weights_descriptor['filename'])
             net.import_weights(weights)
 
-        evaluate(net, data_config['sequences'])
+        evaluate(net, data_config)
 
     # save the reference to the experiments
     _run.info['training_ids'] = train_ids
@@ -86,4 +91,4 @@ def my_main(data_config, modelname, net_config, starting_weights, _run):
         weights = training_experiment.get_artifact(starting_weights['filename'])
         net.import_weights(weights)
 
-        evaluate(net, data_config['sequences'])
+        evaluate(net, data_config)
