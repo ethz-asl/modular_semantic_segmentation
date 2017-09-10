@@ -25,11 +25,12 @@ def evaluate(net, data_config):
     measures, confusion_matrix = net.score(batches)
 
     print('Evaluated network on {}:'.format(data_config['dataset']))
-    print('TOTAL accuracy {:.2f} MEAN accuracy {:.2f} IU {:.2f}'.format(
-        measures['total_accuracy'], measures['mean_accuracy'], measures['mean_IU']))
+    print('total accuracy {:.2f} mean F1 {:.2f} IU {:.2f}'.format(
+        measures['total_accuracy'], measures['mean_F1'], measures['mean_IU']))
     for label in data.labelinfo:
-        print("{:>15}: {:.2f} accuracy".format(data.labelinfo[label]['name'],
-                                               measures['accuracy'][label]))
+        print("{:>15}: {:.2f} precision, {:.2f} recall, {:.2f} F1".format(
+            data.labelinfo[label]['name'], measures['precision'][label],
+            measures['recall'][label], measures['F1'][label]))
 
     # create temporary directory for output files
     if os.path.exists('/tmp/eval'):
