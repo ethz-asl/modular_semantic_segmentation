@@ -19,9 +19,11 @@ class MixFCN(BaseModel):
 
         # load confusion matrices
         rgb_confusion = np.load(
-            ExperimentData(100).get_artifact('confusion_matrix.npy')).astype(np.float32)
+            ExperimentData(config['rgb_eval_experiment'])
+            .get_artifact('confusion_matrix.npy')).astype(np.float32)
         depth_confusion = np.load(
-            ExperimentData(98).get_artifact('confusion_matrix.npy')).astype(np.float32)
+            ExperimentData(config['depth_eval_experiment'])
+            .get_artifact('confusion_matrix.npy')).astype(np.float32)
 
         self.confusion = {'rgb': rgb_confusion, 'depth': depth_confusion}
 
