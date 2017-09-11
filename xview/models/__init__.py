@@ -1,6 +1,7 @@
 from .simple_fcn import SimpleFCN
 from .fcn import FCN
 from .split_fcn import SplitFCN
+from .mix_fcn import MixFCN
 
 
 def get_model(name):
@@ -10,5 +11,7 @@ def get_model(name):
         return SimpleFCN
     elif name == 'split_fcn':
         return SplitFCN
+    elif name == 'mix_fcn':
+        return MixFCN
     else:
         raise UserWarning('ERROR: Model {} not found'.format(name))
