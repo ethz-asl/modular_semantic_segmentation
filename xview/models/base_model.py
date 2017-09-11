@@ -21,12 +21,14 @@ class BaseModel(object):
         loss: a scalar value that should be minimized during training
         _train_step: a method performing one training iteration, taking a merged summary
             as input and returning the value of this summary and a loss value
+    if initialized with supports_training=False:
+        only required attribute is self.precition
     """
 
     __metaclass__ = ABCMeta
     required_attributes = [["loss", "_train_step"], ["prediction"], ["close_queue_op"]]
 
-    def __init__(self, name, output_dir=None, **config):
+    def __init__(self, name, output_dir=None, supports_training=True, **config):
         """Set configuration and build the model.
 
         Requires method _build_model to build the tensorflow graph.
@@ -38,6 +40,7 @@ class BaseModel(object):
         """
         self.name = name
         self.output_dir = output_dir
+        self.supports_training = supports_training
 
         self.config = config
 
@@ -53,14 +56,18 @@ class BaseModel(object):
             # For any child class, we require the attributes specified in the docstring
             # and defined in self.required_attributes. After self._build_graph(), we can
             # check for their existance.
-            missing_attrs = ["'%s'" % attrs for attrs in self.required_attributes
-                             if True not in [hasattr(self, attr) for attr in attrs]]
-            if missing_attrs:
-                raise AttributeError(
-                    "Model class requires "
-                    " and ".join(["attribute {}".format(attrs[0]) if len(attrs) < 2
-                                  else " one of the attributes {}".format(attrs)
-                                  for attrs in missing_attrs]))
+            if supports_training:
+                missing_attrs = ["'%s'" % attrs for attrs in self.required_attributes
+                                 if True not in [hasattr(self, attr) for attr in attrs]]
+                if missing_attrs:
+                    raise AttributeError(
+                        "Model class requires "
+                        " and ".join(["attribute {}".format(attrs[0]) if len(attrs) < 2
+                                      else " one of the attributes {}".format(attrs)
+                                      for attrs in missing_attrs]))
+            else:
+                if not hasattr(self, 'prediction'):
+                    raise AttributeError("Model class required attribute prediction")
 
             # To evaluate accuracy atc, we have to define soem structures here
             self.evaluation_labels = tf.placeholder(tf.float32, shape=[None, None, None])
@@ -69,7 +76,7 @@ class BaseModel(object):
                 predictions=tf.reshape(self.prediction, [-1]),
                 num_classes=self.config['num_classes'])
 
-            if not hasattr(self, '_train_step'):
+            if supports_training and not hasattr(self, '_train_step'):
                 self.global_step = tf.Variable(0, trainable=False, name='global_step')
                 self.trainer = tf.train.AdagradOptimizer(
                     self.config['learning_rate']).minimize(
@@ -87,7 +94,6 @@ class BaseModel(object):
         """Set up the whole network here."""
         raise NotImplementedError
 
-    @abstractmethod
     def _enqueue_batch(self, batch, sess):
         """Load the given training data into the correct inputs."""
         raise NotImplementedError
@@ -124,6 +130,10 @@ class BaseModel(object):
             iterations: The number of training iterations
             output: Boolean specifiying whether to output the loss progress
         """
+        if not self.supports_training:
+            raise UserWarning(
+                "ERROR: Model {} does not support training".format(self.name))
+
         with self.graph.as_default():
             # Merge all summary creation into one op. Add summary for loss.
             loss_summary = tf.summary.scalar('loss', self.loss)
