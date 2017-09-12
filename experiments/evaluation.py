@@ -13,6 +13,8 @@ ex.observers.append(get_mongo_observer())
 
 
 def evaluate(net, data_config):
+    """Evaluate the given network against the specified data and report the result
+    to the given experiment."""
     # Load the dataset, we expect config to include the arguments
     dataset = get_dataset(data_config['dataset'])
     data = dataset(data_config['sequences'], 1)
@@ -32,19 +34,32 @@ def evaluate(net, data_config):
             data.labelinfo[label]['name'], measures['precision'][label],
             measures['recall'][label], measures['F1'][label]))
 
-    # create temporary directory for output files
-    if os.path.exists('/tmp/eval'):
-        # Remove old data
-        shutil.rmtree('/tmp/eval')
-    os.mkdir('/tmp/eval')
-
-    # As this evaluation will take quite some time, we store the confusion matrix for
-    # possible later use.
-    np.save('/tmp/eval/confusion_matrix.npy', confusion_matrix)
-    ex.add_artifact('/tmp/eval/confusion_matrix.npy')
-
     # There seems to be a problem with capturing the print output, flush it for security.
     stdout.flush()
+    return measures, confusion_matrix
+
+
+def import_weights_into_network(net, starting_weights, **kwargs):
+    """Based on either a list of descriptions of training experiments or one description,
+    load the weights produced by these trainigns into the given network.
+    kwargs are passed to net.import_weights
+    """
+    def import_weights_from_description(experiment_description):
+        training_experiment = ExperimentData(experiment_description['experiment_id'])
+        if 'filename' not in experiment_description:
+            # If no specific file specified, take first found
+            filename = (artifact['name']
+                        for artifact in training_experiment.get_record()['artifacts']
+                        if 'weights' in artifact['name']).next()
+        else:
+            filename = experiment_description['filename']
+        net.import_weights(training_experiment.get_artifact(filename), **kwargs)
+
+    if isinstance(starting_weights, list):
+        for experiment_description in starting_weights:
+            import_weights_from_description(experiment_description)
+    else:
+        import_weights_from_description(starting_weights)
 
 
 @ex.command
@@ -89,7 +104,6 @@ def my_main(data_config, modelname, net_config, starting_weights, _run):
     model = get_model(modelname)
     with model(**model_config) as net:
         # import the weights
-        weights = training_experiment.get_artifact(starting_weights['filename'])
-        net.import_weights(weights)
+        import_weights_into_network(net, starting_weights)
 
         evaluate(net, data_config)
