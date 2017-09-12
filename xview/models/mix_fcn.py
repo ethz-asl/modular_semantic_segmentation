@@ -71,8 +71,10 @@ class MixFCN(BaseModel):
         # Based on the relative precision of the experts and their output probabilities,
         # we find a weight per expert and pixel.
         rgb_precision = np.diag(self.confusion['rgb']) / self.confusion['rgb'].sum(1)
+        rgb_precision = np.reshape(rgb_precision, (1, 1, 1, 14))
         depth_precision = np.diag(self.confusion['depth']) / \
             self.confusion['depth'].sum(1)
+        depth_precision = np.reshape(depth_precision, (1, 1, 1, 14))
         relative_precision = np.stack([rgb_precision, depth_precision], axis=0)
         relative_precision = relative_precision / relative_precision.sum(0)
         # Now reshape this precision according to batch shape
@@ -85,14 +87,15 @@ class MixFCN(BaseModel):
                                    keep_dims=True)
         depth_weight = tf.reduce_sum(depth_prob * relative_depth_precision, axis=3,
                                      keep_dims=True)
+        # Normalize prior with softmax
+        weights = tf.nn.softmax(float(self.config['separation_factor']) *
+                                tf.stack([rgb_weight, depth_weight], axis=0), dim=0)
+        rgb_weight = weights[0, :, :, :, :]
+        depth_weight = weights[1, :, :, :, :]
 
         # Now we take the weighted sum over all expert believes as network output.
-        # The 'prior' of each expert is the previously calculated weight stretched out by
-        # the separation factor, which will increase the weight-difference between the
-        # experts for higher values.
-        separation_factor = float(self.config['separation_factor'])
-        fused_score = rgb_bel * tf.exp(rgb_weight * separation_factor) + \
-            depth_bel * tf.exp(depth_weight * separation_factor)
+        # The 'prior' of each expert is the previously calculated weight
+        fused_score = rgb_bel * rgb_weight + depth_bel * depth_weight
 
         label = tf.argmax(fused_score, 3, name='label_2d')
 
@@ -115,10 +118,10 @@ class MixFCN(BaseModel):
         # results for evaluation
         self.rgb_branch = {'label': rgb_label,
                            'believe': rgb_bel,
-                           'relative_precision': relative_rgb_precision}
+                           'weight': rgb_weight}
         self.depth_branch = {'label': depth_label,
                              'believe': depth_bel,
-                             'relative_precision': relative_depth_precision}
+                             'weight': depth_weight}
 
     def _enqueue_batch(self, batch, sess):
         # This model does not support training
