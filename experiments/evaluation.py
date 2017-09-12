@@ -2,14 +2,7 @@ from sacred import Experiment
 from experiments.utils import ExperimentData, get_mongo_observer
 from xview.datasets import get_dataset
 from xview.models import get_model
-import numpy as np
-import os
-import shutil
 from sys import stdout
-
-
-ex = Experiment()
-ex.observers.append(get_mongo_observer())
 
 
 def evaluate(net, data_config):
@@ -22,7 +15,7 @@ def evaluate(net, data_config):
         print('INFO: Evaluating against trainset')
         batches = data.get_train_data(batch_size=1)
     else:
-        batches = data.get_test_data(batch_size=1)
+        batches = data.get_test_data(batch_size=1).next()
 
     measures, confusion_matrix = net.score(batches)
 
@@ -62,41 +55,46 @@ def import_weights_into_network(net, starting_weights, **kwargs):
         import_weights_from_description(starting_weights)
 
 
+ex = Experiment()
+ex.observers.append(get_mongo_observer())
+
+
+@ex.config_hook
+def load_model_configuration(config, command_name, logger):
+
+    def get_config_for_experiment(id):
+        training_experiment = ExperimentData(id)
+        return training_experiment.get_record()['config']
+
+    # This hook will produce the following update-dict for the config:
+    cfg_update = {}
+
+    if isinstance(config['starting_weights'], list):
+        # For convenience, we simply record all the configurations of the trainign
+        # experiments.
+        cfg_update['starting_weights'] = []
+        for exp_descriptor in config['starting_weights']:
+            cfg_update['starting_weights'].append({'config': get_config_for_experiment(
+                exp_descriptor['experiment_id'])})
+    else:
+        train_exp_config = get_config_for_experiment(
+            config['starting_weights']['experiment_id'])
+        # First, same as above, capture the information
+        cfg_update['starting_weights'] = {'config': train_exp_config}
+    return cfg_update
+
+
 @ex.command
-def multiple_weights(data_config, modelname, net_config, starting_weights, _run):
-    """Special command in case we want to import weights from multiple experiments after
-    each other"""
-    train_ids = []
-
-    model = get_model(modelname)
-    with model(**net_config) as net:
-        for weights_descriptor in starting_weights:
-            training_experiment = ExperimentData(weights_descriptor['experiment_id'])
-            train_ids.append(weights_descriptor['experiment_id'])
-            weights = training_experiment.get_artifact(weights_descriptor['filename'])
-            net.import_weights(weights)
-
-        evaluate(net, data_config)
-
-    # save the reference to the experiments
-    _run.info['training_ids'] = train_ids
-
-
-@ex.automain
-def my_main(data_config, modelname, net_config, starting_weights, _run):
-    """Standard command"""
-    # This is an independent experiment, but still we want to set a connection to the
-    # training run.
-    _run.info['training_id'] = starting_weights['experiment_id']
+def also_load_config(modelname, net_config, evaluation_data, starting_weights, _run):
+    """In case of only a single trainign experiment, we also load the exact network
+    config from this experiment as a default"""
     # Load the training experiment
     training_experiment = ExperimentData(starting_weights['experiment_id'])
-    # We take the network configuration from this experiment as a basis and overwrite
-    # any given new values.
+
     model_config = training_experiment.get_record()['config']['fcn_config']
     model_config.update(net_config)
 
     # save this
-    _run.config['net_config'] = model_config
     print('Running with net_config:')
     print(model_config)
 
@@ -106,4 +104,18 @@ def my_main(data_config, modelname, net_config, starting_weights, _run):
         # import the weights
         import_weights_into_network(net, starting_weights)
 
-        evaluate(net, data_config)
+        measurements, confusion_matrix = evaluate(net, evaluation_data)
+        _run.info['measurements'] = measurements
+        _run.info['confusion_matrix'] = confusion_matrix
+
+
+@ex.automain
+def multiple_weights(modelname, net_config, evaluation_data, starting_weights, _run):
+    """Load weigths from trainign experiments and evalaute network against specified
+    data."""
+    model = get_model(modelname)
+    with model(**net_config) as net:
+        import_weights_into_network(net, starting_weights)
+        measurements, confusion_matrix = evaluate(net, evaluation_data)
+        _run.info['measurements'] = measurements
+        _run.info['confusion_matrix'] = confusion_matrix
