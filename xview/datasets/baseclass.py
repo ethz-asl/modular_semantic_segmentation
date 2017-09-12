@@ -79,4 +79,4 @@ class DataBaseclass(DataWrapper):
         # To efficiently map class label to color, we create a lookup table
         lookup = np.array([self.labelinfo[i]['color']
                            for i in range(max(self.labelinfo.keys()) + 1)]).astype(int)
-        return np.array(lookup[labels[:, :]])
+        return np.array(lookup[labels[:, :]]).astype('uint8')
