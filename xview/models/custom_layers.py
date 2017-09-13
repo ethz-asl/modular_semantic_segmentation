@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 
 from tensorflow import layers as tfl
+from tensorflow.python.ops.init_ops import Initializer
 
 
 def bilinear_filter_initializer(filter_shape):
@@ -22,6 +23,49 @@ def bilinear_filter_initializer(filter_shape):
     for i in range(filter_shape[2]):
         weights[:, :, i, i] = bilinear
     return tf.constant_initializer(value=weights, dtype=tf.float32, verify_shape=True)
+
+
+class Selection(Initializer):
+    """Initializes a tensor to a random pick of a set of possible values.
+
+    Caution! Does not yet verify the shape of the requested tensor.
+
+    Args:
+        values: A list of values/arrays from which the initialized value is picked. If
+            the values are scalar, they will be converted into the requested shape of the
+            variable.
+        dtype: the dtype of the initialized value
+    """
+
+    def __init__(self, values, dtype=tf.float32):
+        self.values = values
+        self.dtype = dtype
+
+    def __call__(self, shape, dtype=None, partition_info=None):
+        if dtype is None:
+            dtype = self.dtype
+        if isinstance(self.values[0], (float, int)):
+            # The values are scalar and we have to transform them into the given shape
+            values = tf.stack(self.values, axis=0)
+            # We first set the rank to the requested shape + the first dimension
+            new_shape = [len(self.values)]
+            new_shape.extend([1 for _ in shape])
+            values = tf.reshape(values, new_shape)
+            # Now we repeat the scalar value along to get the requested shape along the
+            # new dimensions
+            repetitions = [1]  # don't repeat the set of values
+            repetitions.extend(values)
+            values = tf.tile(values, repetitions)
+        else:
+            values = tf.stack(self.values, axis=0)
+        return tf.random_shuffle(tf.cast(values, dtype=dtype))[0]
+
+    def get_config(self):
+        return {'values': self.values,
+                'dtype': self.dtype}
+
+
+selection_initializer = Selection
 
 
 def deconv2d(inputs,
@@ -77,7 +121,7 @@ def deconv2d(inputs,
     return out
 
 
-def conv2d(inputs, filters, kernel_size, batch_normalization=True, training=False,
+def conv2d(inputs, filters, kernel_size, batch_normalization=False, training=False,
            **kwargs):
     if batch_normalization:
         # Apply batch_normalization after convolution and activation only afterwards
@@ -89,6 +133,38 @@ def conv2d(inputs, filters, kernel_size, batch_normalization=True, training=Fals
             out = activation(out)
     else:
         out = tfl.conv2d(inputs, filters, kernel_size, **kwargs)
+    return out
+
+
+def adap_conv(inputs, adapter_inputs, filters, kernel_size,
+              trainable=True, name='adap_conv', reuse=False, **kwargs):
+    """Adapter of features from convolutional layers for a progressive convolutional
+    network.
+
+    Args:
+        inputs: the input from the current, new column
+        adapter_inputs: a list of tensors from the previous layers of all other columns
+        filters: innermost dimension of the output space
+        other parameters as for tf.layers.conv2d
+        Any kwargs are passed through to all used conv2d layers.
+    Returns:
+        Output of the new column, as defined in https://arxiv.org/pdf/1606.04671.pdf,
+            equation 2
+    """
+    with tf.variable_scope(name, reuse=reuse):
+        with tf.variable_scope('adapter', reuse=reuse):
+            # Each adapter input gets scaled by a trainable factor.
+            scale = tf.get_variable('scale', [len(adapter_inputs)],
+                                    initializer=selection_initializer([1, 1e-1, 1e-2]),
+                                    trainable=trainable)
+            scaled_adapter_inputs = tf.concat([scale[i] * adapter_inputs[i]
+                                               for i in range(len(adapter_inputs))],
+                                              axis=-1)
+            adapter = tfl.conv2d(scaled_adapter_inputs, inputs.shape[-1], [1, 1],
+                                 reuse=reuse, name='adapter', trainable=trainable,
+                                 **kwargs)
+        out = conv2d(tf.concat([inputs, adapter], axis=-1), filters, kernel_size,
+                     name='combination', **kwargs)
     return out
 
 
