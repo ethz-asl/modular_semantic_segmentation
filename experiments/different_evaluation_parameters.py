@@ -48,4 +48,4 @@ def main(starting_weights, modelname, net_config, evaluation_data, search_parame
     # to impor the measurements into a pandas DataFrame, we convert it into a dict of
     # lists), see:
     # [https://stackoverflow.com/questions/5558418/list-of-dicts-to-from-dict-of-lists]
-    _run['results'] = dict(zip(results[0], zip(*[r.values() for r in results])))
+    _run.info['results'] = dict(zip(results[0], zip(*[r.values() for r in results])))
