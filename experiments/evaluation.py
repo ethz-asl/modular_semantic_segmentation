@@ -15,7 +15,7 @@ def evaluate(net, data_config):
         print('INFO: Evaluating against trainset')
         batches = data.get_train_data(batch_size=1)
     else:
-        batches = data.get_test_data(batch_size=1).next()
+        batches = data.get_test_data(batch_size=1)
 
     measures, confusion_matrix = net.score(batches)
 
