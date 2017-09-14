@@ -1,3 +1,4 @@
+"""Evaluation of trained models."""
 from sacred import Experiment
 from experiments.utils import ExperimentData, get_mongo_observer
 from xview.datasets import get_dataset
