@@ -1,10 +1,54 @@
 import tensorflow as tf
-from tensorflow.python.layers.layers import max_pooling2d, dropout
+from tensorflow.python.layers.layers import dropout
 
 from .base_model import BaseModel
 from .custom_layers import conv2d, deconv2d, log_softmax, softmax
 from .utils import cross_entropy
 from .vgg16 import vgg16
+
+
+def encoder(inputs, prefix, config, is_training=False, reuse=True):
+    """VGG16 image encoder with fusion of conv4_3 and conv5_3 features."""
+    # These parameters are shared between many/all layers and therefore defined here
+    # for convenience.
+    params = {'activation': tf.nn.relu, 'padding': 'same', 'reuse': reuse,
+              'batch_normalization': config['batch_normalization'],
+              'training': is_training, 'trainable': config['train_encoder']}
+
+    vgg16_layers = vgg16(inputs, prefix, params)
+
+    # Use 1x1 convolutions on conv4_3 and conv5_3 to define features.
+    score_conv4 = conv2d(vgg16_layers['conv4_3'], config['num_units'], [1, 1],
+                         name='{}_score_conv4'.format(prefix), **params)
+    score_conv5 = conv2d(vgg16_layers['conv5_3'], config['num_units'], [1, 1],
+                         name='{}_score_conv5'.format(prefix), **params)
+    # The deconvolution is always set static.
+    params['trainable'] = False
+    upscore_conv5 = deconv2d(score_conv5, config['num_units'], [4, 4], strides=[2, 2],
+                             name='{}_upscore_conv5'.format(prefix), **params)
+
+    fused = tf.add_n([score_conv4, upscore_conv5], name='{}_add_score'.format(prefix))
+
+    # Return dictionary of all layers
+    ret = {'fused': fused}
+    ret.update(vgg16_layers)
+    return ret
+
+
+def decoder(features, prefix, dropout_rate, config, is_training=False, reuse=True):
+    """FCN feature decoder."""
+    params = {'activation': tf.nn.relu, 'padding': 'same', 'reuse': reuse,
+              'batch_normalization': config['batch_normalization'],
+              'training': is_training}
+
+    features = dropout(features, rate=dropout_rate,
+                       name='{}_dropout'.format(prefix))
+    # Upsample the fused features to the output classification size
+    features = deconv2d(features, config['num_units'], [16, 16], strides=[8, 8],
+                        name='{}_upscore'.format(prefix), trainable=False, **params)
+    score = conv2d(features, config['num_classes'], [1, 1],
+                   name='{}_score'.format(prefix), **params)
+    return {'upscore': features, 'score': score}
 
 
 class SimpleFCN(BaseModel):
@@ -26,8 +70,8 @@ class SimpleFCN(BaseModel):
         # This is not the direct input into the network, the enqueue-op has to be called
         # to evaluate any data that is fed here.
         # rgb channel
-        self.train_X = tf.placeholder(tf.float32,shape=[None, None, None,
-                                                        self.config['num_channels']])
+        self.train_X = tf.placeholder(tf.float32, shape=[None, None, None,
+                                                         self.config['num_channels']])
         # ground truth labels
         self.train_Y = tf.placeholder(tf.float32, shape=[None, None, None,
                                                          self.config['num_classes']])
@@ -52,11 +96,13 @@ class SimpleFCN(BaseModel):
         # be compatible with tf.layers.
         train_x.set_shape([None, None, None, self.config['num_channels']])
 
-        features = self._encoder(train_x, self.config['modality'], is_training=True,
-                                 reuse=False)
-        score = self._decoder(features, self.config['modality'], train_dropout_rate,
-                              is_training=True, reuse=False)
-        prob = log_softmax(score, self.config['num_classes'], name='prob')
+        encoder_layers = encoder(train_x, self.config['modality'], self.config,
+                                 is_training=True, reuse=False)
+        decoder_layers = decoder(encoder_layers['fused'], self.config['modality'],
+                                 train_dropout_rate, self.config,
+                                 is_training=True, reuse=False)
+        prob = log_softmax(decoder_layers['score'], self.config['num_classes'],
+                           name='prob')
         # The loss is given by the cross-entropy with the ground-truth
         self.loss = tf.div(tf.reduce_sum(cross_entropy(training_labels, prob)),
                            tf.reduce_sum(training_labels))
@@ -68,9 +114,11 @@ class SimpleFCN(BaseModel):
         self.test_X = tf.placeholder(tf.float32, shape=[None, None, None,
                                                         self.config['num_channels']])
 
-        features = self._encoder(self.test_X, self.config['modality'])
-        score = self._decoder(features, self.config['modality'], tf.constant(0.0))
-        label = softmax(score, self.config['num_classes'], name='prob_normalized')
+        encoder_layers = encoder(self.test_X, self.config['modality'], self.config)
+        decoder_layers = decoder(encoder_layers['fused'], self.config['modality'],
+                                 tf.constant(0.0), self.config)
+        label = softmax(decoder_layers['score'], self.config['num_classes'],
+                        name='prob_normalized')
         self.prediction = tf.argmax(label, 3, name='label_2d')
 
         # Add summaries for some weights
@@ -79,44 +127,6 @@ class SimpleFCN(BaseModel):
         for name in variable_names:
             var = next(v for v in tf.global_variables() if v.name == name)
             tf.summary.histogram(name, var)
-
-    def _encoder(self, inputs, prefix, is_training=False, reuse=True):
-        """VGG16 image encoder with fusion of conv4_3 and conv5_3 features."""
-        # These parameters are shared between many/all layers and therefore defined here
-        # for convenience.
-        params = {'activation': tf.nn.relu, 'padding': 'same', 'reuse': reuse,
-                  'batch_normalization': self.config['batch_normalization'],
-                  'training': is_training, 'trainable': self.config['train_encoder']}
-
-        conv4, conv5 = vgg16(inputs, prefix, params)
-
-        # fuse features from conv4 and conv5 together
-        conv4 = conv2d(conv4, self.config['num_units'], [1, 1],
-                       name='{}_score_conv4'.format(prefix), **params)
-        conv5 = conv2d(conv5, self.config['num_units'], [1, 1],
-                       name='{}_score_conv5'.format(prefix), **params)
-        # The deconvolution is always set static.
-        params['trainable'] = False
-        conv5 = deconv2d(conv5, self.config['num_units'], [4, 4], strides=[2, 2],
-                         name='{}_upscore_conv5'.format(prefix), **params)
-
-        fused = tf.add_n([conv4, conv5], name='{}_add_score'.format(prefix))
-        return fused
-
-    def _decoder(self, features, prefix, dropout_rate, is_training=False, reuse=True):
-        params = {'activation': tf.nn.relu, 'padding': 'same', 'reuse': reuse,
-                  'batch_normalization': self.config['batch_normalization'],
-                  'training': is_training}
-
-        features = dropout(features, rate=dropout_rate,
-                           name='{}_dropout'.format(prefix))
-        # Upsample the fused features to the output classification size
-        features = deconv2d(features, self.config['num_units'], [16, 16],
-                            strides=[8, 8], name='{}_upscore'.format(prefix),
-                            trainable=False, **params)
-        score = conv2d(features, self.config['num_classes'], [1, 1],
-                       name='{}_score'.format(prefix), **params)
-        return score
 
     def _enqueue_batch(self, batch, sess):
         with self.graph.as_default():
