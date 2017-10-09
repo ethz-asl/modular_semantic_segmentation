@@ -117,10 +117,7 @@ do
     unrar x "$basedir/synthia/data.rar" "$basedir/synthia" > /dev/null
     # remove all unncessessary files
     declare -a unnecessary=(
-        "Stereo_Left"
-        "Stereo_Right/Omni_L"
-        "Stereo_Right/Omni_R"
-        "Stereo_Right/Omni_B")
+        "Stereo_Left")
     for d in "${unnecessary[@]}"
     do
         rm -rf "$basedir/synthia/${sequences[$i]}/RGB/$d"

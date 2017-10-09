@@ -22,7 +22,7 @@ class Synthia(DataBaseclass):
     given sequences."""
 
     def __init__(self, seqs, batchsize, base_path=SYNTHIA_BASEPATH,
-                 force_preprocessing=False):
+                 force_preprocessing=False, direction='F'):
         if not path.exists(base_path):
             message = 'ERROR: Path to SYNTHIA dataset does not exist.'
             print(message)
@@ -38,7 +38,7 @@ class Synthia(DataBaseclass):
         for sequence in seqs:
             if force_preprocessing or \
                     not path.exists(path.join(base_path,
-                                              '{}/resized_rgb'.format(sequence))):
+                                              '{}/resized_rgb_F'.format(sequence))):
                 self._preprocessing(sequence)
 
         # Every sequence got their own train/test split during preprocessing. According
@@ -77,6 +77,8 @@ class Synthia(DataBaseclass):
         # Intitialize Baseclass
         DataBaseclass.__init__(self, trainset, testset, batchsize,
                                ['rgb', 'depth', 'labels'], labelinfo)
+        # Save direction
+        self.direction = direction
 
     @property
     def one_hot_lookup(self):
@@ -110,9 +112,10 @@ class Synthia(DataBaseclass):
         sequence_basepath = path.join(self.base_path, sequence)
 
         # First we create directories for the downsamples images.
-        for modality in ['RGB', 'Depth', 'labels']:
+        for modality, direction in itertools.product(['RGB', 'Depth', 'labels'],
+                                                     ['F', 'B', 'L', 'R']):
             new_images = path.join(sequence_basepath,
-                                   'resized_{}'.format(modality.lower()))
+                                   'resized_{}_{}'.format(modality.lower(), direction))
             if path.exists(new_images):
                 # We are doing a fresh preprocessing, so delete old data.
                 shutil.rmtree(new_images)
@@ -120,8 +123,8 @@ class Synthia(DataBaseclass):
 
             # RGB and Depth Images can simply be resized by PIL.
             if modality in ['RGB', 'Depth']:
-                original_images = path.join(sequence_basepath, '{}/Stereo_Right/Omni_F'
-                                            .format(modality))
+                original_images = path.join(sequence_basepath, '{}/Stereo_Right/Omni_{}'
+                                            .format(modality, direction))
 
                 # As we have to handle different bitdepths and cropped images, we use
                 # pypng for writing the new files.
@@ -152,8 +155,8 @@ class Synthia(DataBaseclass):
 
             # Label image has a weird format. We save the extracted information as numpy
             # array.
-            original_images = path.join(sequence_basepath,
-                                        'GT/LABELS/Stereo_Right/Omni_F')
+            original_images = path.join(
+                sequence_basepath, 'GT/LABELS/Stereo_Right/Omni_{}'.format(direction))
             for filename in listdir(original_images):
                 # Labels are stored in the 1st channel of the png file
                 array = one_channel_image_reader(path.join(original_images, filename),
@@ -165,7 +168,7 @@ class Synthia(DataBaseclass):
                 np.save(path.join(new_images, filename.split('.')[0]), cropped)
 
         filenames = [filename.split('.')[0] for filename
-                     in listdir(path.join(sequence_basepath, 'resized_rgb'))]
+                     in listdir(path.join(sequence_basepath, 'resized_rgb_F'))]
         trainset, testset = train_test_split(filenames, test_size=0.2)
         with open('{}/train_test_split.json'.format(sequence_basepath), 'w') as f:
             json.dump({'trainset': trainset, 'testset': testset}, f)
@@ -175,8 +178,9 @@ class Synthia(DataBaseclass):
         """Returns data for one given image number from the specified sequence."""
         filetype = {'rgb': 'png', 'depth': 'png', 'labels': 'npy'}
         rgb_filename, depth_filename, groundtruth_filename = (
-            path.join(self.base_path, '{}/resized_{}/{}.{}'
-                      .format(sequence, modality, image_name, filetype[modality]))
+            path.join(self.base_path, '{}/resized_{}_{}/{}.{}'
+                      .format(sequence, modality, self.direction, image_name,
+                              filetype[modality]))
             for modality in ['rgb', 'depth', 'labels'])
 
         blob = {}
