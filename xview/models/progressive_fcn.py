@@ -74,7 +74,24 @@ def column(inputs, prefix, config, dropout_rate, other_columns=False, trainable=
 
 
 class ProgressiveFCN(BaseModel):
-    """FCN implementation following DA-RNN architecture and using tf.layers."""
+    """FCN implementation following DA-RNN architecture and using tf.layers.
+
+    Args:
+        prefix: prefix of all defined variables and operations for the newly trained
+            column
+        existing_columns: list of prefixes for already existing columns, weights need to
+            be imported
+        output_dir: If specified, the diagnostics will be saved in this directory.
+
+        [Network specific config:]
+        num_channels: number of channels in the input modality (eg 3 for RGB)
+        num_classes: number of classes the classifier output should produce
+        num_units: number of feature channels in the encoder output
+        modality: name of the input modality picked from the data dict (eg 'depth')
+        batch_normalization: Bool, whether to apply batch_normalization to convolutional
+            layers
+        dropout_rate: dropout-rate applied during training on the feature layer
+    """
 
     def __init__(self, prefix, existing_columns, output_dir=None, **config):
         self.prefix = prefix
@@ -85,7 +102,8 @@ class ProgressiveFCN(BaseModel):
             'batch_normalization': False
         }
         standard_config.update(config)
-        BaseModel.__init__(self, 'SimpleFCN', output_dir=output_dir, **standard_config)
+        BaseModel.__init__(self, 'ProgressiveFCN', output_dir=output_dir,
+                           **standard_config)
 
     def _build_graph(self):
         """Builds the whole network. Network is split into 2 similar pipelines with shared
