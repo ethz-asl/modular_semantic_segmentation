@@ -166,7 +166,7 @@ class BaseModel(object):
                     summary = self.sess.run(merged_summary)
                     accuracy = tf.Summary(
                         value=[tf.Summary.Value(tag='accuracy',
-                                                simple_value=score['mean_accuracy'])])
+                                                simple_value=score['total_accuracy'])])
 
                     if output:
                         print("{:4d}: loss {:.4f}, accuracy {:.2f}".format(
