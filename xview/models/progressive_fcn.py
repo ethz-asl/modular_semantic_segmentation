@@ -145,7 +145,7 @@ class ProgressiveFCN(BaseModel):
         for prefix in self.existing_columns:
             new_column = column(train_x, prefix, self.config, train_dropout_rate,
                                 other_columns=train_columns, reuse=False)
-            for key, output in new_column:
+            for key, output in new_column.iter_items():
                 if key not in train_columns:
                     # This is the first column and we have to create keys.
                     train_columns[key] = [output]
