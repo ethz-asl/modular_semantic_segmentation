@@ -47,12 +47,10 @@ def column(inputs, prefix, config, dropout_rate, other_columns=False, trainable=
         layers.update(progressive_vgg16(inputs, other_columns, prefix, params))
 
         # Use 1x1 convolutions on conv4_3 and conv5_3 to define features.
-        score_conv4 = adap_conv(layers['conv4_3'], other_columns['conv4_3'],
-                                config['num_units'], [1, 1],
-                                name='{}_score_conv4'.format(prefix), **params)
-        score_conv5 = adap_conv(layers['conv5_3'], other_columns['conv5_3'],
-                                config['num_units'], [1, 1],
-                                name='{}_score_conv5'.format(prefix), **params)
+        score_conv4 = conv2d(layers['conv4_3'], config['num_units'], [1, 1],
+                             name='{}_score_conv4'.format(prefix), **params)
+        score_conv5 = conv2d(layers['conv5_3'], config['num_units'], [1, 1],
+                             name='{}_score_conv5'.format(prefix), **params)
         upscore_conv5 = deconv2d(score_conv5, config['num_units'], [4, 4],
                                  strides=[2, 2], name='{}_upscore_conv5'.format(prefix),
                                  **upscore_params)

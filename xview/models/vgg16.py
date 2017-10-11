@@ -67,29 +67,22 @@ def progressive_vgg16(inputs, columns, prefix, params):
     conv1_2 = adap_conv(conv1_1, columns['conv1_1'], 64, [3, 3],
                         name='{}_conv1_2'.format(prefix), **params)
     pool1 = max_pooling2d(conv1_2, [2, 2], [2, 2], name='{}_pool1'.format(prefix))
-    conv2_1 = adap_conv(pool1, columns['pool1'], 128, [3, 3],
-                        name='{}_conv2_1'.format(prefix), **params)
+    conv2_1 = conv2d(pool1, 128, [3, 3], name='{}_conv2_1'.format(prefix), **params)
     conv2_2 = adap_conv(conv2_1, columns['conv2_1'], 128, [3, 3],
                         name='{}_conv2_2'.format(prefix), **params)
     pool2 = max_pooling2d(conv2_2, [2, 2], [2, 2], name='{}_pool2'.format(prefix))
-    conv3_1 = adap_conv(pool2, columns['pool2'], 256, [3, 3],
-                        name='{}_conv3_1'.format(prefix), **params)
-    conv3_2 = adap_conv(conv3_1, columns['conv3_1'], 256, [3, 3],
-                        name='{}_conv3_2'.format(prefix), **params)
+    conv3_1 = conv2d(pool2, 256, [3, 3], name='{}_conv3_1'.format(prefix), **params)
+    conv3_2 = conv2d(conv3_1, 256, [3, 3], name='{}_conv3_2'.format(prefix), **params)
     conv3_3 = adap_conv(conv3_2, columns['conv3_2'], 256, [3, 3],
                         name='{}_conv3_3'.format(prefix), **params)
     pool3 = max_pooling2d(conv3_3, [2, 2], [2, 2], name='{}_pool3'.format(prefix))
-    conv4_1 = adap_conv(pool3, columns['pool3'], 512, [3, 3],
-                        name='{}_conv4_1'.format(prefix), **params)
-    conv4_2 = adap_conv(conv4_1, columns['conv4_1'], 512, [3, 3],
-                        name='{}_conv4_2'.format(prefix), **params)
+    conv4_1 = conv2d(pool3, 512, [3, 3], name='{}_conv4_1'.format(prefix), **params)
+    conv4_2 = conv2d(conv4_1, 512, [3, 3], name='{}_conv4_2'.format(prefix), **params)
     conv4_3 = adap_conv(conv4_2, columns['conv4_2'], 512, [3, 3],
                         name='{}_conv4_3'.format(prefix), **params)
     pool4 = max_pooling2d(conv4_3, [2, 2], [2, 2], name='{}_pool4'.format(prefix))
-    conv5_1 = adap_conv(pool4, columns['pool4'], 512, [3, 3],
-                        name='{}_conv5_1'.format(prefix), **params)
-    conv5_2 = adap_conv(conv5_1, columns['conv5_1'], 512, [3, 3],
-                        name='{}_conv5_2'.format(prefix), **params)
+    conv5_1 = conv2d(pool4, 512, [3, 3], name='{}_conv5_1'.format(prefix), **params)
+    conv5_2 = conv2d(conv5_1, 512, [3, 3], name='{}_conv5_2'.format(prefix), **params)
     conv5_3 = adap_conv(conv5_2, columns['conv5_2'], 512, [3, 3],
                         name='{}_conv5_3'.format(prefix), **params)
     return {
