@@ -43,7 +43,7 @@ def vgg16(inputs, prefix, params):
         'conv4_1': conv4_1,
         'conv4_2': conv4_2,
         'conv4_3': conv4_3,
-        'pool4': pool2,
+        'pool4': pool4,
         'conv5_1': conv5_1,
         'conv5_2': conv5_2,
         'conv5_3': conv5_3}
