@@ -55,7 +55,7 @@ def column(inputs, prefix, config, dropout_rate, other_columns=False, trainable=
                                 name='{}_score_conv5'.format(prefix), **params)
         upscore_conv5 = deconv2d(score_conv5, config['num_units'], [4, 4],
                                  strides=[2, 2], name='{}_upscore_conv5'.format(prefix),
-                                 trainable=False, **params)
+                                 **upscore_params)
         fused = tf.add_n([score_conv4, upscore_conv5],
                          name='{}_add_score'.format(prefix))
         layers['fused'] = fused
@@ -64,7 +64,7 @@ def column(inputs, prefix, config, dropout_rate, other_columns=False, trainable=
         features = dropout(layers['fused'], rate=dropout_rate,
                            name='{}_dropout'.format(prefix))
         upscore = deconv2d(features, config['num_units'], [16, 16], strides=[8, 8],
-                           name='{}_upscore'.format(prefix), trainable=False, **params)
+                           name='{}_upscore'.format(prefix), **upscore_params)
         layers['upscore'] = upscore
         score = adap_conv(layers['upscore'], other_columns['upscore'],
                           config['num_classes'], [1, 1], name='{}_score'.format(prefix),
@@ -145,7 +145,7 @@ class ProgressiveFCN(BaseModel):
         for prefix in self.existing_columns:
             new_column = column(train_x, prefix, self.config, train_dropout_rate,
                                 other_columns=train_columns, reuse=False)
-            for key, output in new_column.iter_items():
+            for key, output in new_column.items():
                 if key not in train_columns:
                     # This is the first column and we have to create keys.
                     train_columns[key] = [output]
@@ -173,12 +173,12 @@ class ProgressiveFCN(BaseModel):
         for prefix in self.existing_columns:
             new_column = column(self.test_X, prefix, self.config, tf.constant(0.0),
                                 other_columns=test_columns, reuse=True)
-            for key, output in new_column:
-                if key not in train_columns:
+            for key, output in new_column.items():
+                if key not in test_columns:
                     # This is the first column and we have to create keys.
-                    train_columns[key] = [output]
+                    test_columns[key] = [output]
                 else:
-                    train_columns[key].append(output)
+                    test_columns[key].append(output)
         # Set up evaluation of this column
         test_layers = column(self.test_X, self.prefix, self.config, tf.constant(0.0),
                              other_columns=test_columns, reuse=True)
@@ -187,8 +187,9 @@ class ProgressiveFCN(BaseModel):
         self.prediction = tf.argmax(label, 3, name='label_2d')
 
         # Add summaries for some weights
-        variable_names = [x.format(self.config['modality'])
-                          for x in ['{}_score/kernel:0', '{}_score/bias:0']]
+        variable_names = [x.format(self.prefix)
+                          for x in ['{}_score/combination/kernel:0',
+                                    '{}_score/combination/bias:0']]
         for name in variable_names:
             var = next(v for v in tf.global_variables() if v.name == name)
             tf.summary.histogram(name, var)

@@ -7,9 +7,9 @@ config = {'num_classes': 14,
           'learning_rate': 0.01,
           'num_channels': 3,
           'modality': 'rgb',
-          'batch_normalization' : True,
+          'batch_normalization': True,
           'prefix': 'rgb',
-          'existing_columns': []}
+          'existing_columns': ['test']}
 
 
 def test_can_build_model():
@@ -21,5 +21,5 @@ def test_can_build_model():
 def test_can_run_training():
     data = Synthia(['UNITTEST-SEQUENCE'], 2)
 
-    with FCN('/dev/null/', **config) as net:
+    with FCN(**config) as net:
         net.fit(data, 1)

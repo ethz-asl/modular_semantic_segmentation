@@ -51,10 +51,10 @@ class Selection(Initializer):
             new_shape = [len(self.values)]
             new_shape.extend([1 for _ in shape])
             values = tf.reshape(values, new_shape)
-            # Now we repeat the scalar value along to get the requested shape along the
+            # Now we repeat the scalar value to get the requested shape along the
             # new dimensions
             repetitions = [1]  # don't repeat the set of values
-            repetitions.extend(values)
+            repetitions.extend(shape)
             values = tf.tile(values, repetitions)
         else:
             values = tf.stack(self.values, axis=0)
@@ -162,7 +162,8 @@ def adap_conv(inputs, adapter_inputs, filters, kernel_size,
                                               axis=-1)
             adapter = tfl.conv2d(scaled_adapter_inputs, inputs.shape[-1], [1, 1],
                                  reuse=reuse, name='adapter', trainable=trainable,
-                                 **kwargs)
+                                 padding='same',
+                                 activation=kwargs.get('activation', None))
         out = conv2d(tf.concat([inputs, adapter], axis=-1), filters, kernel_size,
                      name='combination', **kwargs)
     return out
