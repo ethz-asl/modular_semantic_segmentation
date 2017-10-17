@@ -128,7 +128,9 @@ def conv2d(inputs, filters, kernel_size, batch_normalization=False, training=Fal
         activation = kwargs.get('activation', None)
         kwargs.update({'activation': None})
         out = tfl.conv2d(inputs, filters, kernel_size, **kwargs)
-        out = tfl.batch_normalization(out, training=training)
+        out = tfl.batch_normalization(out, training=training,
+                                      reuse=kwargs.get('reuse', False),
+                                      name=kwargs.get('name', None))
         if activation is not None:
             out = activation(out)
     else:
