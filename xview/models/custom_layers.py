@@ -155,7 +155,7 @@ def adap_conv(inputs, adapter_inputs, filters, kernel_size,
         with tf.variable_scope('adapter', reuse=reuse):
             # Each adapter input gets scaled by a trainable factor.
             scale = tf.get_variable('scale', [len(adapter_inputs)],
-                                    initializer=selection_initializer([1, 1e-1, 1e-2]),
+                                    initializer=selection_initializer([1, 0.5, 5]),
                                     trainable=trainable)
             scaled_adapter_inputs = tf.concat([scale[i] * adapter_inputs[i]
                                                for i in range(len(adapter_inputs))],
