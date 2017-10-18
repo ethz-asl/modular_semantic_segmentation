@@ -193,7 +193,7 @@ class ProgressiveFCN(BaseModel):
             tf.summary.histogram(name, var)
 
         # add summary for the adapters
-        for var in tf.global_variables:
+        for var in tf.global_variables():
             if 'scale' in var.name:
                 tf.summary.histogram(var.name, var)
 
