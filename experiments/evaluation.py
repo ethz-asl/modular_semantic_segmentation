@@ -8,9 +8,11 @@ from sys import stdout
 def evaluate(net, data_config):
     """Evaluate the given network against the specified data and report the result
     to the given experiment."""
+    dataset_params = {key: val for key, val in data_config.items()
+                      if key not in ['dataset', 'use_trainset']}
+    dataset_params['batch_size'] = 1
     # Load the dataset, we expect config to include the arguments
-    dataset = get_dataset(data_config['dataset'])
-    data = dataset(data_config['sequences'], 1)
+    data = get_dataset(data_config['dataset'], dataset_params)
     if data_config.get('use_trainset', False):
         print('INFO: Evaluating against trainset')
         batches = data.get_train_data(batch_size=1)
