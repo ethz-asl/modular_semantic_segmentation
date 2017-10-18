@@ -10,7 +10,7 @@ def evaluate(net, data_config):
     to the given experiment."""
     dataset_params = {key: val for key, val in data_config.items()
                       if key not in ['dataset', 'use_trainset']}
-    dataset_params['batch_size'] = 1
+    dataset_params['batchsize'] = 1
     # Load the dataset, we expect config to include the arguments
     data = get_dataset(data_config['dataset'], dataset_params)
     if data_config.get('use_trainset', False):
