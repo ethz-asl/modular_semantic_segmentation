@@ -192,6 +192,11 @@ class ProgressiveFCN(BaseModel):
             var = next(v for v in tf.global_variables() if v.name == name)
             tf.summary.histogram(name, var)
 
+        # add summary for the adapters
+        for var in tf.global_variables:
+            if 'scale' in var.name:
+                tf.summary.histogram(var.name, var)
+
     def _enqueue_batch(self, batch, sess):
         with self.graph.as_default():
             feed_dict = {self.train_X: batch[self.config['modality']],
