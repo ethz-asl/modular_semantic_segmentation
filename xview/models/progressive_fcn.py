@@ -4,7 +4,7 @@ from tensorflow.python.layers.layers import dropout
 from .base_model import BaseModel
 from .custom_layers import conv2d, deconv2d, log_softmax, softmax, adap_conv
 from .utils import cross_entropy
-from .vgg16 import vgg16, progressive_vgg16
+from .vgg16 import progressive_vgg16
 from .simple_fcn import encoder, decoder
 
 
@@ -125,7 +125,7 @@ class ProgressiveFCN(BaseModel):
         # IMPORTANT: The size of this queue can grow big very easily with growing
         # batchsize, therefore do not make the queue too long, otherwise we risk getting
         # killed by the OS
-        q = tf.FIFOQueue(1, [tf.float32, tf.float32, tf.float32])
+        q = tf.FIFOQueue(3, [tf.float32, tf.float32, tf.float32])
         self.enqueue_op = q.enqueue([self.train_X, self.train_Y,
                                      self.train_dropout_rate])
         train_x, training_labels, train_dropout_rate = q.dequeue()
@@ -191,6 +191,11 @@ class ProgressiveFCN(BaseModel):
         for name in variable_names:
             var = next(v for v in tf.global_variables() if v.name == name)
             tf.summary.histogram(name, var)
+
+        # add summary for the adapters
+        for var in tf.global_variables():
+            if 'scale' in var.name:
+                tf.summary.histogram(var.name, var)
 
     def _enqueue_batch(self, batch, sess):
         with self.graph.as_default():
