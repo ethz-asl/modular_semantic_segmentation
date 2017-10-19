@@ -136,8 +136,9 @@ def conv2d(inputs, filters, kernel_size, batch_normalization=False, training=Fal
     return out
 
 
-def adap_conv(inputs, adapter_inputs, filters, kernel_size,
-              trainable=True, name='adap_conv', reuse=False, **kwargs):
+def adap_conv(inputs, adapter_inputs, filters, kernel_size, trainable=True,
+              name='adap_conv', reuse=False, extra_convolution=True,
+              initial_scales=[1, 0.1], **kwargs):
     """Adapter of features from convolutional layers for a progressive convolutional
     network.
 
@@ -155,15 +156,18 @@ def adap_conv(inputs, adapter_inputs, filters, kernel_size,
         with tf.variable_scope('adapter', reuse=reuse):
             # Each adapter input gets scaled by a trainable factor.
             scale = tf.get_variable('scale', [len(adapter_inputs)],
-                                    initializer=selection_initializer([1, 0.5, 5]),
+                                    initializer=selection_initializer(initial_scales),
                                     trainable=trainable)
             scaled_adapter_inputs = tf.concat([scale[i] * adapter_inputs[i]
                                                for i in range(len(adapter_inputs))],
                                               axis=-1)
-            adapter = tfl.conv2d(scaled_adapter_inputs, inputs.shape[-1], [1, 1],
-                                 reuse=reuse, name='adapter', trainable=trainable,
-                                 padding='same',
-                                 activation=kwargs.get('activation', None))
+            if extra_convolution:
+                adapter = tfl.conv2d(scaled_adapter_inputs, inputs.shape[-1], [1, 1],
+                                     reuse=reuse, name='adapter', trainable=trainable,
+                                     padding='same',
+                                     activation=kwargs.get('activation', None))
+            else:
+                adapter = scaled_adapter_inputs
         out = conv2d(tf.concat([inputs, adapter], axis=-1), filters, kernel_size,
                      name='combination', **kwargs)
     return out
