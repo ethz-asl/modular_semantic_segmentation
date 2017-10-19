@@ -6,22 +6,32 @@ from .base_model import BaseModel
 from xview.models.simple_fcn import encoder, decoder
 
 
-def bayes_fusion(classifications, confusion_matrices):
+def bayes_fusion(classifications, confusion_matrices, config):
     # We will collect all posteriors in this list
     log_posteriors = []
 
     for i_expert in range(len(confusion_matrices)):
         # compute p(expert output | groudn truth class x)
         confusion_matrix = confusion_matrices[i_expert]
-        conditional = confusion_matrix / confusion_matrix.sum(0)
+        conditional = np.nan_to_num(confusion_matrix / confusion_matrix.sum(0))
+
         # likelihood is conditional at the row of the output class
         likelihood = tf.gather(conditional, classifications[i_expert], axis=0)
 
-        # set a uniform prior for all classes
-        prior = 1.0 / 14
+        uniform_prior = 1.0 / 14
+        data_prior = confusion_matrix.sum(0) / confusion_matrix.sum()
+        if config['class_prior'] == 'uniform':
+            # set a uniform prior for all classes
+            prior = uniform_prior
+        elif config['class_prior'] == 'data':
+            prior = data_prior
+        else:
+            # set a mixture between both
+            prior = uniform_prior + data_prior
+            prior = prior / prior.sum()
 
-        log_posterior = tf.log(likelihood * prior /
-                               tf.reduce_sum(likelihood * prior, axis=-1))
+        log_posterior = tf.log(likelihood) + tf.log(prior) - \
+            tf.log(tf.reduce_sum(likelihood * prior, axis=-1, keep_dims=True))
         log_posteriors.append(log_posterior)
 
     return tf.reduce_sum(tf.stack(log_posteriors, axis=0), axis=0)
@@ -78,7 +88,8 @@ class MixFCN(BaseModel):
         depth_label = tf.argmax(depth_prob, 3, name='depth_label_2d')
 
         fused_score = bayes_fusion([rgb_label, depth_label],
-                                   [self.confusion[x] for x in ['rgb', 'depth']])
+                                   [self.confusion[x] for x in ['rgb', 'depth']],
+                                   self.config)
         label = tf.argmax(fused_score, 3, name='label_2d')
 
         # Now we test which input data is available and based on this we produce the
