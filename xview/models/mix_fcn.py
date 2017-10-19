@@ -26,8 +26,10 @@ def bayes_fusion(classifications, confusion_matrices, config):
         elif config['class_prior'] == 'data':
             prior = data_prior
         else:
-            # set a mixture between both
-            prior = uniform_prior + data_prior
+            # The class_prior parameter is now considered a weight for the mixture
+            # between both priors.
+            weight = float(config['class_prior'])
+            prior = weight * uniform_prior + (1 - weight) * data_prior
             prior = prior / prior.sum()
 
         log_posterior = tf.log(likelihood) + tf.log(prior) - \
