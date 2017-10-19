@@ -76,9 +76,11 @@ class MixFCN(BaseModel):
 
         def test_pipeline(inputs, prefix):
             # Now we get the network output of the FCN expert.
-            features = encoder(inputs, prefix, self.config, reuse=False)
-            score = decoder(features, prefix, 0.0, self.config, reuse=False)
-            prob = tf.nn.softmax(score)
+            outputs = {}
+            outputs.update(encoder(inputs, prefix, self.config, reuse=False))
+            outputs.update(decoder(outputs['fused'], prefix, 0.0, self.config,
+                                   reuse=False))
+            prob = tf.nn.softmax(outputs['score'])
             return prob
 
         rgb_prob = test_pipeline(self.test_X_rgb, 'rgb')
