@@ -7,6 +7,8 @@ from .utils import cross_entropy
 from .vgg16 import progressive_vgg16
 from .simple_fcn import encoder, decoder
 
+from copy import deepcopy
+
 
 def column(inputs, prefix, config, dropout_rate, other_columns=False, trainable=False,
            reuse=True):
@@ -32,6 +34,14 @@ def column(inputs, prefix, config, dropout_rate, other_columns=False, trainable=
     # Deconvolutions are not trainable
     upscore_params['trainable'] = False
     params['trainable'] = trainable
+    # extra adapter parameters
+    adapter_params = {'trainable': trainable,
+                      'extra_convolution': config['extra_adapter_convolution'],
+                      'initial_scales': config['initial_adapter_scales']}
+
+    # fusion of params and adapter-params
+    all_adapter_params = deepcopy(params)
+    all_adapter_params.update(adapter_params)
 
     # We collect all layer outputs in this dict
     layers = {}
@@ -44,7 +54,8 @@ def column(inputs, prefix, config, dropout_rate, other_columns=False, trainable=
                               reuse=reuse))
     else:
         # Define the progressive version of FCN.
-        layers.update(progressive_vgg16(inputs, other_columns, prefix, params))
+        layers.update(progressive_vgg16(inputs, other_columns, prefix, params,
+                                        adapter_params))
 
         # Use 1x1 convolutions on conv4_3 and conv5_3 to define features.
         score_conv4 = conv2d(layers['conv4_3'], config['num_units'], [1, 1],
@@ -66,7 +77,7 @@ def column(inputs, prefix, config, dropout_rate, other_columns=False, trainable=
         layers['upscore'] = upscore
         score = adap_conv(layers['upscore'], other_columns['upscore'],
                           config['num_classes'], [1, 1], name='{}_score'.format(prefix),
-                          **params)
+                          **all_adapter_params)
         layers['score'] = score
     return layers
 
