@@ -8,7 +8,7 @@ from xview.models.simple_fcn import encoder, decoder
 
 def bayes_fusion(classifications, confusion_matrices, config):
     # We will collect all posteriors in this list
-    log_posteriors = []
+    log_likelihoods = []
 
     for i_expert in range(len(confusion_matrices)):
         # compute p(expert output | groudn truth class x)
@@ -16,27 +16,23 @@ def bayes_fusion(classifications, confusion_matrices, config):
         conditional = np.nan_to_num(confusion_matrix / confusion_matrix.sum(0))
 
         # likelihood is conditional at the row of the output class
-        likelihood = tf.gather(conditional, classifications[i_expert])
+        log_likelihoods.append(tf.log(tf.gather(conditional, classifications[i_expert])))
 
-        uniform_prior = 1.0 / 14
-        data_prior = confusion_matrix.sum(0) / confusion_matrix.sum()
-        if config['class_prior'] == 'uniform':
-            # set a uniform prior for all classes
-            prior = uniform_prior
-        elif config['class_prior'] == 'data':
-            prior = data_prior
-        else:
-            # The class_prior parameter is now considered a weight for the mixture
-            # between both priors.
-            weight = float(config['class_prior'])
-            prior = weight * uniform_prior + (1 - weight) * data_prior
-            prior = prior / prior.sum()
+    uniform_prior = 1.0 / 14
+    data_prior = confusion_matrix.sum(0) / confusion_matrix.sum()
+    if config['class_prior'] == 'uniform':
+        # set a uniform prior for all classes
+        prior = uniform_prior
+    elif config['class_prior'] == 'data':
+        prior = data_prior
+    else:
+        # The class_prior parameter is now considered a weight for the mixture
+        # between both priors.
+        weight = float(config['class_prior'])
+        prior = weight * uniform_prior + (1 - weight) * data_prior
+        prior = prior / prior.sum()
 
-        log_posterior = tf.log(likelihood) + tf.log(prior) - \
-            tf.log(tf.reduce_sum(likelihood * prior, axis=-1, keep_dims=True))
-        log_posteriors.append(log_posterior)
-
-    return tf.reduce_sum(tf.stack(log_posteriors, axis=0), axis=0)
+    return tf.reduce_sum(tf.stack(log_likelihoods, axis=0), axis=0) + tf.log(prior)
 
 
 class MixFCN(BaseModel):
