@@ -79,6 +79,11 @@ def column(inputs, prefix, config, dropout_rate, other_columns=False, trainable=
                           config['num_classes'], [1, 1], name='{}_score'.format(prefix),
                           **all_adapter_params)
         layers['score'] = score
+        combined_score = adap_conv(layers['score'], other_columns['score'],
+                                   config['num_classes'], [1, 1],
+                                   name='{}_combine_score'.format(prefix),
+                                   **all_adapter_params)
+        layers['combined_score'] = combined_score
     return layers
 
 
@@ -164,7 +169,7 @@ class ProgressiveFCN(BaseModel):
         # Set up our new, trainable column
         train_layers = column(train_x, self.prefix, self.config, train_dropout_rate,
                               other_columns=train_columns, trainable=True, reuse=False)
-        prob = log_softmax(train_layers['score'], self.config['num_classes'],
+        prob = log_softmax(train_layers['combined_score'], self.config['num_classes'],
                            name='prob')
         # The loss is given by the cross-entropy with the ground-truth
         self.loss = tf.div(tf.reduce_sum(cross_entropy(training_labels, prob)),
@@ -191,7 +196,7 @@ class ProgressiveFCN(BaseModel):
         # Set up evaluation of this column
         test_layers = column(self.test_X, self.prefix, self.config, tf.constant(0.0),
                              other_columns=test_columns, reuse=True)
-        label = softmax(test_layers['score'], self.config['num_classes'],
+        label = softmax(test_layers['combined_score'], self.config['num_classes'],
                         name='prob_normalized')
         self.prediction = tf.argmax(label, 3, name='label_2d')
 
