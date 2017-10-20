@@ -55,7 +55,7 @@ def train_network(net, output_dir, data_config, num_iterations, starting_weights
     data = Synthia(data_config['sequences'], data_config['batchsize'],
                    direction=data_config.get('direction', 'F'))
     # get validation set
-    validation_set = data.get_validation_data(num_items=10)
+    validation_set = data.get_validation_data(num_items=6)
 
     # Train the given network
     if starting_weights:
