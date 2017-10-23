@@ -56,7 +56,7 @@ def adapnet(inputs, prefix, config, is_training=False, reuse=True):
     params = {'activation': tf.nn.relu, 'padding': 'same', 'reuse': reuse,
               'batch_normalization': True, 'training': is_training}
     block_params = {'activation': tf.nn.relu, 'reuse': reuse, 'is_training': is_training}
-    with tf.name_scope(prefix):
+    with tf.variable_scope(prefix):
         block_0_1 = conv2d(inputs, 64, 3, name='block_0_1', **params)
         block_0_2 = conv2d(block_0_1, 64, 7, strides=2, name='block_0_2', **params)
         block_0_pool = max_pooling2d(block_0_2, [2, 2], [2, 2], name='block_0_pool')
@@ -75,7 +75,7 @@ def adapnet(inputs, prefix, config, is_training=False, reuse=True):
                           activation=None, padding='same', reuse=reuse,
                           batch_normalization=True, training=is_training)
 
-        block_8 = block_a(shortcut, 256, 1024, 2, name='block_layer_8',
+        block_8 = block_a(block_7, 256, 1024, 2, name='block_layer_8',
                           shortcut_conv=True, **block_params)
         block_9 = block_a(block_8, 256, 1024, 1, name='block_layer_9', **block_params)
         block_10 = block_b(block_9, 256, 256, 1024, 1, 2, name='block_layer_10',
@@ -128,7 +128,7 @@ class Adapnet(BaseModel):
         else:
             self.prefix = prefix
 
-        BaseModel.__init__(self, 'SimpleFCN', output_dir=output_dir, **standard_config)
+        BaseModel.__init__(self, 'Adapnet', output_dir=output_dir, **standard_config)
 
     def _build_graph(self):
         """Builds the whole network. Network is split into 2 similar pipelines with shared
