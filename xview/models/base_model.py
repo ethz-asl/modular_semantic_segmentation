@@ -5,6 +5,7 @@ from os import path
 from abc import ABCMeta, abstractmethod
 from time import sleep
 from types import GeneratorType
+import tempfile
 
 from xview.models.utils import cross_entropy
 from xview.datasets.wrapper import DataWrapper
@@ -318,7 +319,8 @@ class BaseModel(object):
                 them unassigned
         """
         with self.graph.as_default():
-            weights = np.load(filepath)
+            initializers = []
+            weights = np.load(filepath, mmap_mode='w+')
             for variable in tf.global_variables():
                 name = variable.op.name
                 # Optimizers like Adagrad have their own variables, do not load these
@@ -335,4 +337,5 @@ class BaseModel(object):
                             print('WARNING: wrong shape found for {}, but ignored in '
                                   'chill mode'.format(name))
                     else:
-                        self.sess.run(variable.assign(weights[name]))
+                        initializers.append(variable.assign(weights[name]))
+            self.sess.run(initializers)
