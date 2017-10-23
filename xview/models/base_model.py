@@ -78,9 +78,11 @@ class BaseModel(object):
 
             if supports_training and not hasattr(self, '_train_step'):
                 self.global_step = tf.Variable(0, trainable=False, name='global_step')
-                self.trainer = tf.train.AdagradOptimizer(
-                    self.config['learning_rate']).minimize(
-                        self.loss, global_step=self.global_step)
+                update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+                with tf.control_dependencies(update_ops):
+                    self.trainer = tf.train.AdagradOptimizer(
+                        self.config['learning_rate']).minimize(
+                            self.loss, global_step=self.global_step)
 
             self.saver = tf.train.Saver()
 
