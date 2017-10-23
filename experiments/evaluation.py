@@ -91,7 +91,7 @@ def also_load_config(modelname, net_config, evaluation_data, starting_weights, _
     # Load the training experiment
     training_experiment = ExperimentData(starting_weights['experiment_id'])
 
-    model_config = training_experiment.get_record()['config']['fcn_config']
+    model_config = training_experiment.get_record()['config']['net_config']
     model_config.update(net_config)
 
     # save this
