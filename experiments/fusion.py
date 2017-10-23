@@ -37,7 +37,7 @@ def load_model_configuration(config, command_name, logger):
 
 
 @ex.automain
-def fit_and_evaluate(net_config, evaluation_data, data_config, starting_weights, _run):
+def fit_and_evaluate(net_config, evaluation_data, starting_weights, _run):
     """Load weigths from trainign experiments and evalaute network against specified
     data."""
     output_dir = '/tmp/mix_fcn'
@@ -46,7 +46,7 @@ def fit_and_evaluate(net_config, evaluation_data, data_config, starting_weights,
         import_weights_into_network(net, starting_weights)
 
         # Measure the single experts against the trainingset.
-        dataset_params = {key: val for key, val in data_config.items()
+        dataset_params = {key: val for key, val in evaluation_data.items()
                           if key not in ['dataset', 'use_trainset']}
         dataset_params['batchsize'] = 1
         # Load the dataset, we expect config to include the arguments
