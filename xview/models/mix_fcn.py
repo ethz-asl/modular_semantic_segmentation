@@ -1,36 +1,23 @@
 import tensorflow as tf
 import numpy as np
 from experiments.utils import ExperimentData
+from os import path
+from types import GeneratorType
 
 from .base_model import BaseModel
 from xview.models.simple_fcn import encoder, decoder
 
 
-def bayes_fusion(classifications, confusion_matrices, config):
+def bayes_fusion(probs, conditionals, prior):
+    num_classes = probs[0].shape[3]
+
     # We will collect all posteriors in this list
     log_likelihoods = []
-
-    for i_expert in range(len(confusion_matrices)):
+    for i_expert in range(len(conditionals)):
         # compute p(expert output | groudn truth class x)
-        confusion_matrix = confusion_matrices[i_expert]
-        conditional = np.nan_to_num(confusion_matrix / confusion_matrix.sum(0))
-
-        # likelihood is conditional at the row of the output class
-        log_likelihoods.append(tf.log(tf.gather(conditional, classifications[i_expert])))
-
-    uniform_prior = 1.0 / 14
-    data_prior = confusion_matrix.sum(0) / confusion_matrix.sum()
-    if config['class_prior'] == 'uniform':
-        # set a uniform prior for all classes
-        prior = uniform_prior
-    elif config['class_prior'] == 'data':
-        prior = data_prior
-    else:
-        # The class_prior parameter is now considered a weight for the mixture
-        # between both priors.
-        weight = float(config['class_prior'])
-        prior = weight * uniform_prior + (1 - weight) * data_prior
-        prior = prior / prior.sum()
+        log_likelihood = tf.stack([conditionals[i_expert][c].log_prob(probs[i_expert])
+                                   for c in range(num_classes)], axis=3)
+        log_likelihoods.append(log_likelihood)
 
     return tf.reduce_sum(tf.stack(log_likelihoods, axis=0), axis=0) + tf.log(prior)
 
@@ -45,17 +32,18 @@ class MixFCN(BaseModel):
         }
         standard_config.update(config)
 
-        # load confusion matrices
-        rgb_confusion = np.load(
-            ExperimentData(config['rgb_eval_experiment'])
-            .get_artifact('confusion_matrix.npy')).astype(np.float32).T
-        depth_confusion = np.load(
-            ExperimentData(config['depth_eval_experiment'])
-            .get_artifact('confusion_matrix.npy')).astype(np.float32).T
+        # If specified, load mesaurements of the experts.
+        if 'measurement_exp' in config:
+            measurements = np.load(ExperimentData(config["measurement_exp"])
+                                   .get_artifact("counts.npz"))
+            self.pseudocounts = {'rgb': measurements['rgb'],
+                                 'depth': measurements['depth']}
+            self.class_counts = measurements['class_counts']
+        else:
+            print('WARNING: Could not yet import measurements, you need to fit this '
+                  'model first.')
 
-        self.confusion = {'rgb': rgb_confusion, 'depth': depth_confusion}
-
-        BaseModel.__init__(self, 'FCN', output_dir=output_dir,
+        BaseModel.__init__(self, 'MixFCN', output_dir=output_dir,
                            supports_training=False, **config)
 
     def _build_graph(self):
@@ -70,8 +58,6 @@ class MixFCN(BaseModel):
         # depth channel
         self.test_X_d = tf.placeholder(tf.float32, shape=[None, None, None, 1])
 
-        batch_shape = tf.shape(self.test_X_rgb)
-
         def test_pipeline(inputs, prefix):
             # Now we get the network output of the FCN expert.
             outputs = {}
@@ -81,27 +67,55 @@ class MixFCN(BaseModel):
             prob = tf.nn.softmax(outputs['score'])
             return prob
 
-        rgb_prob = test_pipeline(self.test_X_rgb, 'rgb')
-        depth_prob = test_pipeline(self.test_X_d, 'depth')
+        self.rgb_prob = tf.cast(test_pipeline(self.test_X_rgb, 'rgb'), tf.float32)
+        self.depth_prob = tf.cast(test_pipeline(self.test_X_d, 'depth'), tf.float32)
 
-        rgb_label = tf.argmax(rgb_prob, 3, name='rgb_label_2d')
-        depth_label = tf.argmax(depth_prob, 3, name='depth_label_2d')
+        rgb_label = tf.argmax(self.rgb_prob, 3, name='rgb_label_2d')
+        depth_label = tf.argmax(self.depth_prob, 3, name='depth_label_2d')
 
-        fused_score = bayes_fusion([rgb_label, depth_label],
-                                   [self.confusion[x] for x in ['rgb', 'depth']],
-                                   self.config)
-        label = tf.argmax(fused_score, 3, name='label_2d')
+        # The following part can only be build if measurements are already present.
+        if hasattr(self, 'pseudocounts'):
+            # Create all the Dirichlet distributions conditional on ground-truth class
+            rgb_dirichlets = {}
+            depth_dirichlets = {}
+            for c in range(self.config['num_classes']):
+                rgb_dirichlets[c] = tf.contrib.distributions.Dirichlet(
+                    1 + self.pseudocounts['rgb'][:, c].astype('float32'))
+                depth_dirichlets[c] = tf.contrib.distributions.Dirichlet(
+                    1 + self.pseudocounts['depth'][:, c].astype('float32'))
 
-        # Now we test which input data is available and based on this we produce the
-        # corresponding prediction
-        rgb_available = tf.greater(tf.reduce_sum(self.test_X_rgb), 0.0)
-        depth_available = tf.greater(tf.reduce_sum(self.test_X_d), 0.0)
+            # Set the Prior of the classes
+            uniform_prior = 1.0 / 14
+            data_prior = (self.class_counts / self.class_counts.sum()).astype('float32')
+            if self.config['class_prior'] == 'uniform':
+                # set a uniform prior for all classes
+                prior = uniform_prior
+            elif self.config['class_prior'] == 'data':
+                prior = data_prior
+            else:
+                # The class_prior parameter is now considered a weight for the mixture
+                # between both priors.
+                weight = float(self.config['class_prior'])
+                prior = weight * uniform_prior + (1 - weight) * data_prior
+                prior = prior / prior.sum()
 
-        self.prediction = tf.cond(rgb_available, lambda: tf.cond(depth_available,
-                                                                 lambda: label,
-                                                                 lambda: rgb_label),
-                                  lambda: depth_label)
-        self.prediction = label
+            fused_score = bayes_fusion([self.rgb_prob, self.depth_prob],
+                                       [rgb_dirichlets, depth_dirichlets],
+                                       prior)
+            label = tf.argmax(fused_score, 3, name='label_2d')
+
+            # Now we test which input data is available and based on this we produce the
+            # corresponding prediction
+            rgb_available = tf.greater(tf.reduce_sum(self.test_X_rgb), 0.0)
+            depth_available = tf.greater(tf.reduce_sum(self.test_X_d), 0.0)
+
+            self.prediction = tf.cond(rgb_available, lambda: tf.cond(depth_available,
+                                                                     lambda: label,
+                                                                     lambda: rgb_label),
+                                      lambda: depth_label)
+            self.prediction = label
+        else:
+            self.prediction = rgb_label
         # To understand what"s going on under the hood, we expose a lot of intermediate
         # results for evaluation
         self.rgb_branch = {'label': rgb_label}
@@ -110,6 +124,66 @@ class MixFCN(BaseModel):
     def _enqueue_batch(self, batch, sess):
         # This model does not support training
         pass
+
+    def fit(self, data):
+        """Measure the encoder outputs against the given groundtruth for the given data.
+
+        Args:
+            data: As usual, an instance of DataWrapper
+        """
+        num_classes = self.config['num_classes']
+
+        def get_pseudocounts(probs, labels):
+            """To infer the hidden Dirichlet distribution, sum all prob vectors belonging
+            to a given ground-truth label togehter to pseudocounts."""
+            pseudocounts = np.zeros((num_classes, num_classes))
+            for c in range(num_classes):
+                this_class = np.where(
+                    tf.stack([labels for _ in range(num_classes)]) == c, probs,
+                    np.zeros_like(probs))
+                # Sum the probability putput over batch and x, y coords.
+                pseudocounts[:, c] += this_class.sum((0, 1, 2))
+            return pseudocounts
+
+        def get_classcounts(labels):
+            """Count the number of occurences per class."""
+            counts = np.zeros(num_classes)
+            for c in range(num_classes):
+                counts[c] = (labels == c).sum()
+            return counts
+
+        with self.graph.as_default():
+            # store all measurements in these matrices
+            rgb_measurements = np.zeros((num_classes, num_classes))
+            depth_measurements = np.zeros((num_classes, num_classes))
+            class_counts = np.zeros(num_classes)
+
+            if isinstance(data, GeneratorType):
+                for batch in data:
+                    rgb_prob, depth_prob = self.sess.run(
+                        [self.rgb_prob, self.depth_prob],
+                        feed_dict=self._evaluation_food(batch))
+                    rgb_measurements += get_pseudocounts(rgb_prob, batch['labels'])
+                    depth_measurements += get_pseudocounts(depth_prob, batch['labels'])
+                    class_counts += get_classcounts(batch['labels'])
+            else:
+                rgb_prob, depth_prob = self.sess.run(
+                    [self.rgb_prob, self.depth_prob],
+                    feed_dict=self._evaluation_food(data))
+                rgb_measurements += get_pseudocounts(rgb_prob, data['labels'])
+                depth_measurements += get_pseudocounts(depth_prob, data['labels'])
+                class_counts += get_classcounts(data['labels'])
+
+        # Store the results
+        self.pseudocounts = {'rgb': rgb_measurements, 'depth': depth_measurements}
+        self.class_counts = class_counts
+        if self.output_dir is not None:
+            np.savez(path.join(self.output_dir, 'counts.npz'), class_counts=class_counts,
+                     rgb=rgb_measurements, depth=depth_measurements)
+
+        # Rebuild the graph with the new measurements:
+        BaseModel.__init__(self, self.name, output_dir=self.output_dir,
+                           supports_training=False, **self.config)
 
     def _evaluation_food(self, data):
         feed_dict = {self.test_X_rgb: data['rgb'], self.test_X_d: data['depth']}
