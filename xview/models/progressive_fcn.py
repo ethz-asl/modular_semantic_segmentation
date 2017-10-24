@@ -37,7 +37,8 @@ def column(inputs, prefix, config, dropout_rate, other_columns=False, trainable=
     # extra adapter parameters
     adapter_params = {'trainable': trainable,
                       'extra_convolution': config['extra_adapter_convolution'],
-                      'initial_scales': config['initial_adapter_scales']}
+                      'initial_scales': config['initial_adapter_scales'],
+                      'initialize_half_zero': True}
 
     # fusion of params and adapter-params
     all_adapter_params = deepcopy(params)
