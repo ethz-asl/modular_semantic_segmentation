@@ -4,6 +4,7 @@ from experiments.utils import ExperimentData
 from os import path
 from types import GeneratorType
 
+from .dirichletEstimation import findDirichletPriors
 from .base_model import BaseModel
 from xview.models.simple_fcn import encoder, decoder
 
@@ -74,15 +75,15 @@ class MixFCN(BaseModel):
         depth_label = tf.argmax(self.depth_prob, 3, name='depth_label_2d')
 
         # The following part can only be build if measurements are already present.
-        if hasattr(self, 'pseudocounts'):
+        if hasattr(self, 'dirichlet_params'):
             # Create all the Dirichlet distributions conditional on ground-truth class
             rgb_dirichlets = {}
             depth_dirichlets = {}
             for c in range(self.config['num_classes']):
                 rgb_dirichlets[c] = tf.contrib.distributions.Dirichlet(
-                    1 + self.pseudocounts['rgb'][:, c].astype('float32'))
+                    self.dirichlet_params['rgb'][:, c].astype('float32'))
                 depth_dirichlets[c] = tf.contrib.distributions.Dirichlet(
-                    1 + self.pseudocounts['depth'][:, c].astype('float32'))
+                    self.dirichlet_params['depth'][:, c].astype('float32'))
 
             # Set the Prior of the classes
             uniform_prior = 1.0 / 14
@@ -133,17 +134,17 @@ class MixFCN(BaseModel):
         """
         num_classes = self.config['num_classes']
 
-        def get_pseudocounts(probs, labels):
+        def get_sufficient_statistic(probs, labels, eps=1e-10):
             """To infer the hidden Dirichlet distribution, sum all prob vectors belonging
-            to a given ground-truth label togehter to pseudocounts."""
-            pseudocounts = np.zeros((num_classes, num_classes))
+            to a given ground-truth label togehter to sufficient statistics."""
+            sufficient_statistic = np.zeros((num_classes, num_classes))
             for c in range(num_classes):
                 this_class = np.where(
-                    tf.stack([labels for _ in range(num_classes)]) == c, probs,
-                    np.zeros_like(probs))
+                    np.stack([labels for _ in range(num_classes)], axis=-1) == c, probs,
+                    np.ones_like(probs))
                 # Sum the probability putput over batch and x, y coords.
-                pseudocounts[:, c] += this_class.sum((0, 1, 2))
-            return pseudocounts
+                sufficient_statistic[:, c] += np.log(eps + this_class).sum((0, 1, 2))
+            return sufficient_statistic
 
         def get_classcounts(labels):
             """Count the number of occurences per class."""
@@ -163,27 +164,47 @@ class MixFCN(BaseModel):
                     rgb_prob, depth_prob = self.sess.run(
                         [self.rgb_prob, self.depth_prob],
                         feed_dict=self._evaluation_food(batch))
-                    rgb_measurements += get_pseudocounts(rgb_prob, batch['labels'])
-                    depth_measurements += get_pseudocounts(depth_prob, batch['labels'])
+                    rgb_measurements += get_sufficient_statistic(rgb_prob,
+                                                                 batch['labels'])
+                    depth_measurements += get_sufficient_statistic(depth_prob,
+                                                                   batch['labels'])
                     class_counts += get_classcounts(batch['labels'])
             else:
                 rgb_prob, depth_prob = self.sess.run(
                     [self.rgb_prob, self.depth_prob],
                     feed_dict=self._evaluation_food(data))
-                rgb_measurements += get_pseudocounts(rgb_prob, data['labels'])
-                depth_measurements += get_pseudocounts(depth_prob, data['labels'])
+                rgb_measurements += get_sufficient_statistic(rgb_prob, data['labels'])
+                depth_measurements += get_sufficient_statistic(depth_prob,
+                                                               data['labels'])
                 class_counts += get_classcounts(data['labels'])
 
+        # Now, given the sufficient statistic, run Expectation-Maximization to get the
+        # Dirichlet parameters
+        def dirichlet_em(measurements):
+            """Find dirichlet parameters for all class-conditional dirichlets in
+            measurements."""
+            params = np.ones((num_classes, num_classes))
+
+            for c in range(num_classes):
+                params[:, c] = findDirichletPriors(measurements[:, c] / class_counts[c],
+                                                   np.ones(num_classes))
+            return params
+
+        rgb_dirichlet_params = dirichlet_em(rgb_measurements)
+        depth_dirichlet_params = dirichlet_em(depth_measurements)
+
         # Store the results
-        self.pseudocounts = {'rgb': rgb_measurements, 'depth': depth_measurements}
+        self.dirichlet_params = {'rgb': rgb_dirichlet_params,
+                                 'depth': depth_dirichlet_params}
         self.class_counts = class_counts
         if self.output_dir is not None:
             np.savez(path.join(self.output_dir, 'counts.npz'), class_counts=class_counts,
-                     rgb=rgb_measurements, depth=depth_measurements)
+                     rgb=rgb_dirichlet_params, depth=depth_dirichlet_params)
 
         # Rebuild the graph with the new measurements:
-        BaseModel.__init__(self, self.name, output_dir=self.output_dir,
-                           supports_training=False, **self.config)
+        self._initialize_graph()
+
+        print("INFO: MixFCN fitted to data")
 
     def _evaluation_food(self, data):
         feed_dict = {self.test_X_rgb: data['rgb'], self.test_X_d: data['depth']}
