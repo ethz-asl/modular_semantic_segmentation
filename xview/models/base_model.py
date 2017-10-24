@@ -41,9 +41,11 @@ class BaseModel(object):
         self.name = name
         self.output_dir = output_dir
         self.supports_training = supports_training
-
         self.config = config
 
+        self._initialize_graph()
+
+    def _initialize_graph(self):
         tf.reset_default_graph()
 
         # Now we build the network.
@@ -56,7 +58,7 @@ class BaseModel(object):
             # For any child class, we require the attributes specified in the docstring
             # and defined in self.required_attributes. After self._build_graph(), we can
             # check for their existance.
-            if supports_training:
+            if self.supports_training:
                 missing_attrs = ["'%s'" % attrs for attrs in self.required_attributes
                                  if True not in [hasattr(self, attr) for attr in attrs]]
                 if missing_attrs:
@@ -76,7 +78,7 @@ class BaseModel(object):
                 predictions=tf.reshape(self.prediction, [-1]),
                 num_classes=self.config['num_classes'])
 
-            if supports_training and not hasattr(self, '_train_step'):
+            if self.supports_training and not hasattr(self, '_train_step'):
                 self.global_step = tf.Variable(0, trainable=False, name='global_step')
                 self.trainer = tf.train.AdagradOptimizer(
                     self.config['learning_rate']).minimize(
