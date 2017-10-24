@@ -204,7 +204,6 @@ class MixFCN(BaseModel):
                 new_rgb, new_depth, new_count = self.sess.run(
                     [self.rgb_sufficient_statistic, self.depth_sufficient_statistic,
                      self.class_counts])
-                print(new_rgb)
                 rgb_measurements += new_rgb
                 depth_measurements += new_depth
                 class_counts += new_count
@@ -220,11 +219,16 @@ class MixFCN(BaseModel):
         def dirichlet_em(measurements):
             """Find dirichlet parameters for all class-conditional dirichlets in
             measurements."""
-            params = np.ones((num_classes, num_classes))
+            params = np.ones((num_classes, num_classes)).astype('float64')
 
             for c in range(num_classes):
-                params[:, c] = findDirichletPriors(measurements[:, c] / class_counts[c],
-                                                   np.ones(num_classes))
+                # Average the measurements over the encoutnered class examples to get the
+                # sufficient statistic.
+                ss = (measurements[:, c] / class_counts[c]).astype('float64')
+                # The prior assumption is that all class output probabilities are equally
+                # likely, i.e. all concentration parameters are 1
+                prior = np.ones(num_classes).astype('float64')
+                params[:, c] = findDirichletPriors(ss, prior)
             return params
 
         rgb_dirichlet_params = dirichlet_em(rgb_measurements)
