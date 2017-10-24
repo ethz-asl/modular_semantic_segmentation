@@ -131,9 +131,10 @@ class MixFCN(BaseModel):
                 stacked_labels = tf.stack([labels for _ in range(num_classes)], axis=-1)
 
                 eps = 1e-10
-                sufficient_statistics = [tf.log(eps + tf.where(stacked_labels == c, prob,
-                                                              tf.ones_like(prob)))
-                                        for c in range(num_classes)]
+                sufficient_statistics = [
+                    tf.log(eps + tf.where(tf.equal(stacked_labels, c), prob,
+                                          tf.ones_like(prob)))
+                    for c in range(num_classes)]
                 combined = tf.stack([tf.reduce_sum(stat, axis=[0, 1, 2])
                                      for stat in sufficient_statistics], axis=0)
                 return combined
@@ -203,6 +204,7 @@ class MixFCN(BaseModel):
                 new_rgb, new_depth, new_count = self.sess.run(
                     [self.rgb_sufficient_statistic, self.depth_sufficient_statistic,
                      self.class_counts])
+                print(new_rgb)
                 rgb_measurements += new_rgb
                 depth_measurements += new_depth
                 class_counts += new_count
@@ -210,6 +212,7 @@ class MixFCN(BaseModel):
 
             coord.join([t])
 
+        print(rgb_measurements)
         print('INFO: Measurements of classifiers finished, now EM')
 
         # Now, given the sufficient statistic, run Expectation-Maximization to get the
