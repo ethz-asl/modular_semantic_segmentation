@@ -157,8 +157,9 @@ class MixFCN(BaseModel):
             # This operation has to be called to close the input queue and free the space it
             # occupies in memory.
             self.close_queue_op = q.close(cancel_pending_enqueues=True)
-            self.queue_is_finished_op = tf.Print(tf.logical_and(q.is_closed(),
-                                                       tf.equal(q.size(), 0)), [q.size()])
+            self.queue_is_empty_op = tf.equal(q.size(), 0)
+            # To support tensorflow 1.2, we have to set this flag manually.
+            self.queue_is_closed = False
 
             self.rgb_sufficient_statistic = train_pipeline(train_rgb, 'rgb',
                                                            training_labels)
@@ -197,16 +198,15 @@ class MixFCN(BaseModel):
                                  args=(self.sess, data))
             t.start()
 
-            queue_finished = False
-            while not queue_finished:
+            queue_empty = False
+            while not (queue_empty and self.queue_is_closed):
                 new_rgb, new_depth, new_count = self.sess.run(
                     [self.rgb_sufficient_statistic, self.depth_sufficient_statistic,
                      self.class_counts])
                 rgb_measurements += new_rgb
                 depth_measurements += new_depth
                 class_counts += new_count
-                queue_finished = self.sess.run(self.queue_is_finished_op)
-                print(queue_finished)
+                queue_empty = self.sess.run(self.queue_is_empty_op)
 
             coord.join([t])
 
@@ -271,6 +271,7 @@ class MixFCN(BaseModel):
             except tf.errors.CancelledError:
                 print('INFO: Input queue is closed, cannot enqueue any more data.')
             sess.run(self.close_queue_op)
+            self.queue_is_closed = True
 
     def prediction_difference(self, data):
         """Evaluate prediction of the different individual branches for the given data.
