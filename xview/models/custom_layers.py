@@ -175,8 +175,9 @@ def adap_conv(inputs, adapter_inputs, filters, kernel_size, trainable=True,
                 kc_w = int(np.floor(kernel_w / 2.0))
                 second_half[kc_h, kc_w, :, :] = np.eye(dim_out)
             else:
-                second_half = tf.glorot_normal_initializer()([kernel_h, kernel_w,
-                                                              int(dim_in / 2), dim_out])
+                second_half = tf.contrib.layers.xavier_initializer()([kernel_h, kernel_w,
+                                                                      int(dim_in / 2),
+                                                                      dim_out])
             return tf.cast(tf.concat([first_half, second_half], axis=2), dtype)
 
         def get_config(self):
