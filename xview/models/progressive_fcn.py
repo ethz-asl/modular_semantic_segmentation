@@ -211,7 +211,7 @@ class ProgressiveFCN(BaseModel):
 
         # add summary for the adapters
         for var in tf.global_variables():
-            if 'scale' in var.name:
+            if 'scale' in var.name or 'score' in var.name:
                 tf.summary.histogram(var.name, var)
 
     def _enqueue_batch(self, batch, sess):
