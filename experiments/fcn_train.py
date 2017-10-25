@@ -31,7 +31,8 @@ ex = Experiment()
 ex.observers.append(get_mongo_observer())
 
 
-def train_network(net, output_dir, data_config, num_iterations, starting_weights):
+def train_network(net, output_dir, data_config, num_iterations, starting_weights,
+                  experiment):
     # Load the dataset, we expect config to include the arguments
     data = Synthia(data_config['sequences'], data_config['batchsize'],
                    direction=data_config.get('direction', 'F'))
@@ -55,7 +56,7 @@ def train_network(net, output_dir, data_config, num_iterations, starting_weights
 
     # To end the experiment, we collect all produced output files and store them.
     for filename in os.listdir(output_dir):
-        ex.add_artifact(os.path.join(output_dir, filename))
+        experiment.add_artifact(os.path.join(output_dir, filename))
 
     if timeout:
         raise TimeoutInterrupt
@@ -64,7 +65,7 @@ def train_network(net, output_dir, data_config, num_iterations, starting_weights
 @ex.capture
 def captured_train_network(net, output_dir, data_config, num_iterations,
                            starting_weights):
-    train_network(net, output_dir, data_config, num_iterations, starting_weights)
+    train_network(net, output_dir, data_config, num_iterations, starting_weights, ex)
 
 
 @ex.command

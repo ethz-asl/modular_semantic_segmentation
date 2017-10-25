@@ -13,7 +13,7 @@ ex.observers.append(get_mongo_observer())
 @ex.capture
 def captured_train_network(net, output_dir, data_config, num_iterations,
                            starting_weights):
-    train_network(net, output_dir, data_config, num_iterations, starting_weights)
+    train_network(net, output_dir, data_config, num_iterations, starting_weights, ex)
 
 
 @ex.automain
