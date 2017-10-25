@@ -3,11 +3,11 @@ from sacred.utils import TimeoutInterrupt
 from xview.datasets.synthia import Synthia
 from xview.models.simple_fcn import SimpleFCN
 from xview.models.progressive_fcn import ProgressiveFCN
-from xview.settings import DATA_BASEPATH
 import os
 import shutil
 
-from experiments.utils import get_mongo_observer, ExperimentData
+from experiments.utils import get_mongo_observer
+from experiments.evaluation import import_weights_into_network
 
 
 def create_directories(run_id, experiment):
@@ -27,24 +27,6 @@ def create_directories(run_id, experiment):
     return output_dir
 
 
-def import_startingweights(net, starting_weights):
-    # load startign weights
-    if starting_weights == 'washington':
-        # load the washington weights
-        weights = os.path.join(DATA_BASEPATH, 'darnn/FCN_weights_40000.npz')
-        net.import_weights(weights, chill_mode=True)
-    elif isinstance(starting_weights, dict):
-        print('INFO: Loading weights from experiment {}'.format(
-            starting_weights['experiment_id']))
-        # load weights from previous experiment
-        previous_exp = ExperimentData(starting_weights['experiment_id'])
-        weights = previous_exp.get_artifact(starting_weights['filename'])
-        net.import_weights(weights, chill_mode=True)
-    elif isinstance(starting_weights, list):
-        for weights in starting_weights:
-            import_startingweights(net, weights)
-
-
 ex = Experiment()
 ex.observers.append(get_mongo_observer())
 
@@ -59,7 +41,7 @@ def train_network(net, output_dir, data_config, num_iterations, starting_weights
 
     # Train the given network
     if starting_weights:
-        import_startingweights(net, starting_weights)
+        import_weights_into_network(net, starting_weights)
 
     try:
         # finetune on synthia
