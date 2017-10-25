@@ -10,8 +10,9 @@ from .simple_fcn import encoder, decoder
 from copy import deepcopy
 
 
-def column(inputs, prefix, config, dropout_rate, other_columns=False, trainable=False,
-           reuse=True):
+def column(inputs, prefix, dropout_rate, num_units, num_classes, other_columns=False,
+           trainable=False, reuse=True, extra_adapter_convolution=True,
+           initial_adapter_scales=[1], initialize_half_zero=True):
     """
     FCN Column to be used in a progressive network setup.
 
@@ -36,9 +37,9 @@ def column(inputs, prefix, config, dropout_rate, other_columns=False, trainable=
     params['trainable'] = trainable
     # extra adapter parameters
     adapter_params = {'trainable': trainable,
-                      'extra_convolution': config['extra_adapter_convolution'],
-                      'initial_scales': config['initial_adapter_scales'],
-                      'initialize_half_zero': True}
+                      'extra_convolution': extra_adapter_convolution,
+                      'initial_scales': initial_adapter_scales,
+                      'initialize_half_zero': initialize_half_zero}
 
     # fusion of params and adapter-params
     all_adapter_params = deepcopy(params)
@@ -50,20 +51,22 @@ def column(inputs, prefix, config, dropout_rate, other_columns=False, trainable=
     # In case that we already have other columns, create this column as a progressive
     # network on basis of the other columns. If not, define standalone
     if not other_columns:
-        layers.update(encoder(inputs, prefix, config, reuse=reuse))
-        layers.update(decoder(layers['fused'], prefix, tf.constant(0.0), config,
-                              reuse=reuse))
+        layers.update(encoder(inputs, prefix, num_units, batch_normalization=False,
+                              trainable=trainable, reuse=reuse))
+        layers.update(decoder(layers['fused'], prefix, num_units, num_classes,
+                              tf.constant(0.0), batch_normalization=False,
+                              trainable=trainable, reuse=reuse))
     else:
         # Define the progressive version of FCN.
         layers.update(progressive_vgg16(inputs, other_columns, prefix, params,
                                         adapter_params))
 
         # Use 1x1 convolutions on conv4_3 and conv5_3 to define features.
-        score_conv4 = conv2d(layers['conv4_3'], config['num_units'], [1, 1],
+        score_conv4 = conv2d(layers['conv4_3'], num_units, [1, 1],
                              name='{}_score_conv4'.format(prefix), **params)
-        score_conv5 = conv2d(layers['conv5_3'], config['num_units'], [1, 1],
+        score_conv5 = conv2d(layers['conv5_3'], num_units, [1, 1],
                              name='{}_score_conv5'.format(prefix), **params)
-        upscore_conv5 = deconv2d(score_conv5, config['num_units'], [4, 4],
+        upscore_conv5 = deconv2d(score_conv5, num_units, [4, 4],
                                  strides=[2, 2], name='{}_upscore_conv5'.format(prefix),
                                  **upscore_params)
         fused = tf.add_n([score_conv4, upscore_conv5],
@@ -73,16 +76,14 @@ def column(inputs, prefix, config, dropout_rate, other_columns=False, trainable=
         # Now upsample the features and produce class scores.
         features = dropout(layers['fused'], rate=dropout_rate,
                            name='{}_dropout'.format(prefix))
-        upscore = deconv2d(features, config['num_units'], [16, 16], strides=[8, 8],
+        upscore = deconv2d(features, num_units, [16, 16], strides=[8, 8],
                            name='{}_upscore'.format(prefix), **upscore_params)
         layers['upscore'] = upscore
-        score = adap_conv(layers['upscore'], other_columns['upscore'],
-                          config['num_classes'], [1, 1], name='{}_score'.format(prefix),
-                          **all_adapter_params)
+        score = adap_conv(layers['upscore'], other_columns['upscore'], num_classes,
+                          [1, 1], name='{}_score'.format(prefix), **all_adapter_params)
         layers['score'] = score
-        combined_score = adap_conv(layers['score'], other_columns['score'],
-                                   config['num_classes'], [1, 1],
-                                   name='{}_combine_score'.format(prefix),
+        combined_score = adap_conv(layers['score'], other_columns['score'], num_classes,
+                                   [1, 1], name='{}_combine_score'.format(prefix),
                                    **all_adapter_params)
         layers['combined_score'] = combined_score
     return layers
@@ -158,8 +159,13 @@ class ProgressiveFCN(BaseModel):
         # Set up exisiting columns
         train_columns = {}
         for prefix in self.existing_columns:
-            new_column = column(train_x, prefix, self.config, train_dropout_rate,
-                                other_columns=train_columns, reuse=False)
+            new_column = column(
+                train_x, prefix, train_dropout_rate, self.config['num_units'],
+                self.config['num_classes'], other_columns=train_columns, trainable=False,
+                reuse=False,
+                extra_adapter_convolution=self.config['extra_adapter_convolution'],
+                initial_adapter_scales=self.config['initial_adapter_scales'],
+                initialize_half_zero=self.config['initialize_half_zero'])
             for key, output in new_column.items():
                 if key not in train_columns:
                     # This is the first column and we have to create keys.
@@ -168,8 +174,13 @@ class ProgressiveFCN(BaseModel):
                     train_columns[key].append(output)
 
         # Set up our new, trainable column
-        train_layers = column(train_x, self.prefix, self.config, train_dropout_rate,
-                              other_columns=train_columns, trainable=True, reuse=False)
+        train_layers = column(
+            train_x, self.prefix, train_dropout_rate, self.config['num_units'],
+            self.config['num_classes'], other_columns=train_columns, trainable=True,
+            reuse=False,
+            extra_adapter_convolution=self.config['extra_adapter_convolution'],
+            initial_adapter_scales=self.config['initial_adapter_scales'],
+            initialize_half_zero=self.config['initialize_half_zero'])
         prob = log_softmax(train_layers['combined_score'], self.config['num_classes'],
                            name='prob')
         # The loss is given by the cross-entropy with the ground-truth
@@ -186,8 +197,13 @@ class ProgressiveFCN(BaseModel):
         # Set up exisiing columns
         test_columns = {}
         for prefix in self.existing_columns:
-            new_column = column(self.test_X, prefix, self.config, tf.constant(0.0),
-                                other_columns=test_columns, reuse=True)
+            new_column = column(
+                self.test_X, prefix, tf.constant(0.0), self.config['num_units'],
+                self.config['num_classes'], other_columns=test_columns, trainable=False,
+                reuse=True,
+                extra_adapter_convolution=self.config['extra_adapter_convolution'],
+                initial_adapter_scales=self.config['initial_adapter_scales'],
+                initialize_half_zero=self.config['initialize_half_zero'])
             for key, output in new_column.items():
                 if key not in test_columns:
                     # This is the first column and we have to create keys.
@@ -195,8 +211,13 @@ class ProgressiveFCN(BaseModel):
                 else:
                     test_columns[key].append(output)
         # Set up evaluation of this column
-        test_layers = column(self.test_X, self.prefix, self.config, tf.constant(0.0),
-                             other_columns=test_columns, reuse=True)
+        test_layers = column(
+            self.test_X, self.prefix, tf.constant(0.0), self.config['num_units'],
+            self.config['num_classes'], other_columns=test_columns, trainable=True,
+            reuse=True,
+            extra_adapter_convolution=self.config['extra_adapter_convolution'],
+            initial_adapter_scales=self.config['initial_adapter_scales'],
+            initialize_half_zero=self.config['initialize_half_zero'])
         label = softmax(test_layers['combined_score'], self.config['num_classes'],
                         name='prob_normalized')
         self.prediction = tf.argmax(label, 3, name='label_2d')
