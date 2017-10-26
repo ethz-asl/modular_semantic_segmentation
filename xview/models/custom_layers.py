@@ -158,6 +158,9 @@ def adap_conv(inputs, adapter_inputs, filters, kernel_size, trainable=True,
     """
     class half_zeros_initializer(Initializer):
 
+        def __init__(self, only_dampened=True):
+            self.only_dampened = only_dampened
+
         def __call__(self, shape, dtype=None, partition_info=None):
             """Initializes the first half of the input channel dim to zero, the second
             half either to identity (if input dim = 2 output dim), otherwise xavier."""
@@ -167,17 +170,19 @@ def adap_conv(inputs, adapter_inputs, filters, kernel_size, trainable=True,
 
             assert dim_in % 2 == 0
 
-            first_half = np.zeros((kernel_h, kernel_w, int(dim_in / 2), dim_out))
+            zeros = np.zeros((kernel_h, kernel_w, int(dim_in / 2), dim_out))
+            xavier = lambda: tf.contrib.layers.xavier_initializer()([kernel_h, kernel_w,
+                                                                     int(dim_in / 2),
+                                                                     dim_out])
+            first_half = (0.1 * xavier()) if self.only_dampened else zeros.copy()
             if dim_in == (2 * dim_out):
-                second_half = first_half.copy()
+                second_half = zeros.copy()
                 # find index for kernel center
                 kc_h = int(np.floor(kernel_h / 2.0))
                 kc_w = int(np.floor(kernel_w / 2.0))
                 second_half[kc_h, kc_w, :, :] = np.eye(dim_out)
             else:
-                second_half = tf.contrib.layers.xavier_initializer()([kernel_h, kernel_w,
-                                                                      int(dim_in / 2),
-                                                                      dim_out])
+                second_half = xavier()
             return tf.cast(tf.concat([first_half, second_half], axis=2), dtype)
 
         def get_config(self):
