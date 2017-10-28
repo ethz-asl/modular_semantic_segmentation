@@ -190,18 +190,23 @@ class BaseModel(object):
             coord.join([t])
             print('INFO: Training finished.')
 
-    def predict(self, data):
+    def predict(self, data, output_prob=False):
         """Perform semantic segmentation on the input data.
 
         Args:
             data: a dictionary {'rgb': <array of shape [num_images, width, height]>
                                 'depth': <array of shape [num_images, width, height]>}
+            output_prob: a boolean indicting if classe probabilities should be outputted
+                instead of the label of the most likely class
         Returns:
-            per-pixel classification of the input image in form
-                <array of shape [num_images, width, height]>
+            per-pixel classification of the input image in form:
+                - <array of shape [num_images, width, height, num_classes]>
+                  if output_prob is specified and true
+                - <array of shape [num_images, width, height]> else
         """
         with self.graph.as_default():
-            return self.sess.run(self.prediction, feed_dict=self._evaluation_food(data))
+            output = self.prob if output_prob else self.prediction
+            return self.sess.run(output, feed_dict=self._evaluation_food(data))
 
     def score(self, data, max_iterations=None):
         """Measure the performance of the model with respect to the given data.
@@ -234,20 +239,22 @@ class BaseModel(object):
         else:
             confusion_matrix = get_confusion_matrix(data)
 
-        # Now we compute several mesures from the confusion matrix
-        measures = {}
-        measures['confusion_matrix'] = confusion_matrix
-        measures['precision'] = np.diag(confusion_matrix) / confusion_matrix.sum(1)
-        measures['recall'] = np.diag(confusion_matrix) / confusion_matrix.sum(0)
-        measures['F1'] = 2 * measures['precision'] * measures['recall'] / \
-            (measures['precision'] + measures['recall'])
-        measures['mean_F1'] = np.nanmean(measures['F1'])
-        measures['total_accuracy'] = np.diag(confusion_matrix).sum() / \
-            confusion_matrix.sum()
-        measures['IU'] = np.diag(confusion_matrix) / \
-            (confusion_matrix.sum(1) + confusion_matrix.sum(0) -
-             np.diag(confusion_matrix))
-        measures['mean_IU'] = np.nanmean(measures['IU'])
+        with np.errstate(divide='ignore',invalid='ignore'):
+            # Now we compute several mesures from the confusion matrix
+            measures = {}
+            measures['confusion_matrix'] = confusion_matrix
+            measures['precision'] = np.diag(confusion_matrix) / confusion_matrix.sum(1)
+            measures['recall'] = np.diag(confusion_matrix) / confusion_matrix.sum(0)
+            measures['F1'] = 2 * measures['precision'] * measures['recall'] / \
+                (measures['precision'] + measures['recall'])
+            measures['mean_F1'] = np.nanmean(measures['F1'])
+            measures['total_accuracy'] = np.diag(confusion_matrix).sum() / \
+                confusion_matrix.sum()
+            measures['IU'] = np.diag(confusion_matrix) / \
+                (confusion_matrix.sum(1) + confusion_matrix.sum(0) -
+                 np.diag(confusion_matrix))
+            measures['mean_IU'] = np.nanmean(measures['IU'])
+
         return measures, confusion_matrix
 
     def load_weights(self, filepath):

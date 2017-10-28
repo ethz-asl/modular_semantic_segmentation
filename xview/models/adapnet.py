@@ -115,7 +115,6 @@ def adapnet(inputs, prefix, config, is_training=False, reuse=True):
 
 
 class Adapnet(BaseModel):
-    """FCN implementation following DA-RNN architecture and using tf.layers."""
 
     def __init__(self, prefix=None, output_dir=None, **config):
         standard_config = {
@@ -167,11 +166,11 @@ class Adapnet(BaseModel):
 
         adapnet_layers = adapnet(train_x, self.prefix, self.config, is_training=True,
                                  reuse=False)
-        prob = log_softmax(adapnet_layers['score'], self.config['num_classes'],
-                           name='prob')
-        # The loss is given by the cross-entropy with the ground-truth
-        self.loss = tf.div(tf.reduce_sum(cross_entropy(training_labels, prob)),
-                           tf.reduce_sum(training_labels))
+        with tf.variable_scope('softmax_loss'):
+            prob = log_softmax(adapnet_layers['score'], self.config['num_classes'],
+                               name='prob')
+            self.loss = tf.div(tf.reduce_sum(cross_entropy(training_labels, prob)),
+                               tf.reduce_sum(training_labels))
 
         # Network for testing / evaluation
         # As before, we define placeholders for the input. These here now can be fed
@@ -182,9 +181,9 @@ class Adapnet(BaseModel):
 
         adapnet_layers = adapnet(self.test_X, self.prefix, self.config,
                                  is_training=False, reuse=True)
-        label = softmax(adapnet_layers['score'], self.config['num_classes'],
+        self.prob = softmax(adapnet_layers['score'], self.config['num_classes'],
                         name='prob_normalized')
-        self.prediction = tf.argmax(label, 3, name='label_2d')
+        self.prediction = tf.argmax(self.prob, 3, name='label_2d')
 
         # Add summaries for some weights
         variable_names = []
