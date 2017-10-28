@@ -170,12 +170,16 @@ class BaseModel(object):
                     accuracy = tf.Summary(
                         value=[tf.Summary.Value(tag='accuracy',
                                                 simple_value=score['total_accuracy'])])
+                    iu  = tf.Summary(
+                        value=[tf.Summary.Value(tag='IU',
+                                                simple_value=score['mean_IU'])])
 
                     if output:
-                        print("{:4d}: loss {:.4f}, accuracy {:.2f}".format(
-                            i, loss, score['total_accuracy']))
+                        print("{:4d}: loss {:.4f}, accuracy {:.2f}, iu {:.2f}".format(
+                            i, loss, score['total_accuracy'], score['mean_IU']))
                     if self.output_dir is not None:
                         train_writer.add_summary(accuracy, i)
+                        train_writer.add_summary(iu, i)
                         train_writer.add_summary(summary, i)
 
             coord.request_stop()
