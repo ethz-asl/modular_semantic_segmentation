@@ -34,7 +34,7 @@ ex.observers.append(get_mongo_observer())
 def train_network(net, output_dir, data_config, num_iterations, starting_weights,
                   experiment):
     # Load the dataset, we expect config to include the arguments
-    data = Synthia(data_config['sequences'], data_config['batchsize'],
+    data = Synthia(data_config['seqs'], data_config['batchsize'],
                    direction=data_config.get('direction', 'F'))
     # get validation set
     validation_set = data.get_validation_data(num_items=6)
