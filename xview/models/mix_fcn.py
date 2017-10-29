@@ -216,7 +216,7 @@ class MixFCN(BaseModel):
 
         # Now, given the sufficient statistic, run Expectation-Maximization to get the
         # Dirichlet parameters
-        def dirichlet_em(measurements):
+        def dirichlet_em(measurements, eps=1e-10):
             """Find dirichlet parameters for all class-conditional dirichlets in
             measurements."""
             params = np.ones((num_classes, num_classes)).astype('float64')
@@ -224,7 +224,7 @@ class MixFCN(BaseModel):
             for c in range(num_classes):
                 # Average the measurements over the encoutnered class examples to get the
                 # sufficient statistic.
-                ss = (measurements[:, c] / class_counts[c]).astype('float64')
+                ss = (measurements[:, c] / (eps + class_counts[c])).astype('float64')
                 # The prior assumption is that all class output probabilities are equally
                 # likely, i.e. all concentration parameters are 1
                 prior = np.ones(num_classes).astype('float64')
