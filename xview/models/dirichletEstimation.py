@@ -11,7 +11,7 @@ import math
 import logging
 import random
 import scipy.special as mathExtra
-import sc
+import scipy
 import numpy as np
 
 def digamma(x): return mathExtra.psi(x)
