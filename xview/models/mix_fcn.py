@@ -21,9 +21,13 @@ def bayes_fusion(probs, conditionals, prior):
         # compute p(expert output | groudn truth class x)
         log_likelihood = tf.stack([conditionals[i_expert][c].log_prob(probs[i_expert])
                                    for c in range(num_classes)], axis=3)
+        log_likelihood = tf.Print(log_likelihood, [conditionals[i_expert][c].log_prob(probs[i_expert])
+                                  for c in range(14)],
+                                  message='log_prob')
         log_likelihoods.append(log_likelihood)
 
-    return tf.reduce_sum(tf.stack(log_likelihoods, axis=0), axis=0) + tf.log(prior)
+    likelihood_sum = tf.reduce_sum(tf.stack(log_likelihoods, axis=0), axis=0)
+    return tf.Print(likelihood_sum, [tf.log(prior)]) + tf.log(prior)
 
 
 class MixFCN(BaseModel):
@@ -40,9 +44,9 @@ class MixFCN(BaseModel):
         if 'measurement_exp' in config:
             measurements = np.load(ExperimentData(config["measurement_exp"])
                                    .get_artifact("counts.npz"))
-            self.pseudocounts = {'rgb': measurements['rgb'],
-                                 'depth': measurements['depth']}
-            self.class_counts = measurements['class_counts']
+            self.dirichlet_params = {'rgb': measurements['rgb'],
+                                     'depth': measurements['depth']}
+            self.class_counts = measurements['class_counts'].astype('float32')
         else:
             print('WARNING: Could not yet import measurements, you need to fit this '
                   'model first.')
@@ -82,11 +86,27 @@ class MixFCN(BaseModel):
             # Create all the Dirichlet distributions conditional on ground-truth class
             rgb_dirichlets = {}
             depth_dirichlets = {}
+
+            """
+            def put_into_batch_shape(params):
+                Takes a parameter vector and puts it into shape
+                [batchsize, height, widht, num_classes]
+
+                desired_shape = tf.shape(self.rgb_prob)
+                num_classes = desired_shape[3]
+                params = tf.reshape(params, [1, 1, 1, num_classes])
+                params = tf.tile(params, [desired_shape[0], desired_shape[1],
+                                          desired_shape[2], 1])
+                return params
+            """
+
             for c in range(self.config['num_classes']):
                 rgb_dirichlets[c] = tf.contrib.distributions.Dirichlet(
-                    self.dirichlet_params['rgb'][:, c].astype('float32'))
+                    self.dirichlet_params['rgb'][:, c].astype('float32'),
+                    allow_nan_stats=False)
                 depth_dirichlets[c] = tf.contrib.distributions.Dirichlet(
-                    self.dirichlet_params['depth'][:, c].astype('float32'))
+                    self.dirichlet_params['depth'][:, c].astype('float32'),
+                    allow_nan_stats=False)
 
             # Set the Prior of the classes
             uniform_prior = 1.0 / 14
@@ -103,21 +123,13 @@ class MixFCN(BaseModel):
                 prior = weight * uniform_prior + (1 - weight) * data_prior
                 prior = prior / prior.sum()
 
-            fused_score = bayes_fusion([self.rgb_prob, self.depth_prob],
+            self.fused_score = bayes_fusion([self.rgb_prob, self.depth_prob],
                                        [rgb_dirichlets, depth_dirichlets],
                                        prior)
-            label = tf.argmax(fused_score, 3, name='label_2d')
 
-            # Now we test which input data is available and based on this we produce the
-            # corresponding prediction
-            rgb_available = tf.greater(tf.reduce_sum(self.test_X_rgb), 0.0)
-            depth_available = tf.greater(tf.reduce_sum(self.test_X_d), 0.0)
-
-            self.prediction = tf.cond(rgb_available, lambda: tf.cond(depth_available,
-                                                                     lambda: label,
-                                                                     lambda: rgb_label),
-                                      lambda: depth_label)
-            self.prediction = label
+            label = tf.argmax(self.fused_score, 3, name='label_2d')
+            self.prediction = tf.Print(label, [self.fused_score])
+            print('try')
         else:
             num_classes = self.config['num_classes']
 
@@ -149,7 +161,7 @@ class MixFCN(BaseModel):
             # IMPORTANT: The size of this queue can grow big very easily with growing
             # batchsize, therefore do not make the queue too long, otherwise we risk getting
             # killed by the OS
-            q = tf.FIFOQueue(3, [tf.float32, tf.float32, tf.float32])
+            q = tf.FIFOQueue(2, [tf.float32, tf.float32, tf.float32])
             self.enqueue_op = q.enqueue([self.train_rgb, self.train_depth, self.train_Y])
             train_rgb, train_depth, training_labels = q.dequeue()
             # The queue output does not have a defined shape, so we have to define it here to
@@ -302,7 +314,7 @@ class MixFCN(BaseModel):
         """
         keys = self.rgb_branch.keys()
         with self.graph.as_default():
-            measures = [self.prediction]
+            measures = [self.prediction, self.fused_score]
             for tensors in (self.rgb_branch, self.depth_branch):
                 for key in keys:
                     measures.append(tensors[key])
@@ -310,7 +322,8 @@ class MixFCN(BaseModel):
                                     feed_dict=self._evaluation_food(data))
         ret = {}
         ret['fused_label'] = outputs[0]
-        i = 1
+        ret['fused_score'] = outputs[1]
+        i = 2
         for prefix in ('rgb', 'depth'):
             for key in keys:
                 ret['{}_{}'.format(prefix, key)] = outputs[i]
