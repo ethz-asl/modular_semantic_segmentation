@@ -17,6 +17,8 @@ import numpy as np
 def digamma(x): return mathExtra.psi(x)
 def trigamma(x): return mathExtra.polygamma(1, x)
 
+DELTA = 1e-2
+
 
 # Find the "sufficient statistic" for a group of multinomials.
 # Essential, it's the average of the log probabilities
@@ -40,12 +42,13 @@ def logProbForMultinomials(alphas, ss):
   retVal = mathExtra.gammaln(alpha_sum)
   retVal -= np.sum(mathExtra.gammaln(alphas))
   retVal += np.sum(np.multiply(alphas, ss))
+  retVal -= DELTA * alpha_sum ** 2
   return retVal
 
 #Gives the derivative with respect to the log of prior.  This will be used to adjust the loss
 def getGradientForMultinomials(alphas, ss):
   K = len(alphas)
-  C = digamma(sum(alphas))
+  C = digamma(sum(alphas)) - 2 * DELTA * sum(alphas)
   retVal = [C]*K
   for k in range(0, K):
     retVal[k] += ss[k] - digamma(alphas[k])
@@ -55,7 +58,7 @@ def getGradientForMultinomials(alphas, ss):
 
 #The hessian is actually the sum of two matrices: a diagonal matrix and a constant-value matrix.
 #We'll write two functions to get both
-def priorHessianConst(alphas, ss): return -trigamma(sum(alphas))
+def priorHessianConst(alphas, ss): return -trigamma(sum(alphas)) + 2 * DELTA
 def priorHessianDiag(alphas, ss): return [trigamma(a) for a in alphas]
 
 # Compute the next value to try here
@@ -123,7 +126,7 @@ def sqVectorSize(v):
 	for i in range(0, len(v)): s += v[i] ** 2
 	return s
 
-def findDirichletPriors(ss, initAlphas):
+def findDirichletPriors(ss, initAlphas, max_iter=1000):
   priors = initAlphas
 
   # Let the learning begin!!
@@ -134,13 +137,13 @@ def findDirichletPriors(ss, initAlphas):
   learnRateTolerance = 2 ** -10
 
   count = 0
-  while(count < 1000):
+  while(count < max_iter):
     count += 1
 
     #Get the data for taking steps
     gradient = getGradientForMultinomials(priors, ss)
     gradientSize = sqVectorSize(gradient)
-    print(count, "Loss: ", currentLoss, ", Priors: ", priors, ", Gradient Size: ", gradientSize, gradient)
+    #print(count, "Loss: ", currentLoss, ", Priors: ", priors, ", Gradient Size: ", gradientSize, gradient)
 
     if (gradientSize < gradientToleranceSq):
       print("Converged with small gradient")

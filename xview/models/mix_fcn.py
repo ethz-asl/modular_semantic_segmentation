@@ -5,6 +5,8 @@ from os import path
 from types import GeneratorType
 import threading
 
+from .dirichlet_fastfit import meanprecision_with_sufficient_statistic, \
+                               fixedpoint_with_sufficient_statistic
 from .dirichletEstimation import findDirichletPriors
 from .base_model import BaseModel
 from xview.models.simple_fcn import encoder, decoder
@@ -128,12 +130,12 @@ class MixFCN(BaseModel):
                                        reuse=True))
                 prob = tf.nn.softmax(outputs['score'])
 
-                stacked_labels = tf.stack([labels for _ in range(num_classes)], axis=-1)
+                stacked_labels = tf.stack([labels for _ in range(num_classes)], axis=3)
 
                 eps = 1e-10
                 sufficient_statistics = [
-                    tf.log(eps + tf.where(tf.equal(stacked_labels, c), prob,
-                                          tf.ones_like(prob)))
+                    tf.log(tf.where(tf.equal(stacked_labels, c), eps + prob,
+                                    tf.ones_like(prob)))
                     for c in range(num_classes)]
                 combined = tf.stack([tf.reduce_sum(stat, axis=[0, 1, 2])
                                      for stat in sufficient_statistics], axis=0)
@@ -167,7 +169,7 @@ class MixFCN(BaseModel):
             self.depth_sufficient_statistic = train_pipeline(train_depth, 'depth',
                                                              training_labels)
             self.class_counts = tf.stack(
-                [tf.reduce_sum(tf.cast(tf.equal(training_labels, c), tf.int16))
+                [tf.reduce_sum(tf.cast(tf.equal(training_labels, c), tf.int64))
                  for c in range(num_classes)])
 
             # For compliance with base_model, we have to define a prediction outcome.
@@ -191,7 +193,7 @@ class MixFCN(BaseModel):
             # store all measurements in these matrices
             rgb_measurements = np.zeros((num_classes, num_classes))
             depth_measurements = np.zeros((num_classes, num_classes))
-            class_counts = np.zeros(num_classes)
+            class_counts = np.zeros(num_classes).astype('int64')
 
             # Create a thread to load data.
             coord = tf.train.Coordinator()
@@ -212,6 +214,7 @@ class MixFCN(BaseModel):
             coord.join([t])
 
         print(rgb_measurements)
+        print(class_counts)
         print('INFO: Measurements of classifiers finished, now EM')
 
         # Now, given the sufficient statistic, run Expectation-Maximization to get the
@@ -224,11 +227,25 @@ class MixFCN(BaseModel):
             for c in range(num_classes):
                 # Average the measurements over the encoutnered class examples to get the
                 # sufficient statistic.
-                ss = (measurements[:, c] / (eps + class_counts[c])).astype('float64')
+                if class_counts[c] == 0:
+                    params[:, c] = np.ones(num_classes)
+                    continue
+                else:
+                    ss = (measurements[c, :] / class_counts[c]).astype('float64')
+                print(ss)
+                print(class_counts[c])
+
                 # The prior assumption is that all class output probabilities are equally
                 # likely, i.e. all concentration parameters are 1
-                prior = np.ones(num_classes).astype('float64')
-                params[:, c] = findDirichletPriors(ss, prior)
+                prior = np.ones((num_classes)).astype('float64') / num_classes
+
+
+                params[:, c] = meanprecision_with_sufficient_statistic(
+                    ss, class_counts[c], num_classes, prior, maxiter=10000)
+                #params[:, c] = findDirichletPriors(ss, prior)
+
+                print(params[:, c])
+                print('1 em finished')
             return params
 
         rgb_dirichlet_params = dirichlet_em(rgb_measurements)
@@ -299,3 +316,9 @@ class MixFCN(BaseModel):
                 ret['{}_{}'.format(prefix, key)] = outputs[i]
                 i = i + 1
         return ret
+
+    def get_probs(self, data):
+        with self.graph.as_default():
+            rgb_prob, depth_prob = self.sess.run([self.rgb_prob, self.depth_prob],
+                                                 feed_dict=self._evaluation_food(data))
+        return rgb_prob, depth_prob
