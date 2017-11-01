@@ -51,7 +51,7 @@ def fit_and_evaluate(net_config, evaluation_data, starting_weights, _run):
         dataset_params['batchsize'] = 1
         # Load the dataset, we expect config to include the arguments
         data = get_dataset(evaluation_data['dataset'], dataset_params)
-        batches = data.get_train_data(batch_size=10)
+        batches = data.get_train_data(batch_size=6)
         net.fit(batches)
 
         measurements, confusion_matrix = evaluate(net, evaluation_data)

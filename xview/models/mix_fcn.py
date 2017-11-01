@@ -149,7 +149,7 @@ class MixFCN(BaseModel):
             # IMPORTANT: The size of this queue can grow big very easily with growing
             # batchsize, therefore do not make the queue too long, otherwise we risk getting
             # killed by the OS
-            q = tf.FIFOQueue(3, [tf.float32, tf.float32, tf.float32])
+            q = tf.FIFOQueue(2, [tf.float32, tf.float32, tf.float32])
             self.enqueue_op = q.enqueue([self.train_rgb, self.train_depth, self.train_Y])
             train_rgb, train_depth, training_labels = q.dequeue()
             # The queue output does not have a defined shape, so we have to define it here to
