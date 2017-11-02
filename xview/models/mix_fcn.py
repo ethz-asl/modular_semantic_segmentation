@@ -22,16 +22,14 @@ def bayes_fusion(probs, conditionals, prior):
         log_likelihood = tf.stack(
             [conditionals[i_expert][c].log_prob(1e-20 + probs[i_expert])
              for c in range(num_classes)], axis=3)
-        log_likelihood = tf.Print(log_likelihood,
-                                  [tf.reduce_any(tf.is_nan(log_likelihood))],
-                                  message='nans in likelihood')
-        log_likelihood = tf.Print(log_likelihood,
-                                  [tf.reduce_any(tf.is_inf(log_likelihood))],
-                                  message='infs in likelihood')
         log_likelihoods.append(log_likelihood)
 
-    return (tf.reduce_sum(tf.stack(log_likelihoods, axis=0), axis=0)
-            + tf.log(1e-20 + prior))
+    fused_likelihood = tf.reduce_sum(tf.stack(log_likelihoods, axis=0), axis=0)
+    fused_likelihood = tf.Print(
+        fused_likelihood, [tf.reduce_any(tf.logical_or(tf.is_nan(fused_likelihood),
+                                                       tf.is_inf(fused_likelihood)))],
+        message='nans or infs in likelihood')
+    return fused_likelihood + tf.log(1e-20 + prior)
 
 
 class MixFCN(BaseModel):
@@ -130,7 +128,7 @@ class MixFCN(BaseModel):
                                        prior)
 
             label = tf.argmax(self.fused_score, 3, name='label_2d')
-            self.prediction = tf.Print(label, [self.fused_score])
+            self.prediction = label
 
             # debugging stuff
 
