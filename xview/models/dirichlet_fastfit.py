@@ -151,7 +151,8 @@ def loglikelihood_logp(logp, N, a, delta=1e-2):
     -------
     logl : float
         The log likelihood of the Dirichlet distribution'''
-    return N*(gammaln(a.sum()) - gammaln(a).sum() + ((a - 1)*logp).sum() - delta * a.sum() ** 2)
+    return (N*(gammaln(a.sum()) - gammaln(a).sum() + ((a - 1)*logp).sum())
+            - delta * np.square(a).sum())
 
 def mle(D, tol=1e-7, method='meanprecision', maxiter=None):
     '''Iteratively computes maximum likelihood Dirichlet distribution
@@ -239,7 +240,7 @@ def fixedpoint_with_sufficient_statistic(ss, N, K, prior, tol=1e-7, maxiter=1000
     a0 = prior
 
     for i in xrange(maxiter):
-        a1 = _ipsi(psi(a0.sum()) + logp - 2 * delta * a0.sum())
+        a1 = _ipsi(psi(a0.sum()) + logp)   # - 2 * delta * a0)
         # if norm(a1-a0) < tol:
         if abs(loglikelihood_logp(logp, N, a1)-loglikelihood_logp(logp, N, a0)) < tol: # much faster
             return a1
@@ -247,7 +248,8 @@ def fixedpoint_with_sufficient_statistic(ss, N, K, prior, tol=1e-7, maxiter=1000
     raise Exception('Failed to converge after {} iterations, values are {}.'
                     .format(maxiter, a1))
 
-def meanprecision_with_sufficient_statistic(ss, N, K, prior, tol=1e-7, maxiter=1000):
+def meanprecision_with_sufficient_statistic(ss, N, K, prior, tol=1e-7, maxiter=1000,
+                                            delta=1e-2):
     logp = ss
     a0 = prior
     s0 = a0.sum()
@@ -261,15 +263,17 @@ def meanprecision_with_sufficient_statistic(ss, N, K, prior, tol=1e-7, maxiter=1
 
     for i in xrange(maxiter):
         try:
-            a1 = _fit_s(a0, logp, tol=tol, maxiter=maxiter)
+            a1 = _fit_s(a0, logp, tol=tol, maxiter=maxiter, delta=delta)
             s1 = sum(a1)
             a1 = _fit_m(a1, logp, tol=tol, maxiter=maxiter)
             m = a1/s1
             # if norm(a1-a0) < tol:
-            if abs(loglikelihood_logp(logp, N, a1)-loglikelihood_logp(logp, N, a0)) < tol:
+            if abs(loglikelihood_logp(logp, N, a1, delta=delta)
+                   - loglikelihood_logp(logp, N, a0, delta=delta)) < tol:
                 return a1
             a0 = a1
-        except Exception:
+        except Exception as e:
+            print(e)
             print('Failed to converge, returning')
             return a1
     raise Exception('Failed to converge after {} iterations, values are {}.'
@@ -284,7 +288,7 @@ def _fit_s(a0, logp, tol=1e-7, maxiter=1000, delta=1e-2):
     for i in xrange(maxiter):
         s0 = s1
         g = psi(s1) - (m*psi(s1*m)).sum() + mlogp - 2 * delta * s1
-        h = _trigamma(s1) - ((m**2)*_trigamma(s1*m)).sum()
+        h = _trigamma(s1) - ((m**2)*_trigamma(s1*m)).sum() - 2 * delta
 
         if g + s1 * h < 0:
             s1 = 1/(1/s0 + g/h/(s0**2))

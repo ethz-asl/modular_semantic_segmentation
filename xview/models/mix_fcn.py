@@ -19,15 +19,19 @@ def bayes_fusion(probs, conditionals, prior):
     log_likelihoods = []
     for i_expert in range(len(conditionals)):
         # compute p(expert output | groudn truth class x)
-        log_likelihood = tf.stack([conditionals[i_expert][c].log_prob(probs[i_expert])
-                                   for c in range(num_classes)], axis=3)
-        log_likelihood = tf.Print(log_likelihood, [conditionals[i_expert][c].log_prob(probs[i_expert])
-                                  for c in range(14)],
-                                  message='log_prob')
+        log_likelihood = tf.stack(
+            [conditionals[i_expert][c].log_prob(1e-20 + probs[i_expert])
+             for c in range(num_classes)], axis=3)
+        log_likelihood = tf.Print(log_likelihood,
+                                  [tf.reduce_any(tf.is_nan(log_likelihood))],
+                                  message='nans in likelihood')
+        log_likelihood = tf.Print(log_likelihood,
+                                  [tf.reduce_any(tf.is_inf(log_likelihood))],
+                                  message='infs in likelihood')
         log_likelihoods.append(log_likelihood)
 
-    likelihood_sum = tf.reduce_sum(tf.stack(log_likelihoods, axis=0), axis=0)
-    return tf.Print(likelihood_sum, [tf.log(prior)]) + tf.log(prior)
+    return (tf.reduce_sum(tf.stack(log_likelihoods, axis=0), axis=0)
+            + tf.log(1e-20 + prior))
 
 
 class MixFCN(BaseModel):
@@ -58,6 +62,8 @@ class MixFCN(BaseModel):
         """Builds the whole network. Network is split into 2 similar pipelines with shared
         weights, one for training and one for testing."""
 
+        num_classes = self.config['num_classes']
+
         # Network for testing / evaluation
         # As before, we define placeholders for the input. These here now can be fed
         # directly, e.g. with a feed_dict created by _evaluation_food
@@ -75,11 +81,17 @@ class MixFCN(BaseModel):
             prob = tf.nn.softmax(outputs['score'])
             return prob
 
-        self.rgb_prob = tf.cast(test_pipeline(self.test_X_rgb, 'rgb'), tf.float32)
-        self.depth_prob = tf.cast(test_pipeline(self.test_X_d, 'depth'), tf.float32)
+        rgb_prob = tf.cast(test_pipeline(self.test_X_rgb, 'rgb'), tf.float32)
+        depth_prob = tf.cast(test_pipeline(self.test_X_d, 'depth'), tf.float32)
+
+        self.rgb_prob = rgb_prob / tf.reduce_sum(rgb_prob, axis=3, keep_dims=True)
+        self.depth_prob = depth_prob / tf.reduce_sum(depth_prob, axis=3, keep_dims=True)
 
         rgb_label = tf.argmax(self.rgb_prob, 3, name='rgb_label_2d')
         depth_label = tf.argmax(self.depth_prob, 3, name='depth_label_2d')
+
+        self.rgb_branch = {'label': rgb_label, 'prob': self.rgb_prob}
+        self.depth_branch = {'label': depth_label, 'prob': self.depth_prob}
 
         # The following part can only be build if measurements are already present.
         if hasattr(self, 'dirichlet_params'):
@@ -87,30 +99,20 @@ class MixFCN(BaseModel):
             rgb_dirichlets = {}
             depth_dirichlets = {}
 
-            """
-            def put_into_batch_shape(params):
-                Takes a parameter vector and puts it into shape
-                [batchsize, height, widht, num_classes]
-
-                desired_shape = tf.shape(self.rgb_prob)
-                num_classes = desired_shape[3]
-                params = tf.reshape(params, [1, 1, 1, num_classes])
-                params = tf.tile(params, [desired_shape[0], desired_shape[1],
-                                          desired_shape[2], 1])
-                return params
-            """
+            sigma = self.config['sigma']
 
             for c in range(self.config['num_classes']):
                 rgb_dirichlets[c] = tf.contrib.distributions.Dirichlet(
-                    self.dirichlet_params['rgb'][:, c].astype('float32'),
-                    allow_nan_stats=False)
+                    sigma * self.dirichlet_params['rgb'][:, c].astype('float32'),
+                    validate_args=False, allow_nan_stats=False)
                 depth_dirichlets[c] = tf.contrib.distributions.Dirichlet(
-                    self.dirichlet_params['depth'][:, c].astype('float32'),
-                    allow_nan_stats=False)
+                    sigma * self.dirichlet_params['depth'][:, c].astype('float32'),
+                    validate_args=False, allow_nan_stats=False)
 
             # Set the Prior of the classes
             uniform_prior = 1.0 / 14
-            data_prior = (self.class_counts / self.class_counts.sum()).astype('float32')
+            data_prior = (self.class_counts /
+                          (1e-20 + self.class_counts.sum())).astype('float32')
             if self.config['class_prior'] == 'uniform':
                 # set a uniform prior for all classes
                 prior = uniform_prior
@@ -129,9 +131,38 @@ class MixFCN(BaseModel):
 
             label = tf.argmax(self.fused_score, 3, name='label_2d')
             self.prediction = tf.Print(label, [self.fused_score])
-            print('try')
+
+            # debugging stuff
+
+            # compute p(expert output | groudn truth class x)
+
+            rgb_log_likelihood = tf.stack([rgb_dirichlets[c].log_prob(self.rgb_prob)
+                                           for c in range(num_classes)], axis=3)
+            depth_log_likelihood = tf.stack([depth_dirichlets[c].log_prob(self.depth_prob)
+                                       for c in range(num_classes)], axis=3)
+
+            rgb_log_likelihood_u = tf.stack([rgb_dirichlets[c]._log_unnormalized_prob(self.rgb_prob)
+                                           for c in range(num_classes)], axis=3)
+            depth_log_likelihood_u = tf.stack([depth_dirichlets[c]._log_unnormalized_prob(self.depth_prob)
+                                       for c in range(num_classes)], axis=3)
+
+            rgb_log_likelihood_n = tf.stack([rgb_dirichlets[c]._log_normalization()
+                                           for c in range(num_classes)], axis=0)
+            depth_log_likelihood_n = tf.stack([depth_dirichlets[c]._log_normalization()
+                                       for c in range(num_classes)], axis=0)
+
+            rgb_log_prob = tf.log(self.rgb_prob)
+            depth_log_prob = tf.log(self.depth_prob)
+
+            self.rgb_branch.update({'likelihood': rgb_log_likelihood,
+                                    'u_l': rgb_log_likelihood_u,
+                                    'n_l': rgb_log_likelihood_n,
+                                    'log_prob': rgb_log_prob})
+            self.depth_branch.update({'likelihood': depth_log_likelihood,
+                                      'u_l': depth_log_likelihood_u,
+                                      'n_l': depth_log_likelihood_n,
+                                      'log_prob': depth_log_prob})
         else:
-            num_classes = self.config['num_classes']
 
             # Build a training pipeline for measuring the differnet classifiers
             def train_pipeline(inputs, prefix, labels):
@@ -187,11 +218,13 @@ class MixFCN(BaseModel):
             # For compliance with base_model, we have to define a prediction outcome.
             # As we do not yet know how to do fusion, we simply take rgb.
             self.prediction = rgb_label
+            self.fused_score = self.rgb_prob
 
         # To understand what"s going on under the hood, we expose a lot of intermediate
         # results for evaluation
-        self.rgb_branch = {'label': rgb_label}
-        self.depth_branch = {'label': depth_label}
+
+
+
 
     def fit(self, data):
         """Measure the encoder outputs against the given groundtruth for the given data.
@@ -231,7 +264,7 @@ class MixFCN(BaseModel):
 
         # Now, given the sufficient statistic, run Expectation-Maximization to get the
         # Dirichlet parameters
-        def dirichlet_em(measurements, eps=1e-10):
+        def dirichlet_em(measurements):
             """Find dirichlet parameters for all class-conditional dirichlets in
             measurements."""
             params = np.ones((num_classes, num_classes)).astype('float64')
@@ -249,15 +282,20 @@ class MixFCN(BaseModel):
 
                 # The prior assumption is that all class output probabilities are equally
                 # likely, i.e. all concentration parameters are 1
-                prior = np.ones((num_classes)).astype('float64') / num_classes
+                prior = np.ones((num_classes)).astype('float64')
 
+                #params[:, c] = meanprecision_with_sufficient_statistic(
+                #    ss, class_counts[c], num_classes, prior, maxiter=10000,
+                #    tol=1e-5, delta=self.config['delta'])
+                #params[:, c] = fixedpoint_with_sufficient_statistic(
+                #    ss, class_counts[c], num_classes, prior, maxiter=10000,
+                #    tol=1e-5, delta=self.config['delta'])
+                params[:, c] = findDirichletPriors(ss, prior, max_iter=10000,
+                                                   delta=self.config['delta'])
 
-                params[:, c] = meanprecision_with_sufficient_statistic(
-                    ss, class_counts[c], num_classes, prior, maxiter=10000)
-                #params[:, c] = findDirichletPriors(ss, prior)
-
-                print(params[:, c])
-                print('1 em finished')
+                print('parameters for class {}: {}'.format(
+                    c, ', '.join(['{}: {:.1f}'.format(i, params[i, c])
+                                  for i in range(num_classes)])))
             return params
 
         rgb_dirichlet_params = dirichlet_em(rgb_measurements)
