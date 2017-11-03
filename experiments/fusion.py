@@ -54,6 +54,9 @@ def fit_and_evaluate(net_config, evaluation_data, starting_weights, _run):
         batches = data.get_train_data(batch_size=6)
         net.fit(batches)
 
+	# import weights again as fitting created new graph
+	import_weights_into_network(net, starting_weights)
+
         measurements, confusion_matrix = evaluate(net, evaluation_data)
         _run.info['measurements'] = measurements
         _run.info['confusion_matrix'] = confusion_matrix
