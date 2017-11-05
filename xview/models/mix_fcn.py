@@ -7,7 +7,8 @@ import threading
 
 from .dirichlet_fastfit import meanprecision_with_sufficient_statistic, \
                                fixedpoint_with_sufficient_statistic
-from .dirichletEstimation import findDirichletPriors
+#from .dirichletEstimation import findDirichletPriors
+from .dirichletDifferentiation import findDirichletPriors
 from .base_model import BaseModel
 from xview.models.simple_fcn import encoder, decoder
 
@@ -275,6 +276,10 @@ class MixFCN(BaseModel):
                     continue
                 else:
                     ss = (measurements[c, :] / class_counts[c]).astype('float64')
+
+                # sufficient statistic of negatives
+                neg_ss = (measurements.sum(0) - measurements[c, :]) / \
+                    (class_counts.sum() - class_counts[c])
                 print(ss)
                 print(class_counts[c])
 
@@ -288,7 +293,7 @@ class MixFCN(BaseModel):
                 #params[:, c] = fixedpoint_with_sufficient_statistic(
                 #    ss, class_counts[c], num_classes, prior, maxiter=10000,
                 #    tol=1e-5, delta=self.config['delta'])
-                params[:, c] = findDirichletPriors(ss, prior, max_iter=10000,
+                params[:, c] = findDirichletPriors(ss, neg_ss, prior, max_iter=10000,
                                                    delta=self.config['delta'])
 
                 print('parameters for class {}: {}'.format(
