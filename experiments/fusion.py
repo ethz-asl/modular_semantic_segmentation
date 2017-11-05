@@ -53,9 +53,10 @@ def fit_and_evaluate(net_config, evaluation_data, starting_weights, _run):
         data = get_dataset(evaluation_data['dataset'], dataset_params)
         batches = data.get_train_data(batch_size=6)
         net.fit(batches)
+        #net.fit(data.get_validation_data(num_items=1))
 
-	# import weights again as fitting created new graph
-	import_weights_into_network(net, starting_weights)
+        # import weights again as fitting created new graph
+        import_weights_into_network(net, starting_weights)
 
         measurements, confusion_matrix = evaluate(net, evaluation_data)
         _run.info['measurements'] = measurements
