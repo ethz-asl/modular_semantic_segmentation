@@ -35,30 +35,31 @@ def getSufficientStatistic(multinomials):
 
 # Find the log probability of the data for a given dirichlet
 # This is equal to the log probabiliy of the data.. up to a linear transform
-def logProbForMultinomials(alphas, ss, not_ss, delta):
+def logProbForMultinomials(alphas, ss, not_ss, beta, delta):
   alpha_sum = np.sum(alphas)
-  retVal = mathExtra.gammaln(alpha_sum)
-  retVal -= np.sum(mathExtra.gammaln(alphas))
+  retVal = (1 - beta) * mathExtra.gammaln(alpha_sum)
+  retVal -= (1 - beta) * np.sum(mathExtra.gammaln(alphas))
   retVal += np.sum(np.multiply(alphas, ss))
   retVal -= delta * np.square(alphas).sum()
-  retVal -= np.sum(np.multiply(alphas, not_ss))
+  retVal -= beta * np.sum(np.multiply(alphas, not_ss))
   return retVal
 
 #Gives the derivative with respect to the log of prior.  This will be used to adjust the loss
-def getGradientForMultinomials(alphas, ss, not_ss, delta):
+def getGradientForMultinomials(alphas, ss, not_ss, beta, delta):
   K = len(alphas)
-  C = digamma(sum(alphas)) # - DELTA  * sum(alphas)
+  C = (1 - beta) * digamma(sum(alphas))
   retVal = [C]*K
   for k in range(0, K):
-    retVal[k] += ss[k] - digamma(alphas[k]) - 2 * delta * alphas[k] - not_ss[k]
-
+    retVal[k] += ss[k] - (1 - beta) * digamma(alphas[k])
+    retVal[k] -= 2 * delta * alphas[k] 
+    retVal[k] -= beta * not_ss[k]
 
   return retVal
 
 #The hessian is actually the sum of two matrices: a diagonal matrix and a constant-value matrix.
 #We'll write two functions to get both
-def priorHessianConst(alphas, ss, delta): return -trigamma(sum(alphas)) + 2 * delta
-def priorHessianDiag(alphas, ss): return [trigamma(a) for a in alphas]
+def priorHessianConst(alphas, beta, delta): return -(1 - beta) * trigamma(sum(alphas)) #+ 2 * delta
+def priorHessianDiag(alphas, beta): return [(1 - beta) * trigamma(a) for a in alphas]
 
 # Compute the next value to try here
 # http://research.microsoft.com/en-us/um/people/minka/papers/dirichlet/minka-dirichlet.pdf (eq 18)
@@ -98,39 +99,39 @@ def getPredictedStepAlt(hConst, hDiag, gradient, alphas):
   return retVal
 
 #The priors and data are global, so we don't need to pass them in
-def getTotalLoss(trialPriors, ss, not_ss, delta):
-  return -1*logProbForMultinomials(trialPriors, ss, not_ss, delta)
+def getTotalLoss(trialPriors, ss, not_ss, beta, delta):
+  return -1*logProbForMultinomials(trialPriors, ss, not_ss, beta, delta)
 
-def predictStepUsingHessian(gradient, priors, ss, not_ss,  delta):
-    totalHConst = priorHessianConst(priors, ss, not_ss, delta)
-    totalHDiag = priorHessianDiag(priors, ss, not_ss)
+def predictStepUsingHessian(gradient, priors, ss, not_ss, beta, delta):
+    totalHConst = priorHessianConst(priors, beta, delta)
+    totalHDiag = priorHessianDiag(priors, beta)
     return getPredictedStep(totalHConst, totalHDiag, gradient)
 
-def predictStepLogSpace(gradient, priors, ss, not_ss, delta):
-    totalHConst = priorHessianConst(priors, ss, not_ss, delta)
-    totalHDiag = priorHessianDiag(priors, ss, not_ss)
+def predictStepLogSpace(gradient, priors, ss, not_ss, beta, delta):
+    totalHConst = priorHessianConst(priors, beta, delta)
+    totalHDiag = priorHessianDiag(priors, beta)
     return getPredictedStepAlt(totalHConst, totalHDiag, gradient, priors)
 
 
 # Returns whether it's a good step, and the loss
-def testTrialPriors(trialPriors, ss, not_ss, delta):
+def testTrialPriors(trialPriors, ss, not_ss, beta, delta):
     for alpha in trialPriors:
         if alpha <= 0:
             return float("inf")
 
-    return getTotalLoss(trialPriors, ss, not_ss, delta)
+    return getTotalLoss(trialPriors, ss, not_ss, beta, delta)
 
 def sqVectorSize(v):
     s = 0
     for i in range(0, len(v)): s += v[i] ** 2
     return s
 
-def findDirichletPriors(ss, not_ss, initAlphas, max_iter=1000, delta=1e-2):
+def findDirichletPriors(ss, not_ss, initAlphas, max_iter=1000, delta=1e-2, beta=1e-2):
   priors = initAlphas
 
   # Let the learning begin!!
   #Only step in a positive direction, get the current best loss.
-  currentLoss = getTotalLoss(priors, ss, not_ss, delta)
+  currentLoss = getTotalLoss(priors, ss, not_ss, beta, delta)
 
   gradientToleranceSq = 2 ** -20
   learnRateTolerance = 2 ** -10
@@ -140,7 +141,7 @@ def findDirichletPriors(ss, not_ss, initAlphas, max_iter=1000, delta=1e-2):
     count += 1
 
     #Get the data for taking steps
-    gradient = getGradientForMultinomials(priors, ss, not_ss, delta)
+    gradient = getGradientForMultinomials(priors, ss, not_ss, beta, delta)
     gradientSize = sqVectorSize(gradient)
     #print(count, "Loss: ", currentLoss, ", Priors: ", priors, ", Gradient Size: ", gradientSize, gradient)
 
@@ -148,23 +149,29 @@ def findDirichletPriors(ss, not_ss, initAlphas, max_iter=1000, delta=1e-2):
       print("Converged with small gradient")
       return priors
 
-    trialStep = predictStepUsingHessian(gradient, priors, ss, not_ss, delta)
+    trialStep = predictStepUsingHessian(gradient, priors, ss, not_ss, beta, delta)
 
     #First, try the second order method
-    trialPriors = [0]*len(priors)
-    for i in range(0, len(priors)): trialPriors[i] = priors[i] + trialStep[i]
+    try:
+        trialPriors = [0]*len(priors)
+        for i in range(0, len(priors)): trialPriors[i] = priors[i] + trialStep[i]
 
-    loss = testTrialPriors(trialPriors, ss, not_ss, delta)
-    if loss < currentLoss:
-      currentLoss = loss
-      priors = trialPriors
-      continue
+        loss = testTrialPriors(trialPriors, ss, not_ss, beta, delta)
+        if loss < currentLoss:
+          currentLoss = loss
+          priors = trialPriors
+          continue
+    except OverflowError:
+        print('got overflow error')
 
-    trialStep = predictStepLogSpace(gradient, priors, ss, not_ss, delta)
-    trialPriors = [0]*len(priors)
-    for i in range(0, len(priors)): trialPriors[i] = priors[i] * math.exp(trialStep[i])
-    loss = testTrialPriors(trialPriors, ss, not_ss, delta)
-
+    try:
+        trialStep = predictStepLogSpace(gradient, priors, ss, not_ss, beta, delta)
+        trialPriors = [0]*len(priors)
+        for i in range(0, len(priors)): trialPriors[i] = priors[i] * math.exp(trialStep[i])
+        loss = testTrialPriors(trialPriors, ss, not_ss, beta, delta)
+    except OverflowError:
+        print('got overflow error, returning')
+        return priors
     #Step in the direction of the gradient until there is a loss improvement
     loss = 10000000
     learnRate = 1.0
@@ -172,7 +179,7 @@ def findDirichletPriors(ss, not_ss, initAlphas, max_iter=1000, delta=1e-2):
       learnRate *= 0.9
       trialPriors = [0]*len(priors)
       for i in range(0, len(priors)): trialPriors[i] = priors[i] + gradient[i]*learnRate
-      loss = testTrialPriors(trialPriors, ss, not_ss, delta)
+      loss = testTrialPriors(trialPriors, ss, not_ss, beta, delta)
 
     if (learnRate < learnRateTolerance):
       print("Converged with small learn rate")

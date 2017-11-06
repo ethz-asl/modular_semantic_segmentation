@@ -26,10 +26,10 @@ def bayes_fusion(probs, conditionals, prior):
         log_likelihoods.append(log_likelihood)
 
     fused_likelihood = tf.reduce_sum(tf.stack(log_likelihoods, axis=0), axis=0)
-    fused_likelihood = tf.Print(
-        fused_likelihood, [tf.reduce_any(tf.logical_or(tf.is_nan(fused_likelihood),
-                                                       tf.is_inf(fused_likelihood)))],
-        message='nans or infs in likelihood')
+    #fused_likelihood = tf.Print(
+    #    fused_likelihood, [tf.reduce_any(tf.logical_or(tf.is_nan(fused_likelihood),
+    #                                                   tf.is_inf(fused_likelihood)))],
+    #    message='nans or infs in likelihood')
     return fused_likelihood + tf.log(1e-20 + prior)
 
 
@@ -294,7 +294,8 @@ class MixFCN(BaseModel):
                 #    ss, class_counts[c], num_classes, prior, maxiter=10000,
                 #    tol=1e-5, delta=self.config['delta'])
                 params[:, c] = findDirichletPriors(ss, neg_ss, prior, max_iter=10000,
-                                                   delta=self.config['delta'])
+                                                   delta=self.config['delta'],
+                                                   beta=self.config['beta'])
 
                 print('parameters for class {}: {}'.format(
                     c, ', '.join(['{}: {:.1f}'.format(i, params[i, c])
