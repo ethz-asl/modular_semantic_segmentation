@@ -222,21 +222,21 @@ class MixFCN(BaseModel):
         # To understand what"s going on under the hood, we expose a lot of intermediate
         # results for evaluation
 
-
-
-
-    def fit(self, data):
-        """Measure the encoder outputs against the given groundtruth for the given data.
+    def _get_sufficient_statistic(self, data):
+        """Generate a sufficient statistic of the given data to fit it later to a
+        dirichlet model.
 
         Args:
-            data: As usual, an instance of DataWrapper
+            data: the data to fit, in batch or generator format
+        Returns:
+            rgb and depth statistics aswell as class-counts
         """
         num_classes = self.config['num_classes']
 
         with self.graph.as_default():
             # store all measurements in these matrices
-            rgb_measurements = np.zeros((num_classes, num_classes))
-            depth_measurements = np.zeros((num_classes, num_classes))
+            rgb_counts = np.zeros((num_classes, num_classes))
+            depth_counts = np.zeros((num_classes, num_classes))
             class_counts = np.zeros(num_classes).astype('int64')
 
             # Create a thread to load data.
@@ -250,16 +250,18 @@ class MixFCN(BaseModel):
                 new_rgb, new_depth, new_count = self.sess.run(
                     [self.rgb_sufficient_statistic, self.depth_sufficient_statistic,
                      self.class_counts])
-                rgb_measurements += new_rgb
-                depth_measurements += new_depth
+                rgb_counts += new_rgb
+                depth_counts += new_depth
                 class_counts += new_count
                 queue_empty = self.sess.run(self.queue_is_empty_op)
 
             coord.join([t])
+        return rgb_counts, depth_counts, class_counts
 
-        print(rgb_measurements)
-        print(class_counts)
-        print('INFO: Measurements of classifiers finished, now EM')
+    def _fit_sufficient_statistic(self, rgb_counts, depth_counts,
+                                  class_counts):
+        """Fit a dirichlet model to the given sufficient statistic."""
+        num_classes = self.config['num_classes']
 
         # Now, given the sufficient statistic, run Expectation-Maximization to get the
         # Dirichlet parameters
@@ -302,8 +304,8 @@ class MixFCN(BaseModel):
                                   for i in range(num_classes)])))
             return params
 
-        rgb_dirichlet_params = dirichlet_em(rgb_measurements)
-        depth_dirichlet_params = dirichlet_em(depth_measurements)
+        rgb_dirichlet_params = dirichlet_em(rgb_counts)
+        depth_dirichlet_params = dirichlet_em(depth_counts)
 
         # Store the results
         self.dirichlet_params = {'rgb': rgb_dirichlet_params,
@@ -316,6 +318,16 @@ class MixFCN(BaseModel):
         # Rebuild the graph with the new measurements:
         self._initialize_graph()
 
+    def fit(self, data):
+        """Measure the encoder outputs against the given groundtruth for the given data.
+
+        Args:
+            data: As usual, an instance of DataWrapper
+        """
+        rgb_counts, depth_counts, class_counts = self._get_sufficient_statistic(data)
+        print('INFO: Measurements of classifiers finished, now EM')
+
+        self._fit_sufficient_statistic(rgb_counts, depth_counts, class_counts)
         print("INFO: MixFCN fitted to data")
 
     def _evaluation_food(self, data):
