@@ -136,8 +136,6 @@ class MixFCN(BaseModel):
             rgb_dirichlets = {}
             depth_dirichlets = {}
 
-            sigma = self.config['sigma']
-
             for c in range(self.config['num_classes']):
                 rgb_dirichlets = self.dirichlet_params['rgb'].astype('float32')
                 depth_dirichlets = self.dirichlet_params['depth'].astype('float32')
