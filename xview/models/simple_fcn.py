@@ -41,7 +41,7 @@ def decoder(features, prefix, dropout_rate, config, is_training=False, reuse=Tru
               'batch_normalization': config['batch_normalization'],
               'training': is_training}
 
-    features = dropout(features, rate=dropout_rate,
+    features = dropout(features, rate=dropout_rate, training=True,
                        name='{}_dropout'.format(prefix))
     # Upsample the fused features to the output classification size
     features = deconv2d(features, config['num_units'], [16, 16], strides=[8, 8],
