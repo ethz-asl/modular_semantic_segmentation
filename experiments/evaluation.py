@@ -12,7 +12,7 @@ def evaluate(net, data_config):
     # Load the dataset, we expect config to include the arguments
     dataset = get_dataset(data_config['dataset'])
     data = dataset(data_config['sequences'], 1)
-    if data_config.get('use_trainset', False):
+    if data_config.get('use_trainset', default=False):
         print('INFO: Evaluating against trainset')
         batches = data.get_train_data(batch_size=1)
     else:
@@ -21,8 +21,8 @@ def evaluate(net, data_config):
     measures, confusion_matrix = net.score(batches)
 
     print('Evaluated network on {}:'.format(data_config['dataset']))
-    print('total accuracy {:.2f} mean F1 {:.2f} IU {:.2f}'.format(
-        measures['total_accuracy'], measures['mean_F1'], measures['mean_IU']))
+    print('total accuracy {:.2f} mean F1 {:.2f} IoU {:.2f}'.format(
+        measures['total_accuracy'], measures['mean_F1'], measures['mean_IoU']))
     for label in data.labelinfo:
         print("{:>15}: {:.2f} precision, {:.2f} recall, {:.2f} F1".format(
             data.labelinfo[label]['name'], measures['precision'][label],
@@ -87,7 +87,7 @@ def load_model_configuration(config, command_name, logger):
 
 @ex.command
 def also_load_config(modelname, net_config, evaluation_data, starting_weights, _run):
-    """In case of only a single trainign experiment, we also load the exact network
+    """In case of only a single training experiment, we also load the exact network
     config from this experiment as a default"""
     # Load the training experiment
     training_experiment = ExperimentData(starting_weights['experiment_id'])
@@ -111,8 +111,8 @@ def also_load_config(modelname, net_config, evaluation_data, starting_weights, _
 
 
 @ex.automain
-def multiple_weights(modelname, net_config, evaluation_data, starting_weights, _run):
-    """Load weigths from trainign experiments and evalaute network against specified
+def main(modelname, net_config, evaluation_data, starting_weights, _run):
+    """Load weigths from training experiments and evaluate network against specified
     data."""
     model = get_model(modelname)
     with model(**net_config) as net:

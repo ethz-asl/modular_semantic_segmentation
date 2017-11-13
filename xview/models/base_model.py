@@ -237,10 +237,10 @@ class BaseModel(object):
         measures['mean_F1'] = np.nanmean(measures['F1'])
         measures['total_accuracy'] = np.diag(confusion_matrix).sum() / \
             confusion_matrix.sum()
-        measures['IU'] = np.diag(confusion_matrix) / \
+        measures['IoU'] = np.diag(confusion_matrix) / \
             (confusion_matrix.sum(1) + confusion_matrix.sum(0) -
              np.diag(confusion_matrix))
-        measures['mean_IU'] = np.nanmean(measures['IU'])
+        measures['mean_IoU'] = np.nanmean(measures['IoU'])
         return measures, confusion_matrix
 
     def load_weights(self, filepath):

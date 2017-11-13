@@ -13,7 +13,7 @@ ex.observers.append(get_mongo_observer())
 
 
 @ex.automain
-def my_main(data_config, fcn_config, num_iterations):
+def main(data_config, fcn_config, num_iterations):
     # create temporary directory for output files
     output_dir = '/tmp/fcn_train'
     if os.path.exists(output_dir):
