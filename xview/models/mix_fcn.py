@@ -25,7 +25,8 @@ def bayes_fusion(probs, conditional_params, uncertainties, prior):
     # We will collect all posteriors in this list
     log_likelihoods = []
     for i_expert in range(len(conditional_params)):
-        mix = uncertainties[i_expert] / tf.reduce_max(uncertainties[i_expert])
+        mix = tf.reduce_mean(uncertainties[i_expert], axis=3) / \
+            tf.reduce_max(uncertainties[i_expert])
         mix = tf.expand_dims(tf.expand_dims(mix, axis=-1), axis=-1)
 
         # The exact dirichlet params are given by the uncertainty and the standard params
@@ -158,8 +159,7 @@ class MixFCN(BaseModel):
 
             self.fused_score = bayes_fusion([self.rgb_prob, self.depth_prob],
                                             [rgb_dirichlets, depth_dirichlets],
-                                            [tf.reduce_mean(rgb_var, axis=3),
-                                             tf.reduce_mean(depth_var, axis=3)],
+                                            [rgb_var, depth_var],
                                             prior)
 
             label = tf.argmax(self.fused_score, 3, name='label_2d')
