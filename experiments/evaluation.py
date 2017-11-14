@@ -7,8 +7,16 @@ from sys import stdout
 
 
 def evaluate(net, data_config):
-    """Evaluate the given network against the specified data and report the result
-    to the given experiment."""
+    """
+    Evaluate the given network against the specified data and print the result.
+
+    Args:
+        net: An instance of a `base_model` class.
+        data_config: A config-dict for data containing all initializer arguments and the
+            dataset-name at key 'dataset'.
+    Returns:
+        dict of measurements as produced by net.score, confusion matrix
+    """
     dataset_params = {key: val for key, val in data_config.items()
                       if key not in ['dataset', 'use_trainset']}
     dataset_params['batchsize'] = 1
@@ -38,7 +46,15 @@ def evaluate(net, data_config):
 def import_weights_into_network(net, starting_weights, **kwargs):
     """Based on either a list of descriptions of training experiments or one description,
     load the weights produced by these trainigns into the given network.
-    kwargs are passed to net.import_weights
+
+    Args:
+        net: An instance of a `base_model` inheriting class.
+        starting_weights: Either dict or list of dicts.
+            if dict: expect key 'experiment_id' to match a previous experiment's ID.
+                if key 'filename' is not set, will search for the first artifact that
+                has 'weights' in the name.
+            if list: a list of dicts where each dict will be evaluated as above
+        kwargs are passed to net.import_weights
     """
     def import_weights_from_description(experiment_description):
         training_experiment = ExperimentData(experiment_description['experiment_id'])

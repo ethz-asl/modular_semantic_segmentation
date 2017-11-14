@@ -1,6 +1,6 @@
 from sacred import Experiment
 from experiments.utils import get_mongo_observer, ExperimentData
-from experiments.evaluation import evaluate
+from experiments.evaluation import evaluate, import_weights_into_network
 from sacred.utils import TimeoutInterrupt
 from xview.datasets import get_dataset
 from xview.models import get_model
@@ -9,6 +9,16 @@ import os
 
 
 def create_directories(run_id, experiment):
+    """
+    Make sure directories for storing diagnostics are created and clean.
+
+    Args:
+        run_id: ID of the current sacred run, you can get it from _run._id in a captured
+            function.
+        experiment: The sacred experiment object
+    Returns:
+        The path to the created output directory you can store your diagnostics to.
+    """
     root = '/tmp/sacred/training'
     # create temporary directory for output files
     if not os.path.exists(root):
@@ -24,30 +34,27 @@ def create_directories(run_id, experiment):
     return output_dir
 
 
-def import_startingweights(net, starting_weights):
-    # load startign weights
-    if starting_weights == 'washington':
-        # load the washington weights
-        weights = os.path.join(DATA_BASEPATH, 'darnn/FCN_weights_40000.npz')
-        net.import_weights(weights, chill_mode=True)
-    elif isinstance(starting_weights, dict):
-        print('INFO: Loading weights from experiment {}'.format(
-            starting_weights['experiment_id']))
-        # load weights from previous experiment
-        previous_exp = ExperimentData(starting_weights['experiment_id'])
-        weights = previous_exp.get_artifact(starting_weights['filename'])
-        net.import_weights(weights, chill_mode=True)
-    elif isinstance(starting_weights, list):
-        for weights in starting_weights:
-            import_startingweights(net, weights)
-
-
 ex = Experiment()
 ex.observers.append(get_mongo_observer())
 
 
 def train_network(net, output_dir, data_config, num_iterations, starting_weights,
                   experiment):
+    """\
+    Train a network on a given dataset.
+
+    Args:
+        net: An instance of a `base_model` class.
+        output_dir: A directory path. This function will add all files foudn at this path
+            as artifacts to the experiment.
+        data_config: A config-dict for data containing all initializer arguments and the
+            dataset-name at key 'dataset'.
+        num_iterations: The numbe rof training iterations
+        starting_weights: Desriptor for weight sto load into network. If not false or
+            empty, will load weights as described in `evaluation.py`.
+        experiment: The current sacred experiment.
+    """
+
     # Load the dataset, we expect config to include the arguments
     dataset_params = {key: val for key, val in data_config.items()
                       if key not in ['dataset']}
@@ -58,7 +65,7 @@ def train_network(net, output_dir, data_config, num_iterations, starting_weights
 
     # Train the given network
     if starting_weights:
-        import_startingweights(net, starting_weights)
+        import_weights_into_network(net, starting_weights)
 
     try:
         net.fit(data, num_iterations, validation_data=validation_set)
@@ -81,6 +88,7 @@ def train_network(net, output_dir, data_config, num_iterations, starting_weights
 @ex.capture
 def train_and_evaluate(net, output_dir, data_config, num_iterations,
                        starting_weights, _run):
+    """Train and evaluate a given network."""
     train_network(net, output_dir, data_config, num_iterations, starting_weights, ex)
     measurements, _ = evaluate(net, data_config)
     _run.info['measurements'] = measurements
