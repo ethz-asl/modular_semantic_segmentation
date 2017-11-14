@@ -8,8 +8,8 @@ from xview.settings import DATA_BASEPATH
 import os
 
 
-def create_directories(prefix, run_id, experiment):
-    root = '/tmp/sacred/{}_train'.format(prefix.lower())
+def create_directories(run_id, experiment):
+    root = '/tmp/sacred/training'
     # create temporary directory for output files
     if not os.path.exists(root):
         os.makedirs(root)
@@ -89,7 +89,7 @@ def train_and_evaluate(net, output_dir, data_config, num_iterations,
 @ex.automain
 def main(modelname, net_config, _run):
     # Set up the directories for diagnostics
-    output_dir = create_directories(modelname, _run._id, ex)
+    output_dir = create_directories(_run._id, ex)
 
     # create the network
     model = get_model(modelname)
