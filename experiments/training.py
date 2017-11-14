@@ -1,34 +1,44 @@
 from sacred import Experiment
+from experiments.utils import get_mongo_observer, ExperimentData
 from sacred.utils import TimeoutInterrupt
-from xview.datasets.synthia import Synthia
-from xview.models.simple_fcn import SimpleFCN
-from xview.models.progressive_fcn import ProgressiveFCN
+from xview.datasets import get_dataset
+from xview.models import get_model
+from xview.settings import DATA_BASEPATH
 import os
-import shutil
-
-from experiments.utils import get_mongo_observer
-from experiments.evaluation import import_weights_into_network
 
 
-ex = Experiment()
-ex.observers.append(get_mongo_observer())
-
-
-def create_directories(run_id, experiment):
+def create_directories(prefix, run_id, experiment):
+    root = '/tmp/sacred/{}_train'.format(prefix.lower())
     # create temporary directory for output files
-    if os.path.exists('/tmp/fcn_train'):
-        # Remove old data
-        shutil.rmtree('/tmp/fcn_train')
-    os.mkdir('/tmp/fcn_train')
+    if not os.path.exists(root):
+        os.makedirs(root)
     # The id of this experiment is stored in the magical _run object we get from the
     # decorator.
-    output_dir = '/tmp/fcn_train/{}'.format(run_id)
+    output_dir = '{}/{}'.format(root, run_id)
     os.mkdir(output_dir)
 
     # Tell the experiment that this output dir is also used for tensorflow summaries
     experiment.info.setdefault("tensorflow", {}).setdefault("logdirs", [])\
         .append(output_dir)
     return output_dir
+
+
+def import_startingweights(net, starting_weights):
+    # load startign weights
+    if starting_weights == 'washington':
+        # load the washington weights
+        weights = os.path.join(DATA_BASEPATH, 'darnn/FCN_weights_40000.npz')
+        net.import_weights(weights, chill_mode=True)
+    elif isinstance(starting_weights, dict):
+        print('INFO: Loading weights from experiment {}'.format(
+            starting_weights['experiment_id']))
+        # load weights from previous experiment
+        previous_exp = ExperimentData(starting_weights['experiment_id'])
+        weights = previous_exp.get_artifact(starting_weights['filename'])
+        net.import_weights(weights, chill_mode=True)
+    elif isinstance(starting_weights, list):
+        for weights in starting_weights:
+            import_startingweights(net, weights)
 
 
 ex = Experiment()
@@ -38,17 +48,18 @@ ex.observers.append(get_mongo_observer())
 def train_network(net, output_dir, data_config, num_iterations, starting_weights,
                   experiment):
     # Load the dataset, we expect config to include the arguments
-    data = Synthia(data_config['seqs'], data_config['batchsize'],
-                   direction=data_config.get('direction', 'F'))
+    dataset_params = {key: val for key, val in data_config.items()
+                      if key not in ['dataset']}
+    data = get_dataset(data_config['dataset'], dataset_params)
+
     # get validation set
-    validation_set = data.get_validation_data(num_items=6)
+    validation_set = data.get_validation_data(num_items=10)
 
     # Train the given network
     if starting_weights:
-        import_weights_into_network(net, starting_weights)
+        import_startingweights(net, starting_weights)
 
     try:
-        # finetune on synthia
         net.fit(data, num_iterations, validation_data=validation_set)
         timeout = False
     except KeyboardInterrupt:
@@ -72,22 +83,12 @@ def captured_train_network(net, output_dir, data_config, num_iterations,
     train_network(net, output_dir, data_config, num_iterations, starting_weights, ex)
 
 
-@ex.command
-def progressive(fcn_config, _run):
-    """Training for progressive FCN."""
-    # Set up the directories for diagnostics
-    output_dir = create_directories(_run._id, ex)
-
-    # create the network
-    with ProgressiveFCN(output_dir=output_dir, **fcn_config) as net:
-        captured_train_network(net, output_dir)
-
-
 @ex.automain
-def main(fcn_config, _run):
+def main(modelname, net_config, _run):
     # Set up the directories for diagnostics
-    output_dir = create_directories(_run._id, ex)
+    output_dir = create_directories(modelname, _run._id, ex)
 
     # create the network
-    with SimpleFCN(output_dir=output_dir, **fcn_config) as net:
+    model = get_model(modelname)
+    with model(output_dir=output_dir, **net_config) as net:
         captured_train_network(net, output_dir)

@@ -82,7 +82,7 @@ def deconv2d(inputs,
              activity_regularizer=None,
              trainable=True,
              name=None,
-             reuse=None,
+             reuse=False,
              batch_normalization=True,
              training=False):
     """Deconvolutional Layer. Upsamples a given image with a bilinear interpolation."""
@@ -113,7 +113,7 @@ def deconv2d(inputs,
     if batch_normalization:
         # Apply batch_normalization after convolution and activation only afterwards
         out = _deconv2d(inputs, None)
-        out = tfl.batch_normalization(out, training=training)
+        out = tfl.batch_normalization(out, training=training, name=name, reuse=reuse)
         if activation is not None:
             out = activation(out)
     else:
@@ -128,7 +128,9 @@ def conv2d(inputs, filters, kernel_size, batch_normalization=False, training=Fal
         activation = kwargs.get('activation', None)
         kwargs.update({'activation': None})
         out = tfl.conv2d(inputs, filters, kernel_size, **kwargs)
-        out = tfl.batch_normalization(out, training=training)
+        out = tfl.batch_normalization(out, training=training,
+                                      reuse=kwargs.get('reuse', False),
+                                      name=kwargs.get('name', None))
         if activation is not None:
             out = activation(out)
     else:

@@ -5,6 +5,7 @@ from os import path
 from abc import ABCMeta, abstractmethod
 from time import sleep
 from types import GeneratorType
+import tempfile
 
 from xview.models.utils import cross_entropy
 from xview.datasets.wrapper import DataWrapper
@@ -78,9 +79,11 @@ class BaseModel(object):
 
             if supports_training and not hasattr(self, '_train_step'):
                 self.global_step = tf.Variable(0, trainable=False, name='global_step')
-                self.trainer = tf.train.AdagradOptimizer(
-                    self.config['learning_rate']).minimize(
-                        self.loss, global_step=self.global_step)
+                update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+                with tf.control_dependencies(update_ops):
+                    self.trainer = tf.train.AdagradOptimizer(
+                        self.config['learning_rate']).minimize(
+                            self.loss, global_step=self.global_step)
 
             self.saver = tf.train.Saver()
 
@@ -167,12 +170,16 @@ class BaseModel(object):
                     accuracy = tf.Summary(
                         value=[tf.Summary.Value(tag='accuracy',
                                                 simple_value=score['total_accuracy'])])
+                    iou = tf.Summary(
+                        value=[tf.Summary.Value(tag='IoU',
+                                                simple_value=score['mean_IoU'])])
 
                     if output:
-                        print("{:4d}: loss {:.4f}, accuracy {:.2f}".format(
-                            i, loss, score['total_accuracy']))
+                        print("{:4d}: loss {:.4f}, accuracy {:.2f}, IoU {:.2f}".format(
+                            i, loss, score['total_accuracy'], score['mean_IoU']))
                     if self.output_dir is not None:
                         train_writer.add_summary(accuracy, i)
+                        train_writer.add_summary(iou, i)
                         train_writer.add_summary(summary, i)
 
             coord.request_stop()
@@ -183,18 +190,23 @@ class BaseModel(object):
             coord.join([t])
             print('INFO: Training finished.')
 
-    def predict(self, data):
+    def predict(self, data, output_prob=False):
         """Perform semantic segmentation on the input data.
 
         Args:
             data: a dictionary {'rgb': <array of shape [num_images, width, height]>
                                 'depth': <array of shape [num_images, width, height]>}
+            output_prob: a boolean indicting if classe probabilities should be outputted
+                instead of the label of the most likely class
         Returns:
-            per-pixel classification of the input image in form
-                <array of shape [num_images, width, height]>
+            per-pixel classification of the input image in form:
+                - <array of shape [num_images, width, height, num_classes]>
+                  if output_prob is specified and true
+                - <array of shape [num_images, width, height]> else
         """
         with self.graph.as_default():
-            return self.sess.run(self.prediction, feed_dict=self._evaluation_food(data))
+            output = self.prob if output_prob else self.prediction
+            return self.sess.run(output, feed_dict=self._evaluation_food(data))
 
     def score(self, data, max_iterations=None):
         """Measure the performance of the model with respect to the given data.
@@ -227,20 +239,22 @@ class BaseModel(object):
         else:
             confusion_matrix = get_confusion_matrix(data)
 
-        # Now we compute several mesures from the confusion matrix
-        measures = {}
-        measures['confusion_matrix'] = confusion_matrix
-        measures['precision'] = np.diag(confusion_matrix) / confusion_matrix.sum(1)
-        measures['recall'] = np.diag(confusion_matrix) / confusion_matrix.sum(0)
-        measures['F1'] = 2 * measures['precision'] * measures['recall'] / \
-            (measures['precision'] + measures['recall'])
-        measures['mean_F1'] = np.nanmean(measures['F1'])
-        measures['total_accuracy'] = np.diag(confusion_matrix).sum() / \
-            confusion_matrix.sum()
-        measures['IoU'] = np.diag(confusion_matrix) / \
-            (confusion_matrix.sum(1) + confusion_matrix.sum(0) -
-             np.diag(confusion_matrix))
-        measures['mean_IoU'] = np.nanmean(measures['IoU'])
+        with np.errstate(divide='ignore', invalid='ignore'):
+            # Now we compute several mesures from the confusion matrix
+            measures = {}
+            measures['confusion_matrix'] = confusion_matrix
+            measures['precision'] = np.diag(confusion_matrix) / confusion_matrix.sum(1)
+            measures['recall'] = np.diag(confusion_matrix) / confusion_matrix.sum(0)
+            measures['F1'] = 2 * measures['precision'] * measures['recall'] / \
+                (measures['precision'] + measures['recall'])
+            measures['mean_F1'] = np.nanmean(measures['F1'])
+            measures['total_accuracy'] = np.diag(confusion_matrix).sum() / \
+                confusion_matrix.sum()
+            measures['IoU'] = np.diag(confusion_matrix) / \
+                (confusion_matrix.sum(1) + confusion_matrix.sum(0) -
+                 np.diag(confusion_matrix))
+            measures['mean_IoU'] = np.nanmean(measures['IoU'])
+
         return measures, confusion_matrix
 
     def load_weights(self, filepath):
@@ -316,7 +330,8 @@ class BaseModel(object):
                 them unassigned
         """
         with self.graph.as_default():
-            weights = np.load(filepath)
+            initializers = []
+            weights = np.load(filepath, mmap_mode='w+')
             for variable in tf.global_variables():
                 name = variable.op.name
                 # Optimizers like Adagrad have their own variables, do not load these
@@ -333,4 +348,5 @@ class BaseModel(object):
                             print('WARNING: wrong shape found for {}, but ignored in '
                                   'chill mode'.format(name))
                     else:
-                        self.sess.run(variable.assign(weights[name]))
+                        initializers.append(variable.assign(weights[name]))
+            self.sess.run(initializers)
