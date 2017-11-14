@@ -143,18 +143,14 @@ class Adapnet(BaseModel):
         # ground truth labels
         self.train_Y = tf.placeholder(tf.float32, shape=[None, None, None,
                                                          self.config['num_classes']])
-        # dropout rate is also an input as it will be different between training and
-        # evaluation
-        self.train_dropout_rate = tf.placeholder(tf.float32)
         # An input queue is defined to load the data for several batches in advance and
         # keep the gpu as busy as we can.
         # IMPORTANT: The size of this queue can grow big very easily with growing
         # batchsize, therefore do not make the queue too long, otherwise we risk getting
         # killed by the OS
-        q = tf.FIFOQueue(3, [tf.float32, tf.float32, tf.float32])
-        self.enqueue_op = q.enqueue([self.train_X, self.train_Y,
-                                     self.train_dropout_rate])
-        train_x, training_labels, train_dropout_rate = q.dequeue()
+        q = tf.FIFOQueue(3, [tf.float32, tf.float32])
+        self.enqueue_op = q.enqueue([self.train_X, self.train_Y])
+        train_x, training_labels = q.dequeue()
 
         # This operation has to be called to close the input queue and free the space it
         # occupies in memory.
@@ -194,8 +190,7 @@ class Adapnet(BaseModel):
     def _enqueue_batch(self, batch, sess):
         with self.graph.as_default():
             feed_dict = {self.train_X: batch[self.config['modality']],
-                         self.train_Y: batch['labels'],
-                         self.train_dropout_rate: self.config['dropout_rate']}
+                         self.train_Y: batch['labels']}
             sess.run(self.enqueue_op, feed_dict=feed_dict)
 
     def _evaluation_food(self, data):
