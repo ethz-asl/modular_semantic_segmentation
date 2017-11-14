@@ -1,5 +1,5 @@
 import tensorflow as tf
-from tensorflow.python.layers.layers import dropout, max_pooling2d
+from tensorflow.python.layers.layers import max_pooling2d
 
 from .base_model import BaseModel
 from .custom_layers import conv2d, deconv2d, log_softmax, softmax
@@ -182,7 +182,7 @@ class Adapnet(BaseModel):
         adapnet_layers = adapnet(self.test_X, self.prefix, self.config,
                                  is_training=False, reuse=True)
         self.prob = softmax(adapnet_layers['score'], self.config['num_classes'],
-                        name='prob_normalized')
+                            name='prob_normalized')
         self.prediction = tf.argmax(self.prob, 3, name='label_2d')
 
         # Add summaries for some weights

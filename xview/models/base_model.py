@@ -170,7 +170,7 @@ class BaseModel(object):
                     accuracy = tf.Summary(
                         value=[tf.Summary.Value(tag='accuracy',
                                                 simple_value=score['total_accuracy'])])
-                    iu  = tf.Summary(
+                    iu = tf.Summary(
                         value=[tf.Summary.Value(tag='IU',
                                                 simple_value=score['mean_IU'])])
 
@@ -239,7 +239,7 @@ class BaseModel(object):
         else:
             confusion_matrix = get_confusion_matrix(data)
 
-        with np.errstate(divide='ignore',invalid='ignore'):
+        with np.errstate(divide='ignore', invalid='ignore'):
             # Now we compute several mesures from the confusion matrix
             measures = {}
             measures['confusion_matrix'] = confusion_matrix
