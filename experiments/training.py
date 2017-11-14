@@ -1,5 +1,6 @@
 from sacred import Experiment
 from experiments.utils import get_mongo_observer, ExperimentData
+from experiments.evaluation import evaluate
 from sacred.utils import TimeoutInterrupt
 from xview.datasets import get_dataset
 from xview.models import get_model
@@ -78,9 +79,11 @@ def train_network(net, output_dir, data_config, num_iterations, starting_weights
 
 
 @ex.capture
-def captured_train_network(net, output_dir, data_config, num_iterations,
-                           starting_weights):
+def train_and_evaluate(net, output_dir, data_config, num_iterations,
+                       starting_weights, _run):
     train_network(net, output_dir, data_config, num_iterations, starting_weights, ex)
+    measurements, _ = evaluate(net, data_config)
+    _run.info['measurements'] = measurements
 
 
 @ex.automain
@@ -91,4 +94,4 @@ def main(modelname, net_config, _run):
     # create the network
     model = get_model(modelname)
     with model(output_dir=output_dir, **net_config) as net:
-        captured_train_network(net, output_dir)
+        train_and_evaluate(net, output_dir)
