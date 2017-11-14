@@ -10,7 +10,7 @@ import shutil
 import json
 
 from xview.settings import DATA_BASEPATH
-from .baseclass import DataBaseclass
+from xview.datasets.data_baseclass import DataBaseclass
 
 
 SYNTHIA_BASEPATH = path.join(DATA_BASEPATH, 'synthia')
@@ -153,10 +153,12 @@ class Synthia(DataBaseclass):
                         writer.write(f, val_list)
                 continue
 
-            # Label image has a weird format. We save the extracted information as numpy
-            # array.
+            # Label image has a weird two-channel format where the 1st channel is the
+            # 8bit label integer and the second channel is the instance ID we do not use.
+            # We save the extracted label integer as numpy array to make things easier.
             original_images = path.join(
                 sequence_basepath, 'GT/LABELS/Stereo_Right/Omni_{}'.format(direction))
+
             for filename in listdir(original_images):
                 # Labels are stored in the 1st channel of the png file
                 array = one_channel_image_reader(path.join(original_images, filename),

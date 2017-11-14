@@ -57,7 +57,19 @@ def decoder(features, prefix, num_units, num_classes, dropout_rate,
 
 
 class SimpleFCN(BaseModel):
-    """FCN implementation following DA-RNN architecture and using tf.layers."""
+    """FCN implementation following DA-RNN architecture and using tf.layers.
+
+    Args:
+        output_dir: if set, will output diagnostics and weights here
+        learning_rate: learning rate of the trainer
+        modality: name of the data modality, which has to be a valid key for the input
+            dataset batch
+        num_channels: channel-size of the input data (3 for RGB, 1 for Depth)
+        num_classes: Number of output classes
+        num_units: number of feature units in the intermediate encoder output layer
+        train_encoder(bool): Whether or not to train the VGG16 encoder
+        dropout_rate: training dropout rate
+    """
 
     def __init__(self, output_dir=None, **config):
         standard_config = {

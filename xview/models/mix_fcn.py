@@ -7,7 +7,17 @@ from xview.models import SimpleFCN
 
 
 class MixFCN(BaseModel):
-    """FCN implementation following DA-RNN architecture and using tf.layers."""
+    """Based on the FCN architecture, this model mixes an rgb and depth expert on basis
+    of their confusion matrizes.
+
+    This model does not support training itself, use SimpleFCN for training and import
+    weights of both experts into this model.
+
+    Args:
+        output_dir: if set, will output diagnostics and weights here
+        other kwargs: parameters for the FCN model, should be the same as used for
+            training
+    """
 
     def __init__(self, output_dir=None, **config):
         standard_config = {
