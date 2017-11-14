@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn.model_selection import train_test_split
+from random import shuffle
 
 from .wrapper import DataWrapper
 
@@ -15,6 +16,8 @@ class DataBaseclass(DataWrapper):
         self.batchsize = batchsize
         self.modalities = modalities
         self.labelinfo = labelinfo
+
+        shuffle(self.trainset)
 
     def _get_data(self, **kwargs):
         """Returns data for one item in trainset or testset. kwargs is the unfolded dict
