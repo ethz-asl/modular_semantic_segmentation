@@ -1,10 +1,9 @@
 from sacred import Experiment
-from experiments.utils import get_mongo_observer, ExperimentData
+from experiments.utils import get_mongo_observer
 from experiments.evaluation import evaluate, import_weights_into_network
 from sacred.utils import TimeoutInterrupt
 from xview.datasets import get_dataset
 from xview.models import get_model
-from xview.settings import DATA_BASEPATH
 import os
 
 

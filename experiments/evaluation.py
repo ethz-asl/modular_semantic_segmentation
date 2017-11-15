@@ -22,7 +22,8 @@ def evaluate(net, data_config):
     dataset_params['batchsize'] = 1
     # Load the dataset, we expect config to include the arguments
     data = get_dataset(data_config['dataset'], dataset_params)
-    if data_config.get('use_trainset', default=False):
+    # 'use_trainset' defaults to False if not set
+    if data_config.get('use_trainset', False):
         print('INFO: Evaluating against trainset')
         batches = data.get_train_data(batch_size=1)
     else:
@@ -80,6 +81,9 @@ ex.observers.append(get_mongo_observer())
 
 @ex.config_hook
 def load_model_configuration(config, command_name, logger):
+    """
+    Hook to load the model-configuration of starting-weights into the experiment info.
+    """
 
     def get_config_for_experiment(id):
         training_experiment = ExperimentData(id)
