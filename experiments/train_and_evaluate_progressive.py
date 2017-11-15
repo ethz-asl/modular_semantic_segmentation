@@ -3,7 +3,7 @@ from xview.models.progressive_fcn import ProgressiveFCN
 import numpy as np
 
 from experiments.utils import get_mongo_observer, ExperimentData
-from experiments.fcn_train import create_directories, train_network
+from experiments.fcn_training import create_directories, train_network
 from experiments.evaluation import evaluate
 
 

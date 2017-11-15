@@ -10,6 +10,10 @@ from experiments.utils import get_mongo_observer
 from experiments.evaluation import import_weights_into_network
 
 
+ex = Experiment()
+ex.observers.append(get_mongo_observer())
+
+
 def create_directories(run_id, experiment):
     # create temporary directory for output files
     if os.path.exists('/tmp/fcn_train'):
@@ -80,7 +84,7 @@ def progressive(fcn_config, _run):
 
 
 @ex.automain
-def my_main(fcn_config, _run):
+def main(fcn_config, _run):
     # Set up the directories for diagnostics
     output_dir = create_directories(_run._id, ex)
 
