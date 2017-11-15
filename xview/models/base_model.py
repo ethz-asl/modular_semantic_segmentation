@@ -149,7 +149,7 @@ class BaseModel(object):
             print('INFO: Start training')
             for i in range(iterations):
                 summary, loss, _ = self.sess.run([loss_summary, self.loss,
-                                                   self.trainer])
+                                                  self.trainer])
                 if self.output_dir is not None:
                     train_writer.add_summary(summary, i)
 
