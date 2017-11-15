@@ -14,16 +14,13 @@ class BaseModel(object):
         prediction: usually argmax of class_probabilites, i.e. a 2D array of pixelwise
             classification
         close_queue_op: tensorflow op to close the input queue
-    and requries one of the following:
         loss: a scalar value that should be minimized during training
-        _train_step: a method performing one training iteration, taking a merged summary
-            as input and returning the value of this summary and a loss value
     if initialized with supports_training=False:
         only required attribute is self.precition
     """
 
     __metaclass__ = ABCMeta
-    required_attributes = [["loss", "_train_step"], ["prediction"], ["close_queue_op"]]
+    required_attributes = [["loss"], ["prediction"], ["close_queue_op"]]
 
     def __init__(self, name, output_dir=None, supports_training=True, **config):
         """Set configuration and build the model.
@@ -73,7 +70,7 @@ class BaseModel(object):
                 predictions=tf.reshape(self.prediction, [-1]),
                 num_classes=self.config['num_classes'])
 
-            if supports_training and not hasattr(self, '_train_step'):
+            if supports_training:
                 self.global_step = tf.Variable(0, trainable=False, name='global_step')
                 update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
                 with tf.control_dependencies(update_ops):
@@ -151,11 +148,8 @@ class BaseModel(object):
 
             print('INFO: Start training')
             for i in range(iterations):
-                if hasattr(self, '_train_step'):
-                    summary, loss = self._train_step(loss_summary)
-                else:
-                    summary, loss, _ = self.sess.run([loss_summary, self.loss,
-                                                      self.trainer])
+                summary, loss, _ = self.sess.run([loss_summary, self.loss,
+                                                   self.trainer])
                 if self.output_dir is not None:
                     train_writer.add_summary(summary, i)
 
