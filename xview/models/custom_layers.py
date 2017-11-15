@@ -173,9 +173,12 @@ def adap_conv(inputs, adapter_inputs, filters, kernel_size, trainable=True,
             assert dim_in % 2 == 0
 
             zeros = np.zeros((kernel_h, kernel_w, int(dim_in / 2), dim_out))
-            xavier = lambda: tf.contrib.layers.xavier_initializer()([kernel_h, kernel_w,
-                                                                     int(dim_in / 2),
-                                                                     dim_out])
+
+            def xavier():
+                """Xavier initializer for a kernel with half the input size."""
+                return tf.contrib.layers.xavier_initializer()([kernel_h, kernel_w,
+                                                               int(dim_in / 2), dim_out])
+
             first_half = (0.1 * xavier()) if self.only_dampened else zeros.copy()
             if dim_in == (2 * dim_out):
                 second_half = zeros.copy()

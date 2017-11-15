@@ -3,6 +3,7 @@ from .custom_layers import conv2d, adap_conv
 
 from copy import deepcopy
 
+
 def vgg16(inputs, prefix, params):
     """VGG16 image encoder.
 
