@@ -33,11 +33,13 @@ def rgb_to_depth(net_config, data_config, evaluation_data, starting_weights,
     rgb_weights = np.load(training_experiment.get_artifact(filename))
 
     # For the first layer, take the mean over all 3 channels
-    rgb_weights['rgb_conv1_1/kernel'] = rgb_weights['rgb_conv1_1/kernel'].mean(3)
+    # Therefore, we have to define a new weights dict.
+    new_weights = {key: rgb_weights[key] for key in rgb_weights}
+    new_weights['rgb_conv1_1/kernel'] = rgb_weights['rgb_conv1_1/kernel'].mean(3, keepdims=True)
 
     # We need a file handler for this new weights dict, therefore we save the weights
     # into a temporary file.
-    np.savez('/tmp/translated_rgb_weights.npz', **rgb_weights)
+    np.savez('/tmp/translated_rgb_weights.npz', **new_weights)
 
     # create the network
     with ProgressiveFCN(output_dir=output_dir, **net_config) as net:
