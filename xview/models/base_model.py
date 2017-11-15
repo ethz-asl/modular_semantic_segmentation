@@ -5,10 +5,6 @@ from os import path
 from abc import ABCMeta, abstractmethod
 from time import sleep
 from types import GeneratorType
-import tempfile
-
-from xview.models.utils import cross_entropy
-from xview.datasets.wrapper import DataWrapper
 
 
 class BaseModel(object):
