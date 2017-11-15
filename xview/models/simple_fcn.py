@@ -9,7 +9,22 @@ from .vgg16 import vgg16
 
 def encoder(inputs, prefix, num_units,  batch_normalization=False, trainable=True,
             is_training=False, reuse=True):
-    """VGG16 image encoder with fusion of conv4_3 and conv5_3 features."""
+    """
+    VGG16 image encoder with fusion of conv4_3 and conv5_3 features.
+
+    Args:
+        inputs: input tensor, in channel-last-format
+        prefix: prefix of any variable name
+        num_units: Number of feature units in the FCN.
+        batch_normalization (bool): Whether or not to perform batch normalization.
+        trainable (bool): If False, variables are not trainable.
+        is_training (bool): Indicator whether batch_normalization should be in training
+            (batch) or testing (continuous) mode.
+        reuse (bool): If true, reuse existing variables of same name
+            (attention with prefix). Will raise error if it cannot find such variables.
+    Returns:
+        dict of (intermediate) layer outputs
+    """
     # These parameters are shared between many/all layers and therefore defined here
     # for convenience.
     params = {'activation': tf.nn.relu, 'padding': 'same', 'reuse': reuse,
@@ -38,7 +53,25 @@ def encoder(inputs, prefix, num_units,  batch_normalization=False, trainable=Tru
 
 def decoder(features, prefix, num_units, num_classes, dropout_rate,
             batch_normalization=False, trainable=True, is_training=False, reuse=True):
-    """FCN feature decoder."""
+    """
+    FCN feature decoder.
+
+    Args:
+        features: input tensor, in feature-last format
+        prefix: prefix of any variable name
+        num_units: Number of feature units in the FCN.
+        num_classes: Number of output classes.
+        dropout_rate: Dropout rate for dropout applied on input feature. Set to 0 to
+            disable dropout.
+        batch_normalization (bool): Whether or not to perform batch normalization.
+        trainable (bool): If False, variables are not trainable.
+        is_training (bool): Indicator whether batch_normalization should be in training
+            (batch) or testing (continuous) mode.
+        reuse (bool): If true, reuse existing variables of same name
+            (attention with prefix). Will raise error if it cannot find such variables.
+    Returns:
+        dict of (intermediate) layer outputs
+    """
     upscore_params = params = {
         'activation': tf.nn.relu, 'padding': 'same', 'reuse': reuse,
         'batch_normalization': batch_normalization, 'training': is_training,
@@ -65,10 +98,8 @@ class SimpleFCN(BaseModel):
         modality: name of the data modality, which has to be a valid key for the input
             dataset batch
         num_channels: channel-size of the input data (3 for RGB, 1 for Depth)
-        num_classes: Number of output classes
-        num_units: number of feature units in the intermediate encoder output layer
-        train_encoder(bool): Whether or not to train the VGG16 encoder
-        dropout_rate: training dropout rate
+
+        Other Args see encoder and decoder
     """
 
     def __init__(self, output_dir=None, **config):
