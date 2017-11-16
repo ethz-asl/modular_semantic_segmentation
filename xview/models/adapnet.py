@@ -11,6 +11,26 @@ from .utils import cross_entropy
 
 def block_a(inputs, intermed_filters, filters, strides, is_training, name, reuse,
             activation, shortcut_conv=False):
+    """
+    Block A of the Adapnet/Resnet architecture.
+
+    Args:
+        inputs: The input tensor.
+        intermed_filters: dimension of intermediate features
+        filters: dimension of block-output features
+        strides: strides applied to the first convolution (and possibly the shortcut
+            convolution)
+        is_training (bool): Indicator whether batch_normalization should be in training
+            (batch) or testing (continuous) mode.
+        name: variable-scope for this block
+        reuse (bool): If true, reuse existing variables of same name
+            (attention with prefix). Will raise error if it cannot find such variables.
+        activation: activation function applied to the block output
+        shortcut_conv (bool): If True, a convolution is applied in the shortcut branch.
+            Has to be set to True in case input- and output-dimensions are not equal.
+    Returns:
+        block output tensor
+    """
     # Common parameters of the convolutions
     params = {'activation': tf.nn.relu, 'padding': 'same', 'reuse': reuse,
               'batch_normalization': True, 'training': is_training}
@@ -31,6 +51,27 @@ def block_a(inputs, intermed_filters, filters, strides, is_training, name, reuse
 
 def block_b(inputs, filters_1, filters_2, filters_3, dilation1, dilation2, is_training,
             name, reuse, activation, shortcut_conv=False):
+    """
+    Block B of the Adapnet/Resnet architecture.
+
+    Args:
+        inputs: The input tensor.
+        filters_1: dimension of features after first convolution
+        filters_2: dimension of features after second convolution
+        filters_3: dimension of features after third/last convolution (i.e. = output)
+        dilation_1: Dilation rate for the first branch of the second convolution
+        dilation_1: Dilation rate for the second branch of the second convolution
+        is_training (bool): Indicator whether batch_normalization should be in training
+            (batch) or testing (continuous) mode.
+        name: variable-scope for this block
+        reuse (bool): If true, reuse existing variables of same name
+            (attention with prefix). Will raise error if it cannot find such variables.
+        activation: activation function applied to the block output
+        shortcut_conv (bool): If True, a convolution is applied in the shortcut branch.
+            Has to be set to True in case input- and output-dimensions are not equal.
+    Returns:
+        block output tensor
+    """
     # Common parameters of the convolutions
     params = {'activation': tf.nn.relu, 'padding': 'same', 'reuse': reuse,
               'batch_normalization': True, 'training': is_training}
@@ -52,7 +93,23 @@ def block_b(inputs, filters_1, filters_2, filters_3, dilation1, dilation2, is_tr
     return activation(tf.add(stage_3, shortcut))
 
 
-def adapnet(inputs, prefix, config, is_training=False, reuse=True):
+def adapnet(inputs, prefix, num_units, num_classes, is_training=False, reuse=True):
+    """
+    Adapnet Architecture, as proposed in
+    http://ais.informatik.uni-freiburg.de/publications/papers/valada17icra.pdf
+
+    Args:
+        inputs: The input tensor
+        prefix: Name prefix applied to all variables
+        num_units: Number of feature units before the final deconvolution
+        num_classes: Number of output classes
+        is_training (bool): Indicator whether batch_normalization should be in training
+            (batch) or testing (continuous) mode.
+        reuse (bool): If true, reuse existing variables of same name
+            (attention with prefix). Will raise error if it cannot find such variables.
+    Returns:
+        Dict of (also intermediate) block outputs
+    """
     params = {'activation': tf.nn.relu, 'padding': 'same', 'reuse': reuse,
               'batch_normalization': True, 'training': is_training}
     block_params = {'activation': tf.nn.relu, 'reuse': reuse, 'is_training': is_training}
@@ -71,7 +128,7 @@ def adapnet(inputs, prefix, config, is_training=False, reuse=True):
         block_6 = block_a(block_5, 128, 512, 1, name='block_layer_6', **block_params)
         block_7 = block_b(block_6, 128, 64, 512, 1, 2, name='block_layer_7',
                           **block_params)
-        shortcut = conv2d(block_7, config['num_units'], 1, name='shortcut',
+        shortcut = conv2d(block_7, num_units, 1, name='shortcut',
                           activation=None, padding='same', reuse=reuse,
                           batch_normalization=True, training=is_training)
 
@@ -93,13 +150,13 @@ def adapnet(inputs, prefix, config, is_training=False, reuse=True):
         block_16 = block_b(block_15, 512, 512, 2048, 2, 16, name='block_layer_16',
                            **block_params)
         deconv_1 = conv2d(block_16, 2048, 1, name='first_deconvolution_conv', **params)
-        deconv_1 = deconv2d(deconv_1, config['num_units'], 4, strides=2, activation=None,
+        deconv_1 = deconv2d(deconv_1, num_units, 4, strides=2, activation=None,
                             reuse=reuse, name='first_deconvolution_upconv',
                             padding='same', batch_normalization=True,
                             training=is_training)
 
         merge = tf.add(deconv_1, shortcut)
-        score = deconv2d(merge, config['num_classes'], 16, strides=8, activation=None,
+        score = deconv2d(merge, num_classes, 16, strides=8, activation=None,
                          reuse=reuse, name='second_deconvolution_upconv',
                          padding='same', batch_normalization=True,
                          training=is_training)
@@ -160,7 +217,8 @@ class Adapnet(BaseModel):
         # be compatible with tf.layers.
         train_x.set_shape([None, None, None, self.config['num_channels']])
 
-        adapnet_layers = adapnet(train_x, self.prefix, self.config, is_training=True,
+        adapnet_layers = adapnet(train_x, self.prefix, self.config['num_units'],
+                                 self.config['num_classes'], is_training=True,
                                  reuse=False)
         with tf.variable_scope('softmax_loss'):
             prob = log_softmax(adapnet_layers['score'], self.config['num_classes'],
@@ -175,8 +233,9 @@ class Adapnet(BaseModel):
         self.test_X = tf.placeholder(tf.float32, shape=[None, None, None,
                                                         self.config['num_channels']])
 
-        adapnet_layers = adapnet(self.test_X, self.prefix, self.config,
-                                 is_training=False, reuse=True)
+        adapnet_layers = adapnet(self.test_X, self.prefix, self.config['num_units'],
+                                 self.config['num_classes'], is_training=False,
+                                 reuse=True)
         self.prob = softmax(adapnet_layers['score'], self.config['num_classes'],
                             name='prob_normalized')
         self.prediction = tf.argmax(self.prob, 3, name='label_2d')
