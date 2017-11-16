@@ -3,18 +3,12 @@ from xview.models.progressive_fcn import ProgressiveFCN
 import numpy as np
 
 from experiments.utils import get_mongo_observer, ExperimentData
-from experiments.fcn_training import create_directories, train_network
+from experiments.training import create_directories, train_network
 from experiments.evaluation import evaluate
 
 
 ex = Experiment()
 ex.observers.append(get_mongo_observer())
-
-
-@ex.capture
-def captured_train_network(net, output_dir, data_config, num_iterations,
-                           starting_weights):
-    train_network(net, output_dir, data_config, num_iterations, starting_weights, ex)
 
 
 @ex.command
@@ -57,14 +51,16 @@ def rgb_to_depth(net_config, data_config, evaluation_data, starting_weights,
 
 
 @ex.automain
-def main(fcn_config, data_config, evaluation_data, _run):
+def main(net_config, data_config, evaluation_data, starting_weights, num_iterations,
+         _run):
     """Training for progressive FCN."""
     # Set up the directories for diagnostics
     output_dir = create_directories(_run._id, ex)
 
     # create the network
-    with ProgressiveFCN(output_dir=output_dir, **fcn_config) as net:
-        captured_train_network(net, output_dir)
+    with ProgressiveFCN(output_dir=output_dir, **net_config) as net:
+        train_network(net, output_dir, data_config, num_iterations, starting_weights,
+                      experiment=ex)
 
         print('INFO Evaluate the network adainst the training sequences')
         evaluate(net, data_config)

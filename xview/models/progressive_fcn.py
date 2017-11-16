@@ -19,11 +19,21 @@ def column(inputs, prefix, dropout_rate, num_units, num_classes, other_columns=F
     Args:
         inputs: The input tensor to the FCN
         prefix: Name prefix applied to all variables
-        config: network config dict
+        dropout_rate: The dropout rate that should be applied in the FCN.
+        num_units: Number of feature units in the FCN.
+        num_classes: Number of output classes.
         other_columns: a list of dicts for the output tensors of other columns of this
             type, dict should be exactly the return dict from this method
+        trainable (bool): If False, variables are not trainable.
         reuse (bool): If true, reuse existing variables of same name
             (attention with prefix). Will raise error if it cannot find such variables.
+        extra_adapter_convolution (bool): If True, adapters add a convolution to combine
+            exisiting columns before stacking the output together with the new column.
+        initial_adapter_scales: List of initial adapter scale-factors from which each
+            adapter initializes each column at a random choice.
+        initialize_half_zero (bool): If True, set all adapter weights to dampen any input
+            coming not from the exisiting columns (i.e. first just pass through their
+            outputs)
     Returns:
         dict of (intermediate) layer outputs
     """

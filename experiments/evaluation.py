@@ -7,14 +7,23 @@ from sys import stdout
 
 
 def evaluate(net, data_config):
-    """Evaluate the given network against the specified data and report the result
-    to the given experiment."""
+    """
+    Evaluate the given network against the specified data and print the result.
+
+    Args:
+        net: An instance of a `base_model` class.
+        data_config: A config-dict for data containing all initializer arguments and the
+            dataset-name at key 'dataset'.
+    Returns:
+        dict of measurements as produced by net.score, confusion matrix
+    """
     dataset_params = {key: val for key, val in data_config.items()
                       if key not in ['dataset', 'use_trainset']}
     dataset_params['batchsize'] = 1
     # Load the dataset, we expect config to include the arguments
     data = get_dataset(data_config['dataset'], dataset_params)
-    if data_config.get('use_trainset', default=False):
+    # 'use_trainset' defaults to False if not set
+    if data_config.get('use_trainset', False):
         print('INFO: Evaluating against trainset')
         batches = data.get_train_data(batch_size=1)
     else:
@@ -38,7 +47,15 @@ def evaluate(net, data_config):
 def import_weights_into_network(net, starting_weights, **kwargs):
     """Based on either a list of descriptions of training experiments or one description,
     load the weights produced by these trainigns into the given network.
-    kwargs are passed to net.import_weights
+
+    Args:
+        net: An instance of a `base_model` inheriting class.
+        starting_weights: Either dict or list of dicts.
+            if dict: expect key 'experiment_id' to match a previous experiment's ID.
+                if key 'filename' is not set, will search for the first artifact that
+                has 'weights' in the name.
+            if list: a list of dicts where each dict will be evaluated as above
+        kwargs are passed to net.import_weights
     """
     def import_weights_from_description(experiment_description):
         training_experiment = ExperimentData(experiment_description['experiment_id'])
@@ -64,6 +81,9 @@ ex.observers.append(get_mongo_observer())
 
 @ex.config_hook
 def load_model_configuration(config, command_name, logger):
+    """
+    Hook to load the model-configuration of starting-weights into the experiment info.
+    """
 
     def get_config_for_experiment(id):
         training_experiment = ExperimentData(id)
@@ -94,7 +114,7 @@ def also_load_config(modelname, net_config, evaluation_data, starting_weights, _
     # Load the training experiment
     training_experiment = ExperimentData(starting_weights['experiment_id'])
 
-    model_config = training_experiment.get_record()['config']['fcn_config']
+    model_config = training_experiment.get_record()['config']['net_config']
     model_config.update(net_config)
 
     # save this

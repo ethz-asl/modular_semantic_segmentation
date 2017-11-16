@@ -82,7 +82,7 @@ def deconv2d(inputs,
              activity_regularizer=None,
              trainable=True,
              name=None,
-             reuse=None,
+             reuse=False,
              batch_normalization=True,
              training=False):
     """Deconvolutional Layer. Upsamples a given image with a bilinear interpolation."""
@@ -113,7 +113,7 @@ def deconv2d(inputs,
     if batch_normalization:
         # Apply batch_normalization after convolution and activation only afterwards
         out = _deconv2d(inputs, None)
-        out = tfl.batch_normalization(out, training=training)
+        out = tfl.batch_normalization(out, training=training, name=name, reuse=reuse)
         if activation is not None:
             out = activation(out)
     else:
@@ -128,7 +128,9 @@ def conv2d(inputs, filters, kernel_size, batch_normalization=False, training=Fal
         activation = kwargs.get('activation', None)
         kwargs.update({'activation': None})
         out = tfl.conv2d(inputs, filters, kernel_size, **kwargs)
-        out = tfl.batch_normalization(out, training=training)
+        out = tfl.batch_normalization(out, training=training,
+                                      reuse=kwargs.get('reuse', False),
+                                      name=kwargs.get('name', None))
         if activation is not None:
             out = activation(out)
     else:
@@ -171,9 +173,12 @@ def adap_conv(inputs, adapter_inputs, filters, kernel_size, trainable=True,
             assert dim_in % 2 == 0
 
             zeros = np.zeros((kernel_h, kernel_w, int(dim_in / 2), dim_out))
-            xavier = lambda: tf.contrib.layers.xavier_initializer()([kernel_h, kernel_w,
-                                                                     int(dim_in / 2),
-                                                                     dim_out])
+
+            def xavier():
+                """Xavier initializer for a kernel with half the input size."""
+                return tf.contrib.layers.xavier_initializer()([kernel_h, kernel_w,
+                                                               int(dim_in / 2), dim_out])
+
             first_half = (0.1 * xavier()) if self.only_dampened else zeros.copy()
             if dim_in == (2 * dim_out):
                 second_half = zeros.copy()

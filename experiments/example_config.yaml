@@ -1,0 +1,27 @@
+modelname: 'simple_fcn'
+data_config:
+  dataset: 'synthia'
+  sequences: [
+    'SYNTHIA-SEQS-04-DAWN',
+    'SYNTHIA-SEQS-04-FALL',
+    'SYNTHIA-SEQS-04-FOG',
+    'SYNTHIA-SEQS-04-NIGHT',
+    'SYNTHIA-SEQS-04-RAINNIGHT',
+    'SYNTHIA-SEQS-04-SOFTRAIN',
+    'SYNTHIA-SEQS-04-SPRING',
+    'SYNTHIA-SEQS-04-SUMMER',
+    'SYNTHIA-SEQS-04-SUNSET',
+    'SYNTHIA-SEQS-04-WINTER',
+    'SYNTHIA-SEQS-04-WINTERNIGHT'
+    ]
+  batchsize: 4
+num_iterations: 60000
+starting_weights: ''
+net_config:
+  learning_rate: 0.001
+  num_classes: 14
+  num_channels: 3
+  modality: 'rgb'
+  num_units: 64
+  dropout_rate: 0.0
+  batch_normalization: true
