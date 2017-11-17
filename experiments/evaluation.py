@@ -4,9 +4,10 @@ from experiments.utils import ExperimentData, get_mongo_observer
 from xview.datasets import get_dataset
 from xview.models import get_model
 from sys import stdout
+from copy import deepcopy
 
 
-def evaluate(net, data_config):
+def evaluate(net, data_config, print_results=True):
     """
     Evaluate the given network against the specified data and print the result.
 
@@ -14,6 +15,7 @@ def evaluate(net, data_config):
         net: An instance of a `base_model` class.
         data_config: A config-dict for data containing all initializer arguments and the
             dataset-name at key 'dataset'.
+        print_results: If False, do not print measurements
     Returns:
         dict of measurements as produced by net.score, confusion matrix
     """
@@ -31,17 +33,45 @@ def evaluate(net, data_config):
 
     measures, confusion_matrix = net.score(batches)
 
-    print('Evaluated network on {}:'.format(data_config['dataset']))
-    print('total accuracy {:.2f} mean F1 {:.2f} IoU {:.2f}'.format(
-        measures['total_accuracy'], measures['mean_F1'], measures['mean_IoU']))
-    for label in data.labelinfo:
-        print("{:>15}: {:.2f} precision, {:.2f} recall, {:.2f} F1".format(
-            data.labelinfo[label]['name'], measures['precision'][label],
-            measures['recall'][label], measures['F1'][label]))
+    if print_results:
+        print('Evaluated network on {}:'.format(data_config['dataset']))
+        print('total accuracy {:.2f} mean F1 {:.2f} IoU {:.2f}'.format(
+            measures['total_accuracy'], measures['mean_F1'], measures['mean_IoU']))
+        for label in data.labelinfo:
+            print("{:>15}: {:.2f} precision, {:.2f} recall, {:.2f} F1".format(
+                data.labelinfo[label]['name'], measures['precision'][label],
+                measures['recall'][label], measures['F1'][label]))
 
-    # There seems to be a problem with capturing the print output, flush it for security.
-    stdout.flush()
+        # There seems to be a problem with capturing the print output, flush to be sure
+        stdout.flush()
     return measures, confusion_matrix
+
+
+def evaluate_on_all_synthia_seqs(net, data_config):
+    """
+    Evaluate a network on all synthia sequences individually.
+    """
+    available_sequences = ['SYNTHIA-SEQS-04-DAWN',
+                           'SYNTHIA-SEQS-04-FALL',
+                           'SYNTHIA-SEQS-04-FOG',
+                           'SYNTHIA-SEQS-04-NIGHT',
+                           'SYNTHIA-SEQS-04-RAINNIGHT',
+                           'SYNTHIA-SEQS-04-SOFTRAIN',
+                           'SYNTHIA-SEQS-04-SPRING',
+                           'SYNTHIA-SEQS-04-SUMMER',
+                           'SYNTHIA-SEQS-04-SUNSET',
+                           'SYNTHIA-SEQS-04-WINTER',
+                           'SYNTHIA-SEQS-04-WINTERNIGHT']
+    adapted_config = deepcopy(data_config)
+    all_measurements = {}
+    for sequence in available_sequences:
+        adapted_config['seqs'] = [sequence]
+        measurements, _ = evaluate(net, adapted_config, print_results=False)
+        print('Evaluated network on {}: {:.2f} IoU'.format(sequence,
+                                                           measurements['mean_IoU']))
+        all_measurements[sequence] = measurements
+
+    return all_measurements
 
 
 def import_weights_into_network(net, starting_weights, **kwargs):

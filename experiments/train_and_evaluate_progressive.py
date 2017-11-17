@@ -4,7 +4,7 @@ import numpy as np
 
 from experiments.utils import get_mongo_observer, ExperimentData
 from experiments.training import create_directories, train_network
-from experiments.evaluation import evaluate
+from experiments.evaluation import evaluate, evaluate_on_all_synthia_seqs
 
 
 ex = Experiment()
@@ -12,8 +12,7 @@ ex.observers.append(get_mongo_observer())
 
 
 @ex.command
-def rgb_to_depth(net_config, data_config, evaluation_data, starting_weights,
-                 num_iterations, _run):
+def rgb_to_depth(net_config, data_config, starting_weights, num_iterations, _run):
     """Training for progressive FCN with transfer from existing RGB column to Depth."""
     # Set up the directories for diagnostics
     output_dir = create_directories(_run._id, ex)
@@ -46,13 +45,12 @@ def rgb_to_depth(net_config, data_config, evaluation_data, starting_weights,
         print('INFO Evaluate the network adainst the training sequences')
         evaluate(net, data_config)
 
-        print('INFO: Evaluating against seperate data')
-        evaluate(net, evaluation_data)
+        print('INFO: Evaluating against all sequences')
+        evaluate_on_all_synthia_seqs(net, data_config)
 
 
 @ex.automain
-def main(net_config, data_config, evaluation_data, starting_weights, num_iterations,
-         _run):
+def main(net_config, data_config, starting_weights, num_iterations, _run):
     """Training for progressive FCN."""
     # Set up the directories for diagnostics
     output_dir = create_directories(_run._id, ex)
@@ -65,5 +63,5 @@ def main(net_config, data_config, evaluation_data, starting_weights, num_iterati
         print('INFO Evaluate the network adainst the training sequences')
         evaluate(net, data_config)
 
-        print('INFO: Evaluating against seperate data')
-        evaluate(net, evaluation_data)
+        print('INFO: Evaluating against all sequences')
+        evaluate_on_all_synthia_seqs(net, data_config)
