@@ -118,7 +118,7 @@ class BaseModel(object):
                 print('INFO: Input queue is closed, cannot enqueue any more data.')
 
     def fit(self, data, iterations, output=True, validation_data=None,
-            validation_interval=100):
+            validation_interval=100, additional_eval_data={}):
         """Train the model for given number of iterations.
 
         Args:
@@ -170,6 +170,13 @@ class BaseModel(object):
                     if self.output_dir is not None:
                         train_writer.add_summary(accuracy, i)
                         train_writer.add_summary(iou, i)
+                        train_writer.add_summary(summary, i)
+
+                    # Add additional summaries if specified
+                    for key, additional_data in additional_eval_data.items():
+                        val, _ = self.score(additional_data)
+                        summary = tf.Summary(value=[tf.Summary.Value(tag=key,
+                                                                     simple_value=val)])
                         train_writer.add_summary(summary, i)
 
             coord.request_stop()
