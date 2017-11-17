@@ -20,13 +20,13 @@ def rgb_to_depth(net_config, data_config, starting_weights, num_iterations, _run
     output_dir = create_directories(_run._id, ex)
 
     # Get data from all synthia sequences
-    all_sequences = []
+    all_sequences = {}
     if data_config['dataset'] == 'synthia':
         adapted_config = deepcopy(data_config)
         for sequence in AVAILABLE_SEQUENCES:
             adapted_config['seqs'] = [sequence]
             data = load_data(adapted_config)
-            all_sequences.append(data.get_validation_data(num_items=10))
+            all_sequences[sequence] = data.get_validation_data(num_items=10)
 
     # Get the existing RGB weights
     training_experiment = ExperimentData(starting_weights['experiment_id'])
