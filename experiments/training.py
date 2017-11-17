@@ -1,7 +1,7 @@
 from sacred import Experiment
-from experiments.utils import get_mongo_observer
+from experiments.utils import get_mongo_observer, load_data
 from experiments.evaluation import evaluate, import_weights_into_network
-from sacred.utils import TimeoutInterrupt, load_data
+from sacred.utils import TimeoutInterrupt
 from xview.models import get_model
 import os
 
