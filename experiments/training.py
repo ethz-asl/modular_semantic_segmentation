@@ -4,6 +4,7 @@ from experiments.evaluation import evaluate, import_weights_into_network
 from sacred.utils import TimeoutInterrupt
 from xview.models import get_model
 import os
+import shutil
 
 
 def create_directories(run_id, experiment):
@@ -24,6 +25,9 @@ def create_directories(run_id, experiment):
     # The id of this experiment is stored in the magical _run object we get from the
     # decorator.
     output_dir = '{}/{}'.format(root, run_id)
+    if os.path.exists(output_dir):
+        # Directory may already exist if run_id is None (in case of an unobserved test-run)
+        shutil.rmtree(output_dir)
     os.mkdir(output_dir)
 
     # Tell the experiment that this output dir is also used for tensorflow summaries
