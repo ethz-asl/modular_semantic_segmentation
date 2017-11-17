@@ -39,7 +39,7 @@ def rgb_to_depth(net_config, data_config, starting_weights, num_iterations, _run
     # For the first layer, take the mean over all 3 channels
     # Therefore, we have to define a new weights dict.
     new_weights = {key: rgb_weights[key] for key in rgb_weights}
-    new_weights['rgb_conv1_1/kernel'] = rgb_weights['rgb_conv1_1/kernel'].mean(3, keepdims=True)
+    new_weights['rgb_conv1_1/kernel'] = rgb_weights['rgb_conv1_1/kernel'].mean(2, keepdims=True)
 
     # We need a file handler for this new weights dict, therefore we save the weights
     # into a temporary file.
