@@ -37,7 +37,7 @@ ex.observers.append(get_mongo_observer())
 
 
 def train_network(net, output_dir, data_config, num_iterations, starting_weights,
-                  experiment, additional_eval_data=[]):
+                  experiment, additional_eval_data={}):
     """\
     Train a network on a given dataset.
 
