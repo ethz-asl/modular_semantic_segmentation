@@ -7,6 +7,15 @@ from xview.models import get_model
 import os
 
 
+def load_data(data_config):
+    """
+    Load the data specified in the data_config dict.
+    """
+    dataset_params = {key: val for key, val in data_config.items()
+                      if key not in ['dataset']}
+    return get_dataset(data_config['dataset'], dataset_params)
+
+
 def create_directories(run_id, experiment):
     """
     Make sure directories for storing diagnostics are created and clean.
@@ -38,7 +47,7 @@ ex.observers.append(get_mongo_observer())
 
 
 def train_network(net, output_dir, data_config, num_iterations, starting_weights,
-                  experiment):
+                  experiment, additional_eval_data=[]):
     """\
     Train a network on a given dataset.
 
@@ -54,12 +63,8 @@ def train_network(net, output_dir, data_config, num_iterations, starting_weights
         experiment: The current sacred experiment.
     """
 
-    # Load the dataset, we expect config to include the arguments
-    dataset_params = {key: val for key, val in data_config.items()
-                      if key not in ['dataset']}
-    data = get_dataset(data_config['dataset'], dataset_params)
-
     # get validation set
+    data = load_data(data_config)
     validation_set = data.get_validation_data(num_items=10)
 
     # Train the given network
@@ -67,7 +72,8 @@ def train_network(net, output_dir, data_config, num_iterations, starting_weights
         import_weights_into_network(net, starting_weights)
 
     try:
-        net.fit(data, num_iterations, validation_data=validation_set)
+        net.fit(data, num_iterations, validation_data=validation_set,
+                additional_eval_data=additional_eval_data)
         timeout = False
     except KeyboardInterrupt:
         print('WARNING: Got Keyboard Interrupt, will save weights and close')

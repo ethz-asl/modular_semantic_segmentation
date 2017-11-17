@@ -1,9 +1,11 @@
 from sacred import Experiment
 from xview.models.progressive_fcn import ProgressiveFCN
+from xview.datasets.synthia import AVAILABLE_SEQUENCES
 import numpy as np
+from copy import deepcopy
 
 from experiments.utils import get_mongo_observer, ExperimentData
-from experiments.training import create_directories, train_network
+from experiments.training import create_directories, train_network, load_data
 from experiments.evaluation import evaluate, evaluate_on_all_synthia_seqs
 
 
@@ -16,6 +18,15 @@ def rgb_to_depth(net_config, data_config, starting_weights, num_iterations, _run
     """Training for progressive FCN with transfer from existing RGB column to Depth."""
     # Set up the directories for diagnostics
     output_dir = create_directories(_run._id, ex)
+
+    # Get data from all synthia sequences
+    all_sequences = []
+    if data_config['dataset'] == 'synthia':
+        adapted_config = deepcopy(data_config)
+        for sequence in AVAILABLE_SEQUENCES:
+            adapted_config['seqs'] = [sequence]
+            data = load_data(adapted_config)
+            all_sequences.append(data.get_validation_data(num_items=10))
 
     # Get the existing RGB weights
     training_experiment = ExperimentData(starting_weights['experiment_id'])
@@ -40,9 +51,10 @@ def rgb_to_depth(net_config, data_config, starting_weights, num_iterations, _run
         net.import_weights('/tmp/translated_rgb_weights.npz')
 
         train_network(net, output_dir, data_config, num_iterations,
-                      starting_weights=False, experiment=ex)
+                      starting_weights=False, experiment=ex,
+                      additional_eval_data=all_sequences)
 
-        print('INFO Evaluate the network adainst the training sequences')
+        print('INFO Evaluate the network against the training sequences')
         evaluate(net, data_config)
 
         print('INFO: Evaluating against all sequences')
