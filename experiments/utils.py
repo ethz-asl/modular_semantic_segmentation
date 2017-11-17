@@ -5,6 +5,16 @@ from gridfs import GridFS
 from tensorflow.python.summary.summary_iterator import summary_iterator
 from xview.settings import EXPERIMENT_DB_HOST, EXPERIMENT_DB_USER, EXPERIMENT_DB_PWD,\
     EXPERIMENT_DB_NAME
+from xview.datasets import get_dataset
+
+
+def load_data(data_config):
+    """
+    Load the data specified in the data_config dict.
+    """
+    dataset_params = {key: val for key, val in data_config.items()
+                      if key not in ['dataset']}
+    return get_dataset(data_config['dataset'], dataset_params)
 
 
 def get_mongo_observer():

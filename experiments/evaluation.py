@@ -1,8 +1,6 @@
 """Evaluation of trained models."""
 from sacred import Experiment
-from experiments.utils import ExperimentData, get_mongo_observer
-from experiments.training import load_data
-from xview.datasets import get_dataset
+from experiments.utils import ExperimentData, get_mongo_observer, load_data
 from xview.datasets.synthia import AVAILABLE_SEQUENCES
 from xview.models import get_model
 from sys import stdout

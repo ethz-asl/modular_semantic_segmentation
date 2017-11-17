@@ -1,19 +1,9 @@
 from sacred import Experiment
 from experiments.utils import get_mongo_observer
 from experiments.evaluation import evaluate, import_weights_into_network
-from sacred.utils import TimeoutInterrupt
-from xview.datasets import get_dataset
+from sacred.utils import TimeoutInterrupt, load_data
 from xview.models import get_model
 import os
-
-
-def load_data(data_config):
-    """
-    Load the data specified in the data_config dict.
-    """
-    dataset_params = {key: val for key, val in data_config.items()
-                      if key not in ['dataset']}
-    return get_dataset(data_config['dataset'], dataset_params)
 
 
 def create_directories(run_id, experiment):
