@@ -15,6 +15,18 @@ from xview.datasets.data_baseclass import DataBaseclass
 
 SYNTHIA_BASEPATH = path.join(DATA_BASEPATH, 'synthia')
 
+AVAILABLE_SEQUENCES = ['SYNTHIA-SEQS-04-DAWN',
+                       'SYNTHIA-SEQS-04-FALL',
+                       'SYNTHIA-SEQS-04-FOG',
+                       'SYNTHIA-SEQS-04-NIGHT',
+                       'SYNTHIA-SEQS-04-RAINNIGHT',
+                       'SYNTHIA-SEQS-04-SOFTRAIN',
+                       'SYNTHIA-SEQS-04-SPRING',
+                       'SYNTHIA-SEQS-04-SUMMER',
+                       'SYNTHIA-SEQS-04-SUNSET',
+                       'SYNTHIA-SEQS-04-WINTER',
+                       'SYNTHIA-SEQS-04-WINTERNIGHT']
+
 
 class Synthia(DataBaseclass):
     """Driver for SYNTHIA dataset (http://synthia-dataset.net/).

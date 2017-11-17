@@ -1,7 +1,9 @@
 """Evaluation of trained models."""
 from sacred import Experiment
 from experiments.utils import ExperimentData, get_mongo_observer
+from experiments.training import load_data
 from xview.datasets import get_dataset
+from xview.datasets.synthia import AVAILABLE_SEQUENCES
 from xview.models import get_model
 from sys import stdout
 from copy import deepcopy
@@ -19,11 +21,8 @@ def evaluate(net, data_config, print_results=True):
     Returns:
         dict of measurements as produced by net.score, confusion matrix
     """
-    dataset_params = {key: val for key, val in data_config.items()
-                      if key not in ['dataset', 'use_trainset']}
-    dataset_params['batchsize'] = 1
     # Load the dataset, we expect config to include the arguments
-    data = get_dataset(data_config['dataset'], dataset_params)
+    data = load_data(data_config)
     # 'use_trainset' defaults to False if not set
     if data_config.get('use_trainset', False):
         print('INFO: Evaluating against trainset')
@@ -51,20 +50,9 @@ def evaluate_on_all_synthia_seqs(net, data_config):
     """
     Evaluate a network on all synthia sequences individually.
     """
-    available_sequences = ['SYNTHIA-SEQS-04-DAWN',
-                           'SYNTHIA-SEQS-04-FALL',
-                           'SYNTHIA-SEQS-04-FOG',
-                           'SYNTHIA-SEQS-04-NIGHT',
-                           'SYNTHIA-SEQS-04-RAINNIGHT',
-                           'SYNTHIA-SEQS-04-SOFTRAIN',
-                           'SYNTHIA-SEQS-04-SPRING',
-                           'SYNTHIA-SEQS-04-SUMMER',
-                           'SYNTHIA-SEQS-04-SUNSET',
-                           'SYNTHIA-SEQS-04-WINTER',
-                           'SYNTHIA-SEQS-04-WINTERNIGHT']
     adapted_config = deepcopy(data_config)
     all_measurements = {}
-    for sequence in available_sequences:
+    for sequence in AVAILABLE_SEQUENCES:
         adapted_config['seqs'] = [sequence]
         measurements, _ = evaluate(net, adapted_config, print_results=False)
         print('Evaluated network on {}: {:.2f} IoU'.format(sequence,
