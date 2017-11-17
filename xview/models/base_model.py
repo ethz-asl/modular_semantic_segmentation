@@ -124,7 +124,6 @@ class BaseModel(object):
         Args:
             data: A handler inheriting from DataWrapper
             iterations: The number of training iterations
-            output: Boolean specifiying whether to output the loss progress
         """
         if not self.supports_training:
             raise UserWarning(
@@ -340,10 +339,12 @@ class BaseModel(object):
                     if warnings:
                         print('WARNING: {} not found in saved weights'.format(name))
                 else:
-                    if not variable.shape == weights[name].shape:
+                    if chill_mode and not variable.shape == weights[name].shape:
                         if warnings:
                             print('WARNING: wrong shape found for {}, but ignored in '
                                   'chill mode'.format(name))
+                            print('stored shape: ', weights[name].shape,
+                                  'expected shape: ', variable.shape)
                     else:
                         initializers.append(variable.assign(weights[name]))
             self.sess.run(initializers)
