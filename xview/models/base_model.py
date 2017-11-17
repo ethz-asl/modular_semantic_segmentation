@@ -174,7 +174,7 @@ class BaseModel(object):
 
                     # Add additional summaries if specified
                     for key, additional_data in additional_eval_data.items():
-                        val, _ = self.score(additional_data)
+                        val = self.score(additional_data)[0]['mean_IoU']
                         summary = tf.Summary(value=[tf.Summary.Value(tag=key,
                                                                      simple_value=val)])
                         train_writer.add_summary(summary, i)
