@@ -102,7 +102,9 @@ class SimpleFCN(BaseModel):
         Other Args see encoder and decoder
     """
 
-    def __init__(self, output_dir=None, **config):
+    def __init__(self, prefix, output_dir=None, **config):
+        self.prefix = prefix
+
         standard_config = {
             'train_encoder': True
         }
@@ -144,11 +146,10 @@ class SimpleFCN(BaseModel):
         # be compatible with tf.layers.
         train_x.set_shape([None, None, None, self.config['num_channels']])
 
-        encoder_layers = encoder(train_x, self.config['modality'],
-                                 self.config['num_units'],
+        encoder_layers = encoder(train_x, self.prefix, self.config['num_units'],
                                  batch_normalization=self.config['batch_normalization'],
                                  is_training=True, reuse=False)
-        decoder_layers = decoder(encoder_layers['fused'], self.config['modality'],
+        decoder_layers = decoder(encoder_layers['fused'], self.prefix,
                                  self.config['num_units'], self.config['num_classes'],
                                  train_dropout_rate,
                                  batch_normalization=self.config['batch_normalization'],
@@ -166,11 +167,10 @@ class SimpleFCN(BaseModel):
         self.test_X = tf.placeholder(tf.float32, shape=[None, None, None,
                                                         self.config['num_channels']])
 
-        encoder_layers = encoder(self.test_X, self.config['modality'],
-                                 self.config['num_units'],
+        encoder_layers = encoder(self.test_X, self.prefix, self.config['num_units'],
                                  batch_normalization=self.config['batch_normalization'],
                                  is_training=False, reuse=True)
-        decoder_layers = decoder(encoder_layers['fused'], self.config['modality'],
+        decoder_layers = decoder(encoder_layers['fused'], self.prefix,
                                  self.config['num_units'], self.config['num_classes'],
                                  tf.constant(0.0),
                                  batch_normalization=self.config['batch_normalization'],
