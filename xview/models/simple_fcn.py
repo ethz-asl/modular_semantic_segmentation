@@ -180,7 +180,7 @@ class SimpleFCN(BaseModel):
         self.prediction = tf.argmax(label, 3, name='label_2d')
 
         # Add summaries for some weights
-        variable_names = [x.format(self.config['modality'])
+        variable_names = [x.format(self.prefix)
                           for x in ['{}_score/kernel:0', '{}_score/bias:0']]
         for name in variable_names:
             var = next(v for v in tf.global_variables() if v.name == name)
