@@ -74,8 +74,11 @@ class BaseModel(object):
                 self.global_step = tf.Variable(0, trainable=False, name='global_step')
                 update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
                 with tf.control_dependencies(update_ops):
-                    self.trainer = tf.train.AdagradOptimizer(
-                        self.config['learning_rate']).minimize(
+                    available_trainers = {'adagrad': tf.train.AdagradOptimizer,
+                                          'adam': tf.train.AdamOptimizer,
+                                          'rmsprop': tf.train.RMSPropOptimizer}
+                    self.trainer = available_trainers[self.config['trainer']](
+                        learning_rate=self.config['learning_rate']).minimize(
                             self.loss, global_step=self.global_step)
 
             self.saver = tf.train.Saver()
@@ -331,7 +334,7 @@ class BaseModel(object):
             for variable in tf.global_variables():
                 name = variable.op.name
                 # Optimizers like Adagrad have their own variables, do not load these
-                if 'grad' in name or 'Adam' in name:
+                if 'grad' in name or 'Adam' in name or 'RMS' in name:
                     continue
                 if name not in weights and translation is not None:
                     name = translation[name]
