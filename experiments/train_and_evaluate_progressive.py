@@ -4,8 +4,8 @@ from xview.datasets.synthia import AVAILABLE_SEQUENCES
 import numpy as np
 from copy import deepcopy
 
-from experiments.utils import get_mongo_observer, ExperimentData
-from experiments.training import create_directories, train_network, load_data
+from experiments.utils import get_mongo_observer, ExperimentData, load_data
+from experiments.training import create_directories, train_network
 from experiments.evaluation import evaluate, evaluate_on_all_synthia_seqs
 
 
