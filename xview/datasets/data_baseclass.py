@@ -47,7 +47,7 @@ class DataBaseclass(DataWrapper):
         for start_idx in range(0, trainset_size, batch_size):
             yield self._get_batch((self.trainset[idx] for idx in range(start_idx,
                                    min(start_idx + batch_size, trainset_size))),
-                                  one_hot=False)
+                                  training_format=False)
 
     def get_test_data(self, batch_size=None):
         """Return generator for test-data."""
@@ -57,7 +57,7 @@ class DataBaseclass(DataWrapper):
         for start_idx in range(0, testset_size, batch_size):
             yield self._get_batch((self.testset[idx] for idx in range(start_idx,
                                    min(start_idx + batch_size, testset_size))),
-                                  one_hot=False)
+                                  training_format=False)
 
     def get_validation_data(self, num_items=None, batch_size=None):
         """Return the test-data in one big batch."""
@@ -68,14 +68,14 @@ class DataBaseclass(DataWrapper):
         for start_idx in range(0, num_items, batch_size):
             yield self._get_batch((self.testset[idx] for idx in range(start_idx,
                                    min(start_idx + batch_size, num_items))),
-                                  one_hot=False)
+                                  training_format=False)
 
-    def _get_batch(self, items, one_hot=True):
+    def _get_batch(self, items, training_format=True):
         # Dependent on the batchsize, we collect a list of datablobs and group them by
         # modality
         batch = {mod: [] for mod in self.modalities}
         for item in items:
-            data = self._get_data(one_hot=one_hot, **item)
+            data = self._get_data(training_format=training_format, **item)
             for mod in self.modalities:
                 batch[mod].append(data[mod])
         # Now translate lists of arrays into arrays with first dimension the batch index
