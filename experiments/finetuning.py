@@ -14,7 +14,7 @@ ex.observers.append(get_mongo_observer())
 
 @ex.automain
 def rgb_to_depth(net_config, data_config, num_iterations, starting_weights, 
-                 evaluation_data, _run):
+                 _run):
     """Training for progressive FCN."""
     # Set up the directories for diagnostics
     output_dir = create_directories(_run._id, ex)
@@ -26,7 +26,7 @@ def rgb_to_depth(net_config, data_config, num_iterations, starting_weights,
         for sequence in AVAILABLE_SEQUENCES:
             adapted_config['seqs'] = [sequence]
             data = load_data(adapted_config)
-            all_sequences[sequence] = data.get_validation_data(num_items=8)
+            all_sequences[sequence] = data.get_validation_data(num_items=7)
 
     # Get the existing RGB weights
     training_experiment = ExperimentData(starting_weights['experiment_id'])
