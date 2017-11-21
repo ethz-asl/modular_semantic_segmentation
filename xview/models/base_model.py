@@ -160,7 +160,7 @@ class BaseModel(object):
 
                 # Every validation_interval, we add a summary of validation values
                 if i % validation_interval == 0 and validation_data is not None:
-                    score, _ = self.score(validation_data)
+                    score, _ = self.score(validation_data())
                     summary = self.sess.run(merged_summary)
                     accuracy = tf.Summary(
                         value=[tf.Summary.Value(tag='accuracy',
@@ -179,7 +179,7 @@ class BaseModel(object):
 
                     # Add additional summaries if specified
                     for key, additional_data in additional_eval_data.items():
-                        val = self.score(additional_data)[0]['mean_IoU']
+                        val = self.score(additional_data())[0]['mean_IoU']
                         summary = tf.Summary(value=[tf.Summary.Value(tag=key,
                                                                      simple_value=val)])
                         train_writer.add_summary(summary, i)

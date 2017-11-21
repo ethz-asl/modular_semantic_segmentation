@@ -60,15 +60,19 @@ class DataBaseclass(DataWrapper):
                                   training_format=False)
 
     def get_validation_data(self, num_items=None, batch_size=None):
-        """Return the test-data in one big batch."""
+        """Return a function without arguments that returns a generator for the
+        validation data."""
         if num_items is None:
             num_items = len(self.validation_set)
         if batch_size is None:
             batch_size = self.batchsize
-        for start_idx in range(0, num_items, batch_size):
-            yield self._get_batch((self.testset[idx] for idx in range(start_idx,
-                                   min(start_idx + batch_size, num_items))),
-                                  training_format=False)
+
+        def data_generator():
+            for start_idx in range(0, num_items, batch_size):
+                yield self._get_batch((self.testset[idx] for idx in range(start_idx,
+                                       min(start_idx + batch_size, num_items))),
+                                      training_format=False)
+        return data_generator
 
     def _get_batch(self, items, training_format=True):
         # Dependent on the batchsize, we collect a list of datablobs and group them by
