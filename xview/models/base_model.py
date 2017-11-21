@@ -83,7 +83,10 @@ class BaseModel(object):
 
             self.saver = tf.train.Saver()
 
-            self.sess = tf.Session()
+            # Limit GPU fraction
+            gpu_options = tf.GPUOptions(
+                per_process_gpu_memory_fraction=self.config.get('gpu_fraction', 1))
+            self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
             self.sess.run(tf.global_variables_initializer())
             # There are local variables in the metrics
             self.sess.run(tf.local_variables_initializer())
