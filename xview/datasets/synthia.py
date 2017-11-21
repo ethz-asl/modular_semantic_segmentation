@@ -188,7 +188,7 @@ class Synthia(DataBaseclass):
             json.dump({'trainset': trainset, 'testset': testset}, f)
         print('INFO: Preprocessing finished.')
 
-    def _get_data(self, sequence, image_name, one_hot=True):
+    def _get_data(self, sequence, image_name, training_format=True):
         """Returns data for one given image number from the specified sequence."""
         filetype = {'rgb': 'png', 'depth': 'png', 'labels': 'npy'}
         rgb_filename, depth_filename, groundtruth_filename = (
@@ -207,7 +207,7 @@ class Synthia(DataBaseclass):
         labels = np.load(groundtruth_filename.format('.npy'))
         # Dirty fix for the class 15
         labels[labels == 15] = 13
-        if one_hot:
+        if training_format:
             # Labels still have to get converted to one-hot
             labels = np.array(self.one_hot_lookup == labels[:, :, None]).astype(int)
         blob['labels'] = labels
