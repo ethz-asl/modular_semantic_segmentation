@@ -22,7 +22,7 @@ class DataBaseclass(DataWrapper):
     def _get_data(self, **kwargs):
         """Returns data for one item in trainset or testset. kwargs is the unfolded dict
         from the trainset or testset list
-        # (it is called as self._get_data(**testset[some_idx]))
+        # (it is called as self._get_data(one_hot=something, **testset[some_idx]))
         """
         raise NotImplementedError
 
@@ -39,29 +39,36 @@ class DataBaseclass(DataWrapper):
         return self._get_batch([self.trainset[self._next_batch_idx()]
                                 for _ in range(self.batchsize)])
 
-    def get_train_data(self, batch_size=10):
+    def get_train_data(self, batch_size=None):
         """Return generator for train-data."""
+        if batch_size is None:
+            batch_size = self.batchsize
         trainset_size = len(self.trainset)
         for start_idx in range(0, trainset_size, batch_size):
             yield self._get_batch((self.trainset[idx] for idx in range(start_idx,
                                    min(start_idx + batch_size, trainset_size))),
                                   one_hot=False)
 
-    def get_test_data(self, batch_size=10):
+    def get_test_data(self, batch_size=None):
         """Return generator for test-data."""
+        if batch_size is None:
+            batch_size = self.batchsize
         testset_size = len(self.testset)
         for start_idx in range(0, testset_size, batch_size):
             yield self._get_batch((self.testset[idx] for idx in range(start_idx,
                                    min(start_idx + batch_size, testset_size))),
                                   one_hot=False)
 
-    def get_validation_data(self, num_items=None):
+    def get_validation_data(self, num_items=None, batch_size=None):
         """Return the test-data in one big batch."""
         if num_items is None:
             num_items = len(self.validation_set)
-
-        return self._get_batch((self.validation_set[i] for i in range(num_items)),
-                               one_hot=False)
+        if batch_size is None:
+            batch_size = self.batchsize
+        for start_idx in range(0, num_items, batch_size):
+            yield self._get_batch((self.testset[idx] for idx in range(start_idx,
+                                   min(start_idx + batch_size, num_items))),
+                                  one_hot=False)
 
     def _get_batch(self, items, one_hot=True):
         # Dependent on the batchsize, we collect a list of datablobs and group them by
