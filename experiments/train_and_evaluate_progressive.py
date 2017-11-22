@@ -49,7 +49,8 @@ def depth_to_rgb(net_config, data_config, starting_weights, num_iterations, _run
         evaluate(net, data_config)
 
         print('INFO: Evaluating against all sequences')
-        evaluate_on_all_synthia_seqs(net, data_config)
+        measurements = evaluate_on_all_synthia_seqs(net, data_config)
+        _run.info['measurements'] = measurements
 
 
 @ex.command
@@ -88,7 +89,8 @@ def rgb_to_depth(net_config, data_config, starting_weights, num_iterations, _run
         evaluate(net, data_config)
 
         print('INFO: Evaluating against all sequences')
-        evaluate_on_all_synthia_seqs(net, data_config)
+        measurements = evaluate_on_all_synthia_seqs(net, data_config)
+        _run.info['measurements'] = measurements
 
 
 @ex.automain
@@ -106,4 +108,5 @@ def main(net_config, data_config, starting_weights, num_iterations, _run):
         evaluate(net, data_config)
 
         print('INFO: Evaluating against all sequences')
-        evaluate_on_all_synthia_seqs(net, data_config)
+        measurements = evaluate_on_all_synthia_seqs(net, data_config)
+        _run.info['measurements'] = measurements
