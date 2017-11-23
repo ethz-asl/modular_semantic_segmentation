@@ -45,6 +45,13 @@ LABELINFO = {
    13: {'name': 'traffic light', 'color': [0, 128, 128]}
 }
 
+"""For some reason, synthia consists of the labels 0-12 and 15. to create a
+        onw-hot vector of these 14 classes, one can compare agains the following array,
+            e.g. the one-hot version of class 4 is:
+                (self.one_hot_lookup == 4).astype(int)
+                  -->     [0, 0, 0, 0, 1, 0, 0, 0, 0, 0,  0,  0,  0,  0]"""
+one_hot_lookup = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
+
 
 class Synthia(DataBaseclass):
     """Driver for SYNTHIA dataset (http://synthia-dataset.net/).
@@ -91,15 +98,6 @@ class Synthia(DataBaseclass):
                                ['rgb', 'depth', 'labels'], LABELINFO)
         # Save direction
         self.direction = direction
-
-    @property
-    def one_hot_lookup(self):
-        """For some reason, synthia consists of the labels 0-12 and 15. to create a
-        onw-hot vector of these 14 classes, one can compare agains the following array,
-            e.g. the one-hot version of class 4 is:
-                (self.one_hot_lookup == 4).astype(int)
-                -->     [0, 0, 0, 0, 1, 0, 0, 0, 0, 0,  0,  0,  0,  0]"""
-        return np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
 
     def _preprocessing(self, sequence):
         """Preprocessing of SYNTHIA data.
@@ -209,7 +207,7 @@ class Synthia(DataBaseclass):
         labels[labels == 15] = 13
         if training_format:
             # Labels still have to get converted to one-hot
-            labels = np.array(self.one_hot_lookup == labels[:, :, None]).astype(int)
+            labels = np.array(one_hot_lookup == labels[:, :, None]).astype(int)
         blob['labels'] = labels
         return blob
 
