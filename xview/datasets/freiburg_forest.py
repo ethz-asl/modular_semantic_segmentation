@@ -150,7 +150,7 @@ class FreiburgForest(DataBaseclass):
 
                 if training_format:
                     # Convert the labels into one-hot encoding.
-                    blob['labels'] = np.array(np.array(list(range(7))) ==
+                    blob['labels'] = np.array(np.array(list(range(6))) ==
                                               labels[:, :, None]).astype('int')
                 else:
                     blob['labels'] = labels
