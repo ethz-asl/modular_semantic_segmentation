@@ -99,8 +99,7 @@ class Synthia(DataBaseclass):
 
         blob = {}
         blob['rgb'] = cv2.imread(rgb_filename)
-        depth = one_channel_image_reader(depth_filename.format('png'), np.uint16,
-                                         input_has_three_channels=False)
+        depth = cv2.imread(depth_filename, 2)  # flag 2 -> read image with 16bit depth
         # We have to add a dimension for the channels, as there is only one and the
         # dimension is omitted.
         blob['depth'] = np.expand_dims(depth, 3)
@@ -121,7 +120,8 @@ class Synthia(DataBaseclass):
                 min_scale = crop / float(min(h, w))
                 k = random.uniform(max(min_scale, scale[0]), scale[1])
                 blob['rgb'] = cv2.resize(blob['rgb'], None, fx=k, fy=k)
-                blob['depth'] = cv2.resize(blob['depth'], None, fx=k, fy=k)
+                blob['depth'] = cv2.resize(blob['depth'], None, fx=k, fy=k,
+                                           interpolation=cv2.INTER_NEAREST)
                 blob['labels'] = cv2.resize(blob['labels'], None, fx=k, fy=k,
                                             interpolation=cv2.INTER_NEAREST)
 
