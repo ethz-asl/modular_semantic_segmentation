@@ -80,9 +80,6 @@ def train_network(net, output_dir, data_config, num_iterations, starting_weights
     for filename in os.listdir(output_dir):
         experiment.add_artifact(os.path.join(output_dir, filename))
 
-    if timeout:
-        raise TimeoutInterrupt
-
 
 @ex.capture
 def train_and_evaluate(net, output_dir, data_config, num_iterations,
