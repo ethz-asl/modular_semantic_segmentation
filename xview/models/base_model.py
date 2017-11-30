@@ -184,6 +184,10 @@ class BaseModel(object):
                                                                      simple_value=val)])
                         train_writer.add_summary(summary, i)
 
+                    if 'abort_at_iou' in self.config:
+                        if score['mean_IoU'] > self.config['abort_at_iou']:
+                            break
+
             coord.request_stop()
             # Before we can close the queue, wait that the enqueue process stopped,
             # otherwise it will produce an error.
