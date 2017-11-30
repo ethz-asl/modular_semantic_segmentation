@@ -35,9 +35,9 @@ def evaluate(net, data_config, print_results=True):
         print('total accuracy {:.2f} mean F1 {:.2f} IoU {:.2f}'.format(
             measures['total_accuracy'], measures['mean_F1'], measures['mean_IoU']))
         for label in data.labelinfo:
-            print("{:>15}: {:.2f} precision, {:.2f} recall, {:.2f} F1".format(
+            print("{:>15}: {:.2f} precision, {:.2f} recall, {:.2f} IoU".format(
                 data.labelinfo[label]['name'], measures['precision'][label],
-                measures['recall'][label], measures['F1'][label]))
+                measures['recall'][label], measures['IoU'][label]))
 
         # There seems to be a problem with capturing the print output, flush to be sure
         stdout.flush()
