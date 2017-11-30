@@ -18,9 +18,8 @@ LABELINFO = {
     1: {'name': 'road', 'color': [170, 170, 170]},
     2: {'name': 'grass', 'color': [0, 255, 0]},
     3: {'name': 'vegetation', 'color': [102, 102, 51]},
-    4: {'name': 'tree', 'color': [0, 60, 0]},
-    5: {'name': 'sky', 'color': [0, 120, 255]},
-    6: {'name': 'obstacle', 'color': [0, 0, 0]},
+    4: {'name': 'sky', 'color': [0, 120, 255]},
+    5: {'name': 'obstacle', 'color': [0, 0, 0]},
 }
 
 
