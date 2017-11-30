@@ -99,10 +99,7 @@ class Synthia(DataBaseclass):
 
         blob = {}
         blob['rgb'] = cv2.imread(rgb_filename)
-        depth = cv2.imread(depth_filename, 2)  # flag 2 -> read image with 16bit depth
-        # We have to add a dimension for the channels, as there is only one and the
-        # dimension is omitted.
-        blob['depth'] = np.expand_dims(depth, 3)
+        blob['depth'] = cv2.imread(depth_filename, 2)  # flag 2 -> read image with 16bit depth
         labels = np.load(groundtruth_filename)
         # Dirty fix for the class 15
         labels[labels == 15] = 13
@@ -149,6 +146,10 @@ class Synthia(DataBaseclass):
             # Format labels into one-hot
             blob['labels'] = np.array(one_hot_lookup ==
                                       blob['labels'][:, :, None]).astype(int)
+
+        # We have to add a dimension for the channels, as there is only one and the
+        # dimension is omitted.
+        blob['depth'] = np.expand_dims(blob['depth'], 3)
 
         # Force the image dimension to be multiple of 16
         h, w, _ = blob['rgb'].shape

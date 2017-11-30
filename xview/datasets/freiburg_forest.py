@@ -155,6 +155,4 @@ class FreiburgForest(DataBaseclass):
                     blob['labels'] = labels
             else:
                 blob[modality] = imread(filepath)
-
-            print(modality, image_name, blob[modality].shape)
         return blob
