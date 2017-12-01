@@ -66,7 +66,7 @@ def depth_to_rgb(net_config, data_config, num_iterations, starting_weights,
         _run.info['measurements'] = measurements
 
 
-@ex.automain
+@ex.command
 def rgb_to_depth(net_config, data_config, num_iterations, starting_weights,
                  _run):
     """Training for progressive FCN."""
@@ -98,6 +98,25 @@ def rgb_to_depth(net_config, data_config, num_iterations, starting_weights,
 
         train_network(net, output_dir, data_config, num_iterations,
                       starting_weights=False, experiment=ex,
+                      additional_eval_data=get_all_sequence_validation_sets(data_config))
+
+        print('INFO: Evaluate the network adainst the training sequences')
+        evaluate(net, data_config)
+
+        print('INFO: Evaluating against seperate data')
+        measurements = evaluate_on_all_synthia_seqs(net, data_config)
+        _run.info['measurements'] = measurements
+
+
+@ex.automain
+def train(net_config, data_config, num_iterations, starting_weights, _run):
+    # Set up the directories for diagnostics
+    output_dir = create_directories(_run._id, ex)
+
+    # create the network
+    with SimpleFCN(output_dir=output_dir, **net_config) as net:
+        train_network(net, output_dir, data_config, num_iterations,
+                      starting_weights=starting_weights, experiment=ex,
                       additional_eval_data=get_all_sequence_validation_sets(data_config))
 
         print('INFO: Evaluate the network adainst the training sequences')
