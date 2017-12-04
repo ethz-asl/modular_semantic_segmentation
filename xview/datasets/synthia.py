@@ -28,6 +28,31 @@ AVAILABLE_SEQUENCES = ['SYNTHIA-SEQS-04-DAWN',
                        'SYNTHIA-SEQS-04-WINTER',
                        'SYNTHIA-SEQS-04-WINTERNIGHT']
 
+# Set label information according to synthia README
+LABELINFO = {
+   0: {'name': 'void', 'color': [0, 0, 0]},
+   1: {'name': 'sky', 'color': [128, 128, 128]},
+   2: {'name': 'building', 'color': [128, 0, 0]},
+   3: {'name': 'road', 'color': [128, 64, 128]},
+   4: {'name': 'sidewalk', 'color': [0, 0, 192]},
+   5: {'name': 'fence', 'color': [64, 64, 128]},
+   6: {'name': 'vegetation', 'color': [128, 128, 0]},
+   7: {'name': 'pole', 'color': [192, 192, 128]},
+   8: {'name': 'car', 'color': [64, 0, 128]},
+   9: {'name': 'traffic sign', 'color': [192, 128, 128]},
+   10: {'name': 'pedestrian', 'color': [64, 64, 0]},
+   11: {'name': 'bicycle', 'color': [0, 128, 192]},
+   12: {'name': 'lanemarking', 'color': [0, 192, 0]},
+   13: {'name': 'traffic light', 'color': [0, 128, 128]}
+}
+
+"""For some reason, synthia consists of the labels 0-12 and 15. to create a
+        onw-hot vector of these 14 classes, one can compare agains the following array,
+            e.g. the one-hot version of class 4 is:
+                (self.one_hot_lookup == 4).astype(int)
+                  -->     [0, 0, 0, 0, 1, 0, 0, 0, 0, 0,  0,  0,  0,  0]"""
+one_hot_lookup = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
+
 
 class Synthia(DataBaseclass):
     """Driver for SYNTHIA dataset (http://synthia-dataset.net/).
@@ -69,38 +94,11 @@ class Synthia(DataBaseclass):
                 testset.extend([{'sequence': sequence, 'image_name': filename}
                                 for filename in split['testset']])
 
-        # Set label information according to synthia README
-        labelinfo = {
-            0: {'name': 'void', 'color': [0, 0, 0]},
-            1: {'name': 'sky', 'color': [128, 128, 128]},
-            2: {'name': 'building', 'color': [128, 0, 0]},
-            3: {'name': 'road', 'color': [128, 64, 128]},
-            4: {'name': 'sidewalk', 'color': [0, 0, 192]},
-            5: {'name': 'fence', 'color': [64, 64, 128]},
-            6: {'name': 'vegetation', 'color': [128, 128, 0]},
-            7: {'name': 'pole', 'color': [192, 192, 128]},
-            8: {'name': 'car', 'color': [64, 0, 128]},
-            9: {'name': 'traffic sign', 'color': [192, 128, 128]},
-            10: {'name': 'pedestrian', 'color': [64, 64, 0]},
-            11: {'name': 'bicycle', 'color': [0, 128, 192]},
-            12: {'name': 'lanemarking', 'color': [0, 192, 0]},
-            13: {'name': 'traffic light', 'color': [0, 128, 128]}
-        }
-
         # Intitialize Baseclass
         DataBaseclass.__init__(self, trainset, testset, batchsize,
-                               ['rgb', 'depth', 'labels'], labelinfo)
+                               ['rgb', 'depth', 'labels'], LABELINFO)
         # Save direction
         self.direction = direction
-
-    @property
-    def one_hot_lookup(self):
-        """For some reason, synthia consists of the labels 0-12 and 15. to create a
-        onw-hot vector of these 14 classes, one can compare agains the following array,
-            e.g. the one-hot version of class 4 is:
-                (self.one_hot_lookup == 4).astype(int)
-                -->     [0, 0, 0, 0, 1, 0, 0, 0, 0, 0,  0,  0,  0,  0]"""
-        return np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
 
     def _preprocessing(self, sequence):
         """Preprocessing of SYNTHIA data.
@@ -209,7 +207,7 @@ class Synthia(DataBaseclass):
         labels[labels == 15] = 13
         if training_format:
             # Labels still have to get converted to one-hot
-            labels = np.array(self.one_hot_lookup == labels[:, :, None]).astype(int)
+            labels = np.array(one_hot_lookup == labels[:, :, None]).astype(int)
         blob['labels'] = labels
         return blob
 
