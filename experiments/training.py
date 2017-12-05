@@ -59,7 +59,7 @@ def train_network(net, output_dir, data_config, num_iterations, starting_weights
 
     # get validation set
     data = load_data(data_config)
-    validation_set = data.get_validation_data(num_items=10, batch_size=1)
+    validation_set = data.get_validation_data(num_items=10)
 
     # Train the given network
     if starting_weights:
