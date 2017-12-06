@@ -102,7 +102,8 @@ def main(net_config, data_config, starting_weights, num_iterations, _run):
     # create the network
     with ProgressiveFCN(output_dir=output_dir, **net_config) as net:
         train_network(net, output_dir, data_config, num_iterations, starting_weights,
-                      experiment=ex)
+                      experiment=ex,
+                      additional_eval_data=get_all_sequence_validation_sets(data_config))
 
         print('INFO Evaluate the network adainst the training sequences')
         evaluate(net, data_config)
