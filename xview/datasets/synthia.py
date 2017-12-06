@@ -59,7 +59,7 @@ class Synthia(DataBaseclass):
     Preprocessing resizes images to 640x368 and performs a static 20% test-split for all
     given sequences."""
 
-    def __init__(self, seqs, batchsize, base_path=SYNTHIA_BASEPATH,
+    def __init__(self, batchsize, seqs=AVAILABLE_SEQUENCES, base_path=SYNTHIA_BASEPATH,
                  force_preprocessing=False, direction='F'):
         if not path.exists(base_path):
             message = 'ERROR: Path to SYNTHIA dataset does not exist.'
