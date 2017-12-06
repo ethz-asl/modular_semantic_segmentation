@@ -5,6 +5,7 @@ import cv2
 import shutil
 import json
 import random
+from sklearn.model_selection import train_test_split
 
 from .data_baseclass import DataBaseclass
 from .synthia import SYNTHIA_BASEPATH, AVAILABLE_SEQUENCES, LABELINFO, \
@@ -85,6 +86,20 @@ class Synthia(DataBaseclass):
                 array = one_channel_image_reader(path.join(inpath, filename),
                                                  np.uint8)
                 np.save(path.join(outpath, filename.split('.')[0]), array)
+
+            if sequence == 'RAND_CITYSCAPES':
+                # There are no different directions for this sequence.
+                break
+
+        # create train-test-split if necessary
+        if not path.exists(path.join(self.base_path, sequence, 'train_test_split.json')):
+            print("INFO: Creating Train-Test-Split")
+            filenames = [filename.split('.')[0] for filename
+                         in listdir(path.join(rootpath, 'LABELS/Stereo_Right/Omni_F'))]
+            trainset, testset = train_test_split(filenames, test_size=0.2)
+            with open(path.join(self.base_path, sequence, '/train_test_split.json'),
+                      'w') as f:
+                json.dump({'trainset': trainset, 'testset': testset}, f)
 
     def _get_data(self, sequence, image_name, training_format=True):
         """Returns data for one given image number from the specified sequence."""
