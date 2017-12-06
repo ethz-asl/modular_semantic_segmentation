@@ -57,6 +57,7 @@ def evaluate_on_all_synthia_seqs(net, data_config):
                                                            measurements['mean_IoU']))
         all_measurements[sequence] = measurements
 
+    stdout.flush()
     return all_measurements
 
 
