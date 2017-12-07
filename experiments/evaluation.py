@@ -150,6 +150,17 @@ def also_load_config(modelname, net_config, evaluation_data, starting_weights, _
 
 
 @ex.automain
+def all_synthia(modelname, net_config, evaluation_data, starting_weights, _run):
+    """Load weigths from training experiments and evaluate network against specified
+    data."""
+    model = get_model(modelname)
+    with model(**net_config) as net:
+        import_weights_into_network(net, starting_weights)
+        measurements = evaluate_on_all_synthia_seqs(net, evaluation_data)
+        _run.info['measurements'] = measurements
+
+
+@ex.automain
 def main(modelname, net_config, evaluation_data, starting_weights, _run):
     """Load weigths from training experiments and evaluate network against specified
     data."""
