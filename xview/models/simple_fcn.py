@@ -1,5 +1,6 @@
 import tensorflow as tf
 from tensorflow.python.layers.layers import dropout
+from copy import deepcopy
 
 from .base_model import BaseModel
 from .custom_layers import conv2d, deconv2d, log_softmax, softmax
@@ -72,11 +73,12 @@ def decoder(features, prefix, num_units, num_classes, dropout_rate,
     Returns:
         dict of (intermediate) layer outputs
     """
-    upscore_params = params = {
+    params = {
         'activation': tf.nn.relu, 'padding': 'same', 'reuse': reuse,
         'batch_normalization': batch_normalization, 'training': is_training,
         'trainable': trainable}
     # Upscore layers are never trainable
+    upscore_params = deepcopy(params)
     upscore_params['trainable'] = False
 
     features = dropout(features, rate=dropout_rate,
