@@ -148,7 +148,8 @@ class SimpleFCN(BaseModel):
 
         encoder_layers = encoder(train_x, self.prefix, self.config['num_units'],
                                  batch_normalization=self.config['batch_normalization'],
-                                 is_training=True, reuse=False)
+                                 is_training=True, reuse=False,
+                                 trainable=self.config.get('train_encoder', True))
         decoder_layers = decoder(encoder_layers['fused'], self.prefix,
                                  self.config['num_units'], self.config['num_classes'],
                                  train_dropout_rate,
