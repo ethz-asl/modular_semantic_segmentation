@@ -81,7 +81,7 @@ class DataBaseclass(DataWrapper):
         for item in items:
             data = self._get_data(training_format=training_format, **item)
             for mod in self.modalities:
-                batch[mod].append(data[mod])
+                batch[mod].append(crop_multiple(data[mod]))
         # Now translate lists of arrays into arrays with first dimension the batch index
         # for each modality.
         for mod in self.modalities:
