@@ -5,6 +5,8 @@ from tqdm import tqdm
 from PIL import Image
 from scipy.ndimage import zoom
 import tifffile as tiff
+import random
+import cv2
 
 from xview.settings import DATA_BASEPATH
 from .data_baseclass import DataBaseclass, crop_multiple
@@ -155,4 +157,36 @@ class FreiburgForest(DataBaseclass):
                     blob['labels'] = labels
             else:
                 blob[modality] = imread(filepath)
+
+        if training_format:
+            scale = self.config['augmentation']['scale']
+            crop = self.config['augmentation']['crop']
+            hflip = self.config['augmentation']['hflip']
+            vflip = self.config['augmentation']['vflip']
+
+            if scale and crop:
+                h, w, _ = blob['rgb'].shape
+                min_scale = crop / float(min(h, w))
+                k = random.uniform(max(min_scale, scale[0]), scale[1])
+                for modality in self.modalities:
+                    if modality == 'rgb':
+                        blob['rgb'] = cv2.resize(blob['rgb'], None, fx=k, fy=k)
+                    else:
+                        blob[modality] = cv2.resize(blob[modality], None, fx=k, fy=k,
+                                                    interpolation=cv2.INTER_NEAREST)
+
+            if crop:
+                h, w, _ = blob['rgb'].shape
+                h_c = random.randint(0, h - crop)
+                w_c = random.randint(0, w - crop)
+                for m in self.modalities:
+                    blob[m] = blob[m][h_c:h_c+crop, w_c:w_c+crop, ...]
+
+            if hflip and np.random.choice([0, 1]):
+                for m in self.modalities:
+                    blob[m] = np.flip(blob[m], axis=0)
+
+            if vflip and np.random.choice([0, 1]):
+                for m in self.modalities:
+                    blob[m] = np.flip(blob[m], axis=1)
         return blob
