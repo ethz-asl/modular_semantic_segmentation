@@ -4,6 +4,22 @@ from random import shuffle
 from .wrapper import DataWrapper
 
 
+def crop_multiple(data, multiple_of=16):
+    """Force the array dimension to be multiple of the given factor.
+
+    Args:
+        data: a >=2-dim array, first 2 dims will be cropped
+        multiple_of: the factor, as an int
+    Returns:
+        cropped array
+    """
+    h, w = data.shape[0], data.shape[1]
+    h_c, w_c = [d - (d % multiple_of) for d in [h, w]]
+    if h_c != h or w_c != w:
+        return data[:h_c, :w_c, ...]
+    else:
+        return data
+
 class DataBaseclass(DataWrapper):
     """A basic, abstract class for splitting data into batches, compliant with DataWrapper
     interface."""
@@ -96,16 +112,3 @@ class DataBaseclass(DataWrapper):
         return np.array(lookup[labels[:, :]]).astype('uint8')
 
 
-def crop_multiple(data, multiple_of=16):
-    """Force the array dimension to be multiple of the given factor.
-
-    Args:
-        data: a >=2-dim array, first 2 dims will be cropped
-        multiple_of: the factor, as an int
-    Returns:
-        cropped array
-    """
-    h, w = data.shape[0], data.shape[1]
-    h_c, w_c = [d - (d % multiple_of) for d in [h, w]]
-    if h_c != h or w_c != w:
-        return data[:h_c, :w_c, ...]
