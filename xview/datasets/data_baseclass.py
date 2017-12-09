@@ -1,5 +1,4 @@
 import numpy as np
-from sklearn.model_selection import train_test_split
 from random import shuffle
 
 from .wrapper import DataWrapper
@@ -10,7 +9,8 @@ class DataBaseclass(DataWrapper):
     interface."""
 
     def __init__(self, trainset, testset, batchsize, modalities, labelinfo):
-        self.testset, self.validation_set = train_test_split(testset, test_size=10)
+        self.validation_set = testset[:15]
+        self.testset = testset[15:]
         self.trainset = trainset
         self.batch_idx = 0
         self.batchsize = batchsize
