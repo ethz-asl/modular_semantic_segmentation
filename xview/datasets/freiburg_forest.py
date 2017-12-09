@@ -48,10 +48,12 @@ class FreiburgForest(DataBaseclass):
         if force_preprocessing:
             self._preprocessing(trainset + testset)
 
+        self.config = config
+
         # Intitialize Baseclass
         DataBaseclass.__init__(self, trainset, testset, batchsize,
                                ['rgb', 'depth', 'labels', 'evi', 'ndvi', 'nir', 'nrg'],
-                               LABELINFO, **config)
+                               LABELINFO)
 
     def _preprocessing(self, image_list):
         modality_paths = {'rgb': 'rgb', 'depth': 'depth_gray', 'labels': 'GT_color',
