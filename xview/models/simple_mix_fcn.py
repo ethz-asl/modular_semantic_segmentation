@@ -55,7 +55,7 @@ class MixFCN(BaseModel):
 
         self.confusion = {'rgb': rgb_confusion, 'depth': depth_confusion}
 
-        BaseModel.__init__(self, 'FCN', output_dir=output_dir,
+        BaseModel.__init__(self, 'SimpleMixFCN', output_dir=output_dir,
                            supports_training=False, **config)
 
     def _build_graph(self):
