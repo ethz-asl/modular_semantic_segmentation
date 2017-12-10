@@ -5,15 +5,53 @@ from scipy.ndimage import zoom
 from sklearn.model_selection import train_test_split
 from png import Reader, Writer
 from PIL import Image
+import cv2
 import itertools
 import shutil
 import json
 
 from xview.settings import DATA_BASEPATH
-from .baseclass import DataBaseclass
+from xview.datasets.data_baseclass import DataBaseclass
 
 
 SYNTHIA_BASEPATH = path.join(DATA_BASEPATH, 'synthia')
+
+AVAILABLE_SEQUENCES = ['SYNTHIA-SEQS-04-DAWN',
+                       'SYNTHIA-SEQS-04-FALL',
+                       'SYNTHIA-SEQS-04-FOG',
+                       'SYNTHIA-SEQS-04-NIGHT',
+                       'SYNTHIA-SEQS-04-RAINNIGHT',
+                       'SYNTHIA-SEQS-04-SOFTRAIN',
+                       'SYNTHIA-SEQS-04-SPRING',
+                       'SYNTHIA-SEQS-04-SUMMER',
+                       'SYNTHIA-SEQS-04-SUNSET',
+                       'SYNTHIA-SEQS-04-WINTER',
+                       'SYNTHIA-SEQS-04-WINTERNIGHT']
+
+# Set label information according to synthia README
+LABELINFO = {
+   0: {'name': 'void', 'color': [0, 0, 0]},
+   1: {'name': 'sky', 'color': [128, 128, 128]},
+   2: {'name': 'building', 'color': [128, 0, 0]},
+   3: {'name': 'road', 'color': [128, 64, 128]},
+   4: {'name': 'sidewalk', 'color': [0, 0, 192]},
+   5: {'name': 'fence', 'color': [64, 64, 128]},
+   6: {'name': 'vegetation', 'color': [128, 128, 0]},
+   7: {'name': 'pole', 'color': [192, 192, 128]},
+   8: {'name': 'car', 'color': [64, 0, 128]},
+   9: {'name': 'traffic sign', 'color': [192, 128, 128]},
+   10: {'name': 'pedestrian', 'color': [64, 64, 0]},
+   11: {'name': 'bicycle', 'color': [0, 128, 192]},
+   12: {'name': 'lanemarking', 'color': [0, 192, 0]},
+   13: {'name': 'traffic light', 'color': [0, 128, 128]}
+}
+
+"""For some reason, synthia consists of the labels 0-12 and 15. to create a
+        onw-hot vector of these 14 classes, one can compare agains the following array,
+            e.g. the one-hot version of class 4 is:
+                (self.one_hot_lookup == 4).astype(int)
+                  -->     [0, 0, 0, 0, 1, 0, 0, 0, 0, 0,  0,  0,  0,  0]"""
+one_hot_lookup = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
 
 
 class Synthia(DataBaseclass):
@@ -21,7 +59,7 @@ class Synthia(DataBaseclass):
     Preprocessing resizes images to 640x368 and performs a static 20% test-split for all
     given sequences."""
 
-    def __init__(self, seqs, batchsize, base_path=SYNTHIA_BASEPATH,
+    def __init__(self, batchsize, seqs=AVAILABLE_SEQUENCES, base_path=SYNTHIA_BASEPATH,
                  force_preprocessing=False, direction='F'):
         if not path.exists(base_path):
             message = 'ERROR: Path to SYNTHIA dataset does not exist.'
@@ -56,38 +94,11 @@ class Synthia(DataBaseclass):
                 testset.extend([{'sequence': sequence, 'image_name': filename}
                                 for filename in split['testset']])
 
-        # Set label information according to synthia README
-        labelinfo = {
-            0: {'name': 'void', 'color': [0, 0, 0]},
-            1: {'name': 'sky', 'color': [128, 128, 128]},
-            2: {'name': 'building', 'color': [128, 0, 0]},
-            3: {'name': 'road', 'color': [128, 64, 128]},
-            4: {'name': 'sidewalk', 'color': [0, 0, 192]},
-            5: {'name': 'fence', 'color': [64, 64, 128]},
-            6: {'name': 'vegetation', 'color': [128, 128, 0]},
-            7: {'name': 'pole', 'color': [192, 192, 128]},
-            8: {'name': 'car', 'color': [64, 0, 128]},
-            9: {'name': 'traffic sign', 'color': [192, 128, 128]},
-            10: {'name': 'pedestrian', 'color': [64, 64, 0]},
-            11: {'name': 'bicycle', 'color': [0, 128, 192]},
-            12: {'name': 'lanemarking', 'color': [0, 192, 0]},
-            13: {'name': 'traffic light', 'color': [0, 128, 128]}
-        }
-
         # Intitialize Baseclass
         DataBaseclass.__init__(self, trainset, testset, batchsize,
-                               ['rgb', 'depth', 'labels'], labelinfo)
+                               ['rgb', 'depth', 'labels'], LABELINFO)
         # Save direction
         self.direction = direction
-
-    @property
-    def one_hot_lookup(self):
-        """For some reason, synthia consists of the labels 0-12 and 15. to create a
-        onw-hot vector of these 14 classes, one can compare agains the following array,
-            e.g. the one-hot version of class 4 is:
-                (self.one_hot_lookup == 4).astype(int)
-                -->     [0, 0, 0, 0, 1, 0, 0, 0, 0, 0,  0,  0,  0,  0]"""
-        return np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
 
     def _preprocessing(self, sequence):
         """Preprocessing of SYNTHIA data.
@@ -153,10 +164,12 @@ class Synthia(DataBaseclass):
                         writer.write(f, val_list)
                 continue
 
-            # Label image has a weird format. We save the extracted information as numpy
-            # array.
+            # Label image has a weird two-channel format where the 1st channel is the
+            # 8bit label integer and the second channel is the instance ID we do not use.
+            # We save the extracted label integer as numpy array to make things easier.
             original_images = path.join(
                 sequence_basepath, 'GT/LABELS/Stereo_Right/Omni_{}'.format(direction))
+
             for filename in listdir(original_images):
                 # Labels are stored in the 1st channel of the png file
                 array = one_channel_image_reader(path.join(original_images, filename),
@@ -174,7 +187,7 @@ class Synthia(DataBaseclass):
             json.dump({'trainset': trainset, 'testset': testset}, f)
         print('INFO: Preprocessing finished.')
 
-    def _get_data(self, sequence, image_name, one_hot=True):
+    def _get_data(self, sequence, image_name, training_format=True):
         """Returns data for one given image number from the specified sequence."""
         filetype = {'rgb': 'png', 'depth': 'png', 'labels': 'npy'}
         rgb_filename, depth_filename, groundtruth_filename = (
@@ -184,18 +197,17 @@ class Synthia(DataBaseclass):
             for modality in ['rgb', 'depth', 'labels'])
 
         blob = {}
-        blob['rgb'] = imread(rgb_filename.format('.png'))
-        depth = one_channel_image_reader(depth_filename.format('png'), np.uint16,
-                                         input_has_three_channels=False)
+        blob['rgb'] = cv2.imread(rgb_filename.format('.png'))
+        depth = cv2.imread(depth_filename.format('png'), 2)
         # We have to add a dimension for the channels, as there is only one and the
         # dimension is omitted
         blob['depth'] = np.expand_dims(depth, 3)
         labels = np.load(groundtruth_filename.format('.npy'))
         # Dirty fix for the class 15
         labels[labels == 15] = 13
-        if one_hot:
+        if training_format:
             # Labels still have to get converted to one-hot
-            labels = np.array(self.one_hot_lookup == labels[:, :, None]).astype(int)
+            labels = np.array(one_hot_lookup == labels[:, :, None]).astype(int)
         blob['labels'] = labels
         return blob
 

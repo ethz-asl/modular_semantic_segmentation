@@ -5,13 +5,23 @@ from gridfs import GridFS
 from tensorflow.python.summary.summary_iterator import summary_iterator
 from xview.settings import EXPERIMENT_DB_HOST, EXPERIMENT_DB_USER, EXPERIMENT_DB_PWD,\
     EXPERIMENT_DB_NAME
+from xview.datasets import get_dataset
+
+
+def load_data(data_config):
+    """
+    Load the data specified in the data_config dict.
+    """
+    dataset_params = {key: val for key, val in data_config.items()
+                      if key not in ['dataset']}
+    return get_dataset(data_config['dataset'], dataset_params)
 
 
 def get_mongo_observer():
     return MongoObserver.create(url='mongodb://{user}:{pwd}@{host}/{db}'.format(
                                     host=EXPERIMENT_DB_HOST, user=EXPERIMENT_DB_USER,
                                     pwd=EXPERIMENT_DB_PWD, db=EXPERIMENT_DB_NAME),
-                                db_name='xview_experiments')
+                                db_name=EXPERIMENT_DB_NAME)
 
 
 class ExperimentData:
@@ -22,7 +32,7 @@ class ExperimentData:
         client = MongoClient('mongodb://{user}:{pwd}@{host}/{db}'.format(
                              host=EXPERIMENT_DB_HOST, user=EXPERIMENT_DB_USER,
                              pwd=EXPERIMENT_DB_PWD, db=EXPERIMENT_DB_NAME))
-        self.db = client['xview_experiments']
+        self.db = client[EXPERIMENT_DB_NAME]
         self.fs = GridFS(self.db)
         self.record = self.db.runs.find_one({'_id': exp_id})
 

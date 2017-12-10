@@ -9,7 +9,10 @@ config = {'num_classes': 14,
           'modality': 'rgb',
           'batch_normalization': True,
           'prefix': 'rgb',
-          'existing_columns': ['test']}
+          'existing_columns': ['test'],
+          'extra_adapter_convolution': False,
+          'initial_adapter_scales': [1],
+          'initialize_half_zero': True}
 
 
 def test_can_build_model():
