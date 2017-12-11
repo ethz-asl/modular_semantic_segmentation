@@ -34,7 +34,7 @@ def dirichlet_fusion(probs, conditionals, prior):
     return fused_likelihood + tf.log(1e-20 + prior)
 
 
-class BayesMix(BaseModel):
+class DirichletMix(BaseModel):
     """FCN implementation following DA-RNN architecture and using tf.layers."""
 
     def __init__(self, output_dir=None, **config):
