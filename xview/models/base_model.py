@@ -5,6 +5,7 @@ from os import path
 from abc import ABCMeta, abstractmethod
 from time import sleep
 from types import GeneratorType
+import tempfile
 
 
 class BaseModel(object):
@@ -35,9 +36,11 @@ class BaseModel(object):
         self.name = name
         self.output_dir = output_dir
         self.supports_training = supports_training
-
         self.config = config
 
+        self._initialize_graph()
+
+    def _initialize_graph(self):
         tf.reset_default_graph()
 
         # Now we build the network.
@@ -50,7 +53,7 @@ class BaseModel(object):
             # For any child class, we require the attributes specified in the docstring
             # and defined in self.required_attributes. After self._build_graph(), we can
             # check for their existance.
-            if supports_training:
+            if self.supports_training:
                 missing_attrs = ["'%s'" % attrs for attrs in self.required_attributes
                                  if True not in [hasattr(self, attr) for attr in attrs]]
                 if missing_attrs:

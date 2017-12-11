@@ -9,14 +9,10 @@ ex = Experiment()
 ex.observers.append(get_mongo_observer())
 
 
-@ex.automain
-def main(starting_weights, modelname, net_config, evaluation_data, search_parameters,
-         _run):
-    model = get_model(modelname)
-
+def parameter_combinations(search_parameters, net_config):
     # We want to tets all the different combinations of the search_parameters, therefore,
     # we create a list of the different network configurations.
-    configs_to_test = [{}]
+    configs_to_test = [net_config]
     for param in search_parameters:
         # For all existing configs_to_test, we create one copy for every tested value of
         # this parameter.
@@ -29,11 +25,19 @@ def main(starting_weights, modelname, net_config, evaluation_data, search_parame
                 new_config[parameter] = value
                 new_configs_to_test.append(new_config)
         configs_to_test = new_configs_to_test
+    return configs_to_test
+
+
+@ex.automain
+def main(starting_weights, modelname, net_config, evaluation_data, search_parameters,
+         _run):
+    model = get_model(modelname)
+
+    # Get different configs we will test
+    configs_to_test = parameter_combinations(search_parameters, net_config)
 
     results = []
     for test_parameters in configs_to_test:
-        # Load default values of the network configuration that do not change.
-        test_parameters.update(net_config)
         with model(**test_parameters) as net:
             import_weights_into_network(net, starting_weights)
             measurements, _ = evaluate(net, evaluation_data)
