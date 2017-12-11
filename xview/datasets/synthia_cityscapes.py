@@ -116,7 +116,7 @@ class SynthiaCityscapes(DataBaseclass):
         labels[labels == 12] = 11  # motorcycle -> bicycle
         labels[labels == 13] = 12  # parking spot -> lanemarking
         labels[labels == 14] = 0   # road_work -> void
-        labels[labels == 15] = 9   # traffic light -> traffic sign
+        labels[labels == 15] = 7   # traffic light -> pole
         labels[labels == 16] = 0   # terrain -> void
         labels[labels == 17] = 11  # rider -> bicycle
         labels[labels == 18] = 8   # truck -> car
