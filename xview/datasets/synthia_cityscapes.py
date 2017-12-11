@@ -116,7 +116,7 @@ class SynthiaCityscapes(DataBaseclass):
         labels[labels == 12] = 11  # motorcycle -> bicycle
         labels[labels == 13] = 12  # parking spot -> lanemarking
         labels[labels == 14] = 0   # road_work -> void
-        labels[labels == 15] = 7   # traffic light -> pole
+        labels[labels == 15] = 0   # traffic light -> void
         labels[labels == 16] = 0   # terrain -> void
         labels[labels == 17] = 11  # rider -> bicycle
         labels[labels == 18] = 8   # truck -> car
@@ -124,6 +124,8 @@ class SynthiaCityscapes(DataBaseclass):
         labels[labels == 20] = 0   # train -> void
         labels[labels == 21] = 0   # wall -> void
         labels[labels == 22] = 12  # lanemarking
+
+        labels[labels == 12] = 0   # lanemarking -> void
 
         blob['labels'] = labels
 
