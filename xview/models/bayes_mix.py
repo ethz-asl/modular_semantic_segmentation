@@ -5,7 +5,35 @@ from experiments.utils import ExperimentData
 from .base_model import BaseModel
 from xview.models.adapnet import adapnet
 from xview.models.simple_fcn import encoder, decoder
-from xview.models.simple_mix_fcn import bayes_fusion
+
+
+def bayes_fusion(classifications, confusion_matrices, config):
+    # We will collect all posteriors in this list
+    log_likelihoods = []
+
+    for i_expert in range(len(confusion_matrices)):
+        # compute p(expert output | groudn truth class x)
+        confusion_matrix = confusion_matrices[i_expert]
+        conditional = np.nan_to_num(confusion_matrix / confusion_matrix.sum(0))
+
+        # likelihood is conditional at the row of the output class
+        log_likelihoods.append(tf.log(tf.gather(conditional, classifications[i_expert])))
+
+    uniform_prior = 1.0 / 14
+    data_prior = confusion_matrix.sum(0) / confusion_matrix.sum()
+    if config['class_prior'] == 'uniform':
+        # set a uniform prior for all classes
+        prior = uniform_prior
+    elif config['class_prior'] == 'data':
+        prior = data_prior
+    else:
+        # The class_prior parameter is now considered a weight for the mixture
+        # between both priors.
+        weight = float(config['class_prior'])
+        prior = weight * uniform_prior + (1 - weight) * data_prior
+        prior = prior / prior.sum()
+
+    return tf.reduce_sum(tf.stack(log_likelihoods, axis=0), axis=0) + tf.log(prior)
 
 
 class BayesMix(BaseModel):

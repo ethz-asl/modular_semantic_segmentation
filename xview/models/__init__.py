@@ -1,5 +1,5 @@
 from .simple_fcn import SimpleFCN
-from .simple_mix_fcn import MixFCN as BayesMix
+from .bayes_mix import BayesMix
 from .progressive_fcn import ProgressiveFCN
 from .adapnet import Adapnet
 
