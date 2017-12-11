@@ -13,7 +13,7 @@ def load_data(data_config):
     Load the data specified in the data_config dict.
     """
     dataset_params = {key: val for key, val in data_config.items()
-                      if key not in ['dataset']}
+                      if key not in ['dataset', 'use_trainset']}
     return get_dataset(data_config['dataset'], dataset_params)
 
 
