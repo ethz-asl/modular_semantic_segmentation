@@ -75,6 +75,9 @@ def fit_and_evaluate(net_config, evaluation_data, starting_weights, _run):
         # import weights again has fitting created new graph
         import_weights_into_network(net, starting_weights)
 
+
+        # never evaluate against train data
+        evaluation_data['use_trainset'] = False
         measurements, confusion_matrix = evaluate(net, evaluation_data)
         _run.info['measurements'] = measurements
         _run.info['confusion_matrix'] = confusion_matrix
