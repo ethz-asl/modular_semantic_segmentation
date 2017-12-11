@@ -71,26 +71,28 @@ class DirichletMix(BaseModel):
         # depth channel
         self.test_X_d = tf.placeholder(tf.float32, shape=[None, None, None, 1])
 
-        def test_pipeline(inputs, prefix):
+        def test_pipeline(inputs, modality, reuse=False):
+            prefix = self.config['prefixes'][modality]
+
             if self.config['expert_model'] == 'adapnet':
                 # Now we get the network output of the Adapnet expert.
                 outputs = adapnet(inputs, prefix, self.config['num_units'],
-                                  self.config['num_classes'], reuse=False)
+                                  self.config['num_classes'], reuse=reuse)
             elif self.config['expert_model'] == 'fcn':
                 outputs = encoder(inputs, prefix, self.config['num_units'],
-                                  trainable=False, reuse=False)
+                                  trainable=False, reuse=reuse)
                 outputs.update(decoder(outputs['fused'], prefix,
                                        self.config['num_units'],
                                        self.config['num_classes'], 0.0, trainable=False,
-                                       reuse=False))
+                                       reuse=reuse))
             else:
                 raise UserWarning('ERROR: Expert Model {} not found'
                                   .format(self.config['expert_model']))
             prob = tf.nn.softmax(outputs['score'])
             return prob
 
-        rgb_prob = test_pipeline(self.test_X_rgb, self.config['prefixes']['rgb'])
-        depth_prob = test_pipeline(self.test_X_d, self.config['prefixes']['depth'])
+        rgb_prob = test_pipeline(self.test_X_rgb, 'rgb')
+        depth_prob = test_pipeline(self.test_X_d, 'depth')
 
         self.rgb_prob = rgb_prob / tf.reduce_sum(rgb_prob, axis=3, keep_dims=True)
         self.depth_prob = depth_prob / tf.reduce_sum(depth_prob, axis=3, keep_dims=True)
@@ -173,13 +175,8 @@ class DirichletMix(BaseModel):
         else:
 
             # Build a training pipeline for measuring the differnet classifiers
-            def train_pipeline(inputs, prefix, labels):
-                # Now we get the network output of the FCN expert.
-                outputs = {}
-                outputs.update(encoder(inputs, prefix, self.config, reuse=True))
-                outputs.update(decoder(outputs['fused'], prefix, 0.0, self.config,
-                                       reuse=True))
-                prob = tf.nn.softmax(outputs['score'])
+            def train_pipeline(inputs, modality, labels):
+                prob = test_pipeline(inputs, modality)
 
                 stacked_labels = tf.stack([labels for _ in range(num_classes)], axis=3)
 
