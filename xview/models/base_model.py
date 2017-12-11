@@ -73,7 +73,7 @@ class BaseModel(object):
                 predictions=tf.reshape(self.prediction, [-1]),
                 num_classes=self.config['num_classes'])
 
-            if supports_training:
+            if self.supports_training:
                 self.global_step = tf.Variable(0, trainable=False, name='global_step')
                 update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
                 with tf.control_dependencies(update_ops):

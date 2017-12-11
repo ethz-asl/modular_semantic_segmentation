@@ -224,8 +224,8 @@ class DirichletMix(BaseModel):
 
             # For compliance with base_model, we have to define a prediction outcome.
             # As we do not yet know how to do fusion, we simply take rgb.
-            self.prediction = rgb_label
-            self.fused_score = self.rgb_prob
+            self.prediction = 0
+            self.fused_score = 0
 
         # To understand what"s going on under the hood, we expose a lot of intermediate
         # results for evaluation
