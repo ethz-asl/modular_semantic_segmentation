@@ -91,20 +91,22 @@ class DirichletMix(BaseModel):
             prob = tf.nn.softmax(outputs['score'])
             return prob
 
-        rgb_prob = test_pipeline(self.test_X_rgb, 'rgb')
-        depth_prob = test_pipeline(self.test_X_d, 'depth')
-
-        self.rgb_prob = rgb_prob / tf.reduce_sum(rgb_prob, axis=3, keep_dims=True)
-        self.depth_prob = depth_prob / tf.reduce_sum(depth_prob, axis=3, keep_dims=True)
-
-        rgb_label = tf.argmax(self.rgb_prob, 3, name='rgb_label_2d')
-        depth_label = tf.argmax(self.depth_prob, 3, name='depth_label_2d')
-
-        self.rgb_branch = {'label': rgb_label, 'prob': self.rgb_prob}
-        self.depth_branch = {'label': depth_label, 'prob': self.depth_prob}
-
         # The following part can only be build if measurements are already present.
         if hasattr(self, 'dirichlet_params'):
+
+            rgb_prob = test_pipeline(self.test_X_rgb, 'rgb')
+            depth_prob = test_pipeline(self.test_X_d, 'depth')
+
+            self.rgb_prob = rgb_prob / tf.reduce_sum(rgb_prob, axis=3, keep_dims=True)
+            self.depth_prob = depth_prob / tf.reduce_sum(depth_prob, axis=3, keep_dims=True)
+
+            rgb_label = tf.argmax(self.rgb_prob, 3, name='rgb_label_2d')
+            depth_label = tf.argmax(self.depth_prob, 3, name='depth_label_2d')
+
+            self.rgb_branch = {'label': rgb_label, 'prob': self.rgb_prob}
+            self.depth_branch = {'label': depth_label, 'prob': self.depth_prob}
+
+
             # Create all the Dirichlet distributions conditional on ground-truth class
             rgb_dirichlets = {}
             depth_dirichlets = {}
