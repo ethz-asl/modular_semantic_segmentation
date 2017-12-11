@@ -3,39 +3,13 @@ from experiments.utils import ExperimentData, get_mongo_observer
 from experiments.evaluation import evaluate, import_weights_into_network
 from experiments.different_evaluation_parameters import parameter_combinations
 from xview.datasets import get_dataset
-from xview.models.mix_fcn import MixFCN
+from xview.models.dirichlet_mix import DirichletMix
 from sys import stdout
 import os
 
 
 ex = Experiment()
 ex.observers.append(get_mongo_observer())
-
-
-@ex.config_hook
-def load_model_configuration(config, command_name, logger):
-
-    def get_config_for_experiment(id):
-        training_experiment = ExperimentData(id)
-        return training_experiment.get_record()['config']
-
-    # This hook will produce the following update-dict for the config:
-    cfg_update = {}
-
-    if isinstance(config['starting_weights'], list):
-        # For convenience, we simply record all the configurations of the trainign
-        # experiments.
-        cfg_update['starting_weights'] = []
-        for exp_descriptor in config['starting_weights']:
-            cfg_update['starting_weights'].append({'config': get_config_for_experiment(
-                exp_descriptor['experiment_id'])})
-    else:
-        train_exp_config = get_config_for_experiment(
-            config['starting_weights']['experiment_id'])
-        # First, same as above, capture the information
-        cfg_update['starting_weights'] = {'config': train_exp_config}
-    return cfg_update
-
 
 @ex.command
 def test_parameters(net_config, evaluation_data, starting_weights, search_paramters,
@@ -82,7 +56,7 @@ def fit_and_evaluate(net_config, evaluation_data, starting_weights, _run):
     data."""
     output_dir = '/tmp/mix_fcn'
 
-    with MixFCN(output_dir=output_dir, **net_config) as net:
+    with DirichletMix(output_dir=output_dir, **net_config) as net:
         import_weights_into_network(net, starting_weights)
 
         # Measure the single experts against the trainingset.
@@ -91,11 +65,14 @@ def fit_and_evaluate(net_config, evaluation_data, starting_weights, _run):
         dataset_params['batchsize'] = 1
         # Load the dataset, we expect config to include the arguments
         data = get_dataset(evaluation_data['dataset'], dataset_params)
+        if evaluation_data['use_trainset']:
+            net.fit(data.get_train_data())
+        else:
         #net.fit(data.get_validation_data(num_items=1))
-        net.fit(data.get_validation_data())
+            net.fit(data.get_validation_data()())
 
 
-        # import weights again as fitting created new graph
+        # import weights again has fitting created new graph
         import_weights_into_network(net, starting_weights)
 
         measurements, confusion_matrix = evaluate(net, evaluation_data)
