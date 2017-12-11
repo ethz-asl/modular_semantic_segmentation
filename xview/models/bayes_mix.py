@@ -3,59 +3,30 @@ import numpy as np
 from experiments.utils import ExperimentData
 
 from .base_model import BaseModel
+from xview.models.adapnet import adapnet
 from xview.models.simple_fcn import encoder, decoder
+from xview.models.simple_mix_fcn import bayes_fusion
 
 
-def bayes_fusion(classifications, confusion_matrices, config):
-    # We will collect all posteriors in this list
-    log_likelihoods = []
-
-    for i_expert in range(len(confusion_matrices)):
-        # compute p(expert output | groudn truth class x)
-        confusion_matrix = confusion_matrices[i_expert]
-        conditional = np.nan_to_num(confusion_matrix / confusion_matrix.sum(0))
-
-        # likelihood is conditional at the row of the output class
-        log_likelihoods.append(tf.log(tf.gather(conditional, classifications[i_expert])))
-
-    uniform_prior = 1.0 / 14
-    data_prior = confusion_matrix.sum(0) / confusion_matrix.sum()
-    if config['class_prior'] == 'uniform':
-        # set a uniform prior for all classes
-        prior = uniform_prior
-    elif config['class_prior'] == 'data':
-        prior = data_prior
-    else:
-        # The class_prior parameter is now considered a weight for the mixture
-        # between both priors.
-        weight = float(config['class_prior'])
-        prior = weight * uniform_prior + (1 - weight) * data_prior
-        prior = prior / prior.sum()
-
-    return tf.reduce_sum(tf.stack(log_likelihoods, axis=0), axis=0) + tf.log(prior)
-
-
-class MixFCN(BaseModel):
+class BayesMix(BaseModel):
     """FCN implementation following DA-RNN architecture and using tf.layers."""
 
     def __init__(self, output_dir=None, **config):
         standard_config = {
             'learning_rate': 0.0,
-            'batch_normalization': False
         }
         standard_config.update(config)
 
         # load confusion matrices
-        rgb_confusion = np.load(
-            ExperimentData(config['rgb_eval_experiment'])
-            .get_artifact('confusion_matrix.npy')).astype(np.float32).T
-        depth_confusion = np.load(
-            ExperimentData(config['depth_eval_experiment'])
-            .get_artifact('confusion_matrix.npy')).astype(np.float32).T
+        self.modalities = []
+        self.confusion_matrices = {}
+        for key, exp_id in config['eval_experiments'].values():
+            self.modalities.append(key)
+            self.confusion_matrices[key] = np.load(
+                ExperimentData(exp_id)
+                .get_artifact('confusion_matrix.npy')).astype(np.float32).T
 
-        self.confusion = {'rgb': rgb_confusion, 'depth': depth_confusion}
-
-        BaseModel.__init__(self, 'SimpleMixFCN', output_dir=output_dir,
+        BaseModel.__init__(self, 'BayesMixture', output_dir=output_dir,
                            supports_training=False, **config)
 
     def _build_graph(self):
@@ -70,14 +41,21 @@ class MixFCN(BaseModel):
         # depth channel
         self.test_X_d = tf.placeholder(tf.float32, shape=[None, None, None, 1])
 
-        batch_shape = tf.shape(self.test_X_rgb)
-
         def test_pipeline(inputs, prefix):
-            # Now we get the network output of the FCN expert.
-            outputs = {}
-            outputs.update(encoder(inputs, prefix, self.config, reuse=False))
-            outputs.update(decoder(outputs['fused'], prefix, 0.0, self.config,
-                                   reuse=False))
+            if self.config['expert_model'] == 'adapnet':
+                # Now we get the network output of the Adapnet expert.
+                outputs = adapnet(inputs, prefix, self.config['num_units'],
+                                  self.config['num_classes'], reuse=False)
+            elif self.config['expert_model'] == 'fcn':
+                outputs = encoder(inputs, prefix, self.config['num_units'],
+                                  trainable=False, reuse=False)
+                outputs.update(decoder(outputs['fused'], prefix,
+                                       self.config['num_units'],
+                                       self.config['num_classes'], 0.0, trainable=False,
+                                       reuse=False))
+            else:
+                raise UserWarning('ERROR: Expert Model {} not found'
+                                  .format(self.config['expert_model']))
             prob = tf.nn.softmax(outputs['score'])
             return prob
 
@@ -88,19 +66,10 @@ class MixFCN(BaseModel):
         depth_label = tf.argmax(depth_prob, 3, name='depth_label_2d')
 
         fused_score = bayes_fusion([rgb_label, depth_label],
-                                   [self.confusion[x] for x in ['rgb', 'depth']],
+                                   [self.confusion_matrices[x]
+                                    for x in ['rgb', 'depth']],
                                    self.config)
         label = tf.argmax(fused_score, 3, name='label_2d')
-
-        # Now we test which input data is available and based on this we produce the
-        # corresponding prediction
-        rgb_available = tf.greater(tf.reduce_sum(self.test_X_rgb), 0.0)
-        depth_available = tf.greater(tf.reduce_sum(self.test_X_d), 0.0)
-
-        self.prediction = tf.cond(rgb_available, lambda: tf.cond(depth_available,
-                                                                 lambda: label,
-                                                                 lambda: rgb_label),
-                                  lambda: depth_label)
         self.prediction = label
         # To understand what"s going on under the hood, we expose a lot of intermediate
         # results for evaluation
