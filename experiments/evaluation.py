@@ -96,34 +96,6 @@ ex = Experiment()
 ex.observers.append(get_mongo_observer())
 
 
-@ex.config_hook
-def load_model_configuration(config, command_name, logger):
-    """
-    Hook to load the model-configuration of starting-weights into the experiment info.
-    """
-
-    def get_config_for_experiment(id):
-        training_experiment = ExperimentData(id)
-        return training_experiment.get_record()['config']
-
-    # This hook will produce the following update-dict for the config:
-    cfg_update = {}
-
-    if isinstance(config['starting_weights'], list):
-        # For convenience, we simply record all the configurations of the trainign
-        # experiments.
-        cfg_update['starting_weights'] = []
-        for exp_descriptor in config['starting_weights']:
-            cfg_update['starting_weights'].append({'config': get_config_for_experiment(
-                exp_descriptor['experiment_id'])})
-    else:
-        train_exp_config = get_config_for_experiment(
-            config['starting_weights']['experiment_id'])
-        # First, same as above, capture the information
-        cfg_update['starting_weights'] = {'config': train_exp_config}
-    return cfg_update
-
-
 @ex.command
 def also_load_config(modelname, net_config, evaluation_data, starting_weights, _run):
     """In case of only a single training experiment, we also load the exact network
