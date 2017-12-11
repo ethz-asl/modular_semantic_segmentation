@@ -191,4 +191,11 @@ class FreiburgForest(DataBaseclass):
             if vflip and np.random.choice([0, 1]):
                 for m in self.modalities:
                     blob[m] = np.flip(blob[m], axis=1)
+
+        for modality in self.modalities:
+            # We have to add a dimension for the channels, as there is only one and the
+            # dimension is omitted.
+            if len(blob[modality].shape) < 3 and modality != 'labels':
+                blob[modality] = np.expand_dims(blob[modality], 3)
+
         return blob

@@ -75,6 +75,9 @@ def import_weights_into_network(net, starting_weights, **kwargs):
         kwargs are passed to net.import_weights
     """
     def import_weights_from_description(experiment_description):
+        if experiment_description == 'paul_adapnet':
+            net.import_weights('/media/asl-dalco-105/external_drive/blumh/Adapnet_weights_160000.npz', **kwargs)
+            return
         training_experiment = ExperimentData(experiment_description['experiment_id'])
         if 'filename' not in experiment_description:
             # If no specific file specified, take first found
@@ -121,7 +124,7 @@ def also_load_config(modelname, net_config, evaluation_data, starting_weights, _
         _run.info['confusion_matrix'] = confusion_matrix
 
 
-@ex.automain
+@ex.command
 def all_synthia(modelname, net_config, evaluation_data, starting_weights, _run):
     """Load weigths from training experiments and evaluate network against specified
     data."""
