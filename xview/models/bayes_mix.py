@@ -87,8 +87,8 @@ class BayesMix(BaseModel):
             prob = tf.nn.softmax(outputs['score'])
             return prob
 
-        rgb_prob = test_pipeline(self.test_X_rgb, 'rgb')
-        depth_prob = test_pipeline(self.test_X_d, 'depth')
+        rgb_prob = test_pipeline(self.test_X_rgb, self.config['prefixes']['rgb'])
+        depth_prob = test_pipeline(self.test_X_d, self.config['prefixes']['depth'])
 
         rgb_label = tf.argmax(rgb_prob, 3, name='rgb_label_2d')
         depth_label = tf.argmax(depth_prob, 3, name='depth_label_2d')
