@@ -48,11 +48,10 @@ class BayesMix(BaseModel):
         # load confusion matrices
         self.modalities = []
         self.confusion_matrices = {}
-        for key, exp_id in config['eval_experiments'].values():
+        for key, exp_id in config['eval_experiments'].items():
             self.modalities.append(key)
-            self.confusion_matrices[key] = np.load(
-                ExperimentData(exp_id)
-                .get_artifact('confusion_matrix.npy')).astype(np.float32).T
+            self.confusion_matrices[key] = np.array(
+                ExperimentData(exp_id).get_record()['info']['confusion_matrix']['values']).astype('float32').T
 
         BaseModel.__init__(self, 'BayesMixture', output_dir=output_dir,
                            supports_training=False, **config)
