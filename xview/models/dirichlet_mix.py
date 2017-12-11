@@ -326,7 +326,7 @@ class DirichletMix(BaseModel):
         # Rebuild the graph with the new measurements:
         self._initialize_graph()
 
-    def fit(self, data):
+    def fit(self, data, *args, **kwargs):
         """Measure the encoder outputs against the given groundtruth for the given data.
 
         Args:
