@@ -25,8 +25,7 @@ LABELINFO = {
    8: {'name': 'car', 'color': [64, 0, 128]},
    9: {'name': 'traffic sign', 'color': [192, 128, 128]},
    10: {'name': 'pedestrian', 'color': [64, 64, 0]},
-   11: {'name': 'bicycle', 'color': [0, 128, 192]},
-   12: {'name': 'lanemarking', 'color': [0, 192, 0]}
+   11: {'name': 'bicycle', 'color': [0, 128, 192]}
 }
 
 one_hot_lookup = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
