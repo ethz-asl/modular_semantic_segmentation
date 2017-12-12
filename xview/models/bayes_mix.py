@@ -39,7 +39,7 @@ def bayes_fusion(classifications, confusion_matrices, config):
 class BayesMix(BaseModel):
     """FCN implementation following DA-RNN architecture and using tf.layers."""
 
-    def __init__(self, output_dir=None, **config):
+    def __init__(self, output_dir=None, confusion_matrices=False, **config):
         standard_config = {
             'learning_rate': 0.0,
         }
@@ -47,11 +47,15 @@ class BayesMix(BaseModel):
 
         # load confusion matrices
         self.modalities = []
-        self.confusion_matrices = {}
-        for key, exp_id in config['eval_experiments'].items():
-            self.modalities.append(key)
-            self.confusion_matrices[key] = np.array(
-                ExperimentData(exp_id).get_record()['info']['confusion_matrix']['values']).astype('float32').T
+        if confusion_matrices:
+            self.confusion_matrices = confusion_matrices
+        else:
+            self.confusion_matrices = {}
+            for key, exp_id in config['eval_experiments'].items():
+                self.modalities.append(key)
+                self.confusion_matrices[key] = np.array(
+                    ExperimentData(exp_id).get_record()['info']['confusion_matrix']
+                    ['values']).astype('float32').T
 
         BaseModel.__init__(self, 'BayesMixture', output_dir=output_dir,
                            supports_training=False, **config)
