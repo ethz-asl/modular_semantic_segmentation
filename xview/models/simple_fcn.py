@@ -1,5 +1,6 @@
 import tensorflow as tf
 from tensorflow.python.layers.layers import dropout
+from copy import deepcopy
 
 from .base_model import BaseModel
 from .custom_layers import conv2d, deconv2d, log_softmax, softmax
@@ -7,24 +8,40 @@ from .utils import cross_entropy
 from .vgg16 import vgg16
 
 
-def encoder(inputs, prefix, config, is_training=False, reuse=True):
-    """VGG16 image encoder with fusion of conv4_3 and conv5_3 features."""
+def encoder(inputs, prefix, num_units,  batch_normalization=False, trainable=True,
+            is_training=False, reuse=True):
+    """
+    VGG16 image encoder with fusion of conv4_3 and conv5_3 features.
+
+    Args:
+        inputs: input tensor, in channel-last-format
+        prefix: prefix of any variable name
+        num_units: Number of feature units in the FCN.
+        batch_normalization (bool): Whether or not to perform batch normalization.
+        trainable (bool): If False, variables are not trainable.
+        is_training (bool): Indicator whether batch_normalization should be in training
+            (batch) or testing (continuous) mode.
+        reuse (bool): If true, reuse existing variables of same name
+            (attention with prefix). Will raise error if it cannot find such variables.
+    Returns:
+        dict of (intermediate) layer outputs
+    """
     # These parameters are shared between many/all layers and therefore defined here
     # for convenience.
     params = {'activation': tf.nn.relu, 'padding': 'same', 'reuse': reuse,
-              'batch_normalization': config['batch_normalization'],
-              'training': is_training, 'trainable': config['train_encoder']}
+              'batch_normalization': batch_normalization, 'training': is_training,
+              'trainable': trainable}
 
     vgg16_layers = vgg16(inputs, prefix, params)
 
     # Use 1x1 convolutions on conv4_3 and conv5_3 to define features.
-    score_conv4 = conv2d(vgg16_layers['conv4_3'], config['num_units'], [1, 1],
+    score_conv4 = conv2d(vgg16_layers['conv4_3'], num_units, [1, 1],
                          name='{}_score_conv4'.format(prefix), **params)
-    score_conv5 = conv2d(vgg16_layers['conv5_3'], config['num_units'], [1, 1],
+    score_conv5 = conv2d(vgg16_layers['conv5_3'], num_units, [1, 1],
                          name='{}_score_conv5'.format(prefix), **params)
     # The deconvolution is always set static.
     params['trainable'] = False
-    upscore_conv5 = deconv2d(score_conv5, config['num_units'], [4, 4], strides=[2, 2],
+    upscore_conv5 = deconv2d(score_conv5, num_units, [4, 4], strides=[2, 2],
                              name='{}_upscore_conv5'.format(prefix), **params)
 
     fused = tf.add_n([score_conv4, upscore_conv5], name='{}_add_score'.format(prefix))
@@ -35,26 +52,61 @@ def encoder(inputs, prefix, config, is_training=False, reuse=True):
     return ret
 
 
-def decoder(features, prefix, dropout_rate, config, is_training=False, reuse=True):
-    """FCN feature decoder."""
-    params = {'activation': tf.nn.relu, 'padding': 'same', 'reuse': reuse,
-              'batch_normalization': config['batch_normalization'],
-              'training': is_training}
+def decoder(features, prefix, num_units, num_classes, dropout_rate,
+            batch_normalization=False, trainable=True, is_training=False, reuse=True):
+    """
+    FCN feature decoder.
+
+    Args:
+        features: input tensor, in feature-last format
+        prefix: prefix of any variable name
+        num_units: Number of feature units in the FCN.
+        num_classes: Number of output classes.
+        dropout_rate: Dropout rate for dropout applied on input feature. Set to 0 to
+            disable dropout.
+        batch_normalization (bool): Whether or not to perform batch normalization.
+        trainable (bool): If False, variables are not trainable.
+        is_training (bool): Indicator whether batch_normalization should be in training
+            (batch) or testing (continuous) mode.
+        reuse (bool): If true, reuse existing variables of same name
+            (attention with prefix). Will raise error if it cannot find such variables.
+    Returns:
+        dict of (intermediate) layer outputs
+    """
+    params = {
+        'activation': tf.nn.relu, 'padding': 'same', 'reuse': reuse,
+        'batch_normalization': batch_normalization, 'training': is_training,
+        'trainable': trainable}
+    # Upscore layers are never trainable
+    upscore_params = deepcopy(params)
+    upscore_params['trainable'] = False
 
     features = dropout(features, rate=dropout_rate, training=True,
                        name='{}_dropout'.format(prefix))
     # Upsample the fused features to the output classification size
-    features = deconv2d(features, config['num_units'], [16, 16], strides=[8, 8],
-                        name='{}_upscore'.format(prefix), trainable=False, **params)
-    score = conv2d(features, config['num_classes'], [1, 1],
+    features = deconv2d(features, num_units, [16, 16], strides=[8, 8],
+                        name='{}_upscore'.format(prefix), **upscore_params)
+    score = conv2d(features, num_classes, [1, 1],
                    name='{}_score'.format(prefix), **params)
     return {'upscore': features, 'score': score}
 
 
 class SimpleFCN(BaseModel):
-    """FCN implementation following DA-RNN architecture and using tf.layers."""
+    """FCN implementation following DA-RNN architecture and using tf.layers.
 
-    def __init__(self, output_dir=None, **config):
+    Args:
+        output_dir: if set, will output diagnostics and weights here
+        learning_rate: learning rate of the trainer
+        modality: name of the data modality, which has to be a valid key for the input
+            dataset batch
+        num_channels: channel-size of the input data (3 for RGB, 1 for Depth)
+
+        Other Args see encoder and decoder
+    """
+
+    def __init__(self, prefix, output_dir=None, **config):
+        self.prefix = prefix
+
         standard_config = {
             'train_encoder': True
         }
@@ -96,10 +148,14 @@ class SimpleFCN(BaseModel):
         # be compatible with tf.layers.
         train_x.set_shape([None, None, None, self.config['num_channels']])
 
-        encoder_layers = encoder(train_x, self.config['modality'], self.config,
-                                 is_training=True, reuse=False)
-        decoder_layers = decoder(encoder_layers['fused'], self.config['modality'],
-                                 train_dropout_rate, self.config,
+        encoder_layers = encoder(train_x, self.prefix, self.config['num_units'],
+                                 batch_normalization=self.config['batch_normalization'],
+                                 is_training=True, reuse=False,
+                                 trainable=self.config.get('train_encoder', True))
+        decoder_layers = decoder(encoder_layers['fused'], self.prefix,
+                                 self.config['num_units'], self.config['num_classes'],
+                                 train_dropout_rate,
+                                 batch_normalization=self.config['batch_normalization'],
                                  is_training=True, reuse=False)
         prob = log_softmax(decoder_layers['score'], self.config['num_classes'],
                            name='prob')
@@ -114,15 +170,20 @@ class SimpleFCN(BaseModel):
         self.test_X = tf.placeholder(tf.float32, shape=[None, None, None,
                                                         self.config['num_channels']])
 
-        encoder_layers = encoder(self.test_X, self.config['modality'], self.config)
-        decoder_layers = decoder(encoder_layers['fused'], self.config['modality'],
-                                 tf.constant(0.0), self.config)
+        encoder_layers = encoder(self.test_X, self.prefix, self.config['num_units'],
+                                 batch_normalization=self.config['batch_normalization'],
+                                 is_training=False, reuse=True)
+        decoder_layers = decoder(encoder_layers['fused'], self.prefix,
+                                 self.config['num_units'], self.config['num_classes'],
+                                 tf.constant(0.0),
+                                 batch_normalization=self.config['batch_normalization'],
+                                 is_training=False, reuse=True)
         label = softmax(decoder_layers['score'], self.config['num_classes'],
                         name='prob_normalized')
         self.prediction = tf.argmax(label, 3, name='label_2d')
 
         # Add summaries for some weights
-        variable_names = [x.format(self.config['modality'])
+        variable_names = [x.format(self.prefix)
                           for x in ['{}_score/kernel:0', '{}_score/bias:0']]
         for name in variable_names:
             var = next(v for v in tf.global_variables() if v.name == name)

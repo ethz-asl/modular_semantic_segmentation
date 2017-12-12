@@ -11,10 +11,11 @@ from .dirichlet_fastfit import meanprecision_with_sufficient_statistic, \
 #from .dirichletEstimation import findDirichletPriors
 from .dirichletDifferentiation import findDirichletPriors
 from .base_model import BaseModel
+from xview.models.adapnet import adapnet
 from xview.models.simple_fcn import encoder, decoder
 
 
-def bayes_fusion(probs, conditional_params, uncertainties, prior):
+def dirichlet_uncertainty_fusion(probs, conditional_params, uncertainties, prior):
     num_classes = int(probs[0].shape[3])
 
     # Preparation for uncertainty parameter mixture
@@ -51,13 +52,12 @@ def bayes_fusion(probs, conditional_params, uncertainties, prior):
     return fused_likelihood + tf.log(1e-20 + prior)
 
 
-class MixFCN(BaseModel):
+class DirichletMix(BaseModel):
     """FCN implementation following DA-RNN architecture and using tf.layers."""
 
     def __init__(self, output_dir=None, **config):
         standard_config = {
             'learning_rate': 0.0,
-            'batch_normalization': False
         }
         standard_config.update(config)
 
@@ -89,10 +89,32 @@ class MixFCN(BaseModel):
         # depth channel
         self.test_X_d = tf.placeholder(tf.float32, shape=[None, None, None, 1])
 
-        def test_pipeline(inputs, prefix):
-            def sample_pipeline(inputs, reuse=False):
-                # We apply dropout at the input.
+        def get_prob(inputs, modality, reuse=False):
+            prefix = self.config['prefixes'][modality]
 
+            if self.config['expert_model'] == 'adapnet':
+                # Now we get the network output of the Adapnet expert.
+                outputs = adapnet(inputs, prefix, self.config['num_units'],
+                                  self.config['num_classes'], reuse=reuse)
+            elif self.config['expert_model'] == 'fcn':
+                outputs = encoder(inputs, prefix, self.config['num_units'],
+                                  trainable=False, reuse=reuse)
+                outputs.update(decoder(outputs['fused'], prefix,
+                                       self.config['num_units'],
+                                       self.config['num_classes'], 0.0,
+                                       trainable=False, reuse=reuse))
+            else:
+                raise UserWarning('ERROR: Expert Model {} not found'
+                                  .format(self.config['expert_model']))
+            prob = tf.nn.softmax(outputs['score'])
+            return prob
+
+        def test_pipeline(inputs, modality):
+
+            def sample_pipeline(inputs, modality, reuse=False):
+                prefix = self.config['prefixes'][modality]
+
+                # We apply dropout at the input.
                 # We do want to set whole pixels to 0, therefore out noise-shape has
                 # dim 1 for the channel-space:
                 input_shape = tf.shape(inputs)
@@ -100,9 +122,7 @@ class MixFCN(BaseModel):
                 inputs = dropout(inputs, rate=self.config['dropout_rate'], training=True,
                                  noise_shape=noise_shape,
                                  name='{}_dropout'.format(prefix))
-                features = encoder(inputs, prefix, self.config, reuse=reuse)['fused']
-                score = decoder(features, prefix, 0.0, self.config, reuse=reuse)['score']
-                return tf.nn.softmax(score)
+                return get_prob(inputs, modality, reuse=reuse)
 
             # For classification, we sample distributions with Dropout-Monte-Carlo and
             # fuse output according to variance
@@ -113,26 +133,25 @@ class MixFCN(BaseModel):
             #variance = tf.nn.l2_normalize(variance, 3, epsilon=1e-12)
 
             # We get the label by passign the input without dropout
-            features = encoder(inputs, prefix, self.config, reuse=True)['fused']
-            score = decoder(features, prefix, 0.0, self.config, reuse=True)['score']
-            prob = tf.nn.softmax(score)
-            return prob, variance
-
-        rgb_prob, rgb_var = test_pipeline(self.test_X_rgb, 'rgb')
-        depth_prob, depth_var = test_pipeline(self.test_X_d, 'depth')
-
-        self.rgb_prob = rgb_prob / tf.reduce_sum(rgb_prob, axis=3, keep_dims=True)
-        self.depth_prob = depth_prob / tf.reduce_sum(depth_prob, axis=3, keep_dims=True)
-
-        rgb_label = tf.argmax(self.rgb_prob, 3, name='rgb_label_2d')
-        depth_label = tf.argmax(self.depth_prob, 3, name='depth_label_2d')
-
-        self.rgb_branch = {'label': rgb_label, 'prob': self.rgb_prob, 'var': rgb_var}
-        self.depth_branch = {'label': depth_label, 'prob': self.depth_prob,
-                             'var': depth_var}
+            return get_prob(inputs, modality, reuse=True), variance
 
         # The following part can only be build if measurements are already present.
         if hasattr(self, 'dirichlet_params'):
+
+            rgb_prob, rgb_var = test_pipeline(self.test_X_rgb, 'rgb')
+            depth_prob, depth_var = test_pipeline(self.test_X_d, 'depth')
+
+            self.rgb_prob = rgb_prob / tf.reduce_sum(rgb_prob, axis=3, keep_dims=True)
+            self.depth_prob = depth_prob / tf.reduce_sum(depth_prob, axis=3, keep_dims=True)
+
+            rgb_label = tf.argmax(self.rgb_prob, 3, name='rgb_label_2d')
+            depth_label = tf.argmax(self.depth_prob, 3, name='depth_label_2d')
+
+            self.rgb_branch = {'label': rgb_label, 'prob': self.rgb_prob,
+                               'var': rgb_var}
+            self.depth_branch = {'label': depth_label, 'prob': self.depth_prob,
+                                 'var': depth_var}
+
             # Create all the Dirichlet distributions conditional on ground-truth class
             rgb_dirichlets = {}
             depth_dirichlets = {}
@@ -157,10 +176,10 @@ class MixFCN(BaseModel):
                 prior = weight * uniform_prior + (1 - weight) * data_prior
                 prior = prior / prior.sum()
 
-            self.fused_score = bayes_fusion([self.rgb_prob, self.depth_prob],
-                                            [rgb_dirichlets, depth_dirichlets],
-                                            [rgb_var, depth_var],
-                                            prior)
+            self.fused_score = dirichlet_uncertainty_fusion(
+                [self.rgb_prob, self.depth_prob], [rgb_dirichlets, depth_dirichlets],
+                [rgb_var, depth_var], prior)
+
 
             label = tf.argmax(self.fused_score, 3, name='label_2d')
             self.prediction = label
@@ -200,13 +219,8 @@ class MixFCN(BaseModel):
         else:
 
             # Build a training pipeline for measuring the differnet classifiers
-            def train_pipeline(inputs, prefix, labels):
-                # Now we get the network output of the FCN expert.
-                outputs = {}
-                outputs.update(encoder(inputs, prefix, self.config, reuse=True))
-                outputs.update(decoder(outputs['fused'], prefix, 0.0, self.config,
-                                       reuse=True))
-                prob = tf.nn.softmax(outputs['score'])
+            def train_pipeline(inputs, modality, labels):
+                prob = get_prob(inputs, modality)
 
                 stacked_labels = tf.stack([labels for _ in range(num_classes)], axis=3)
 
@@ -252,8 +266,8 @@ class MixFCN(BaseModel):
 
             # For compliance with base_model, we have to define a prediction outcome.
             # As we do not yet know how to do fusion, we simply take rgb.
-            self.prediction = rgb_label
-            self.fused_score = self.rgb_prob
+            self.prediction = 0
+            self.fused_score = 0
 
         # To understand what"s going on under the hood, we expose a lot of intermediate
         # results for evaluation
@@ -354,7 +368,7 @@ class MixFCN(BaseModel):
         # Rebuild the graph with the new measurements:
         self._initialize_graph()
 
-    def fit(self, data):
+    def fit(self, data, *args, **kwargs):
         """Measure the encoder outputs against the given groundtruth for the given data.
 
         Args:

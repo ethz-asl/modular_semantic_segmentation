@@ -7,9 +7,6 @@ from time import sleep
 from types import GeneratorType
 import tempfile
 
-from xview.models.utils import cross_entropy
-from xview.datasets.wrapper import DataWrapper
-
 
 class BaseModel(object):
     """Structure for network models. Handels basic training and IO operations.
@@ -18,16 +15,13 @@ class BaseModel(object):
         prediction: usually argmax of class_probabilites, i.e. a 2D array of pixelwise
             classification
         close_queue_op: tensorflow op to close the input queue
-    and requries one of the following:
         loss: a scalar value that should be minimized during training
-        _train_step: a method performing one training iteration, taking a merged summary
-            as input and returning the value of this summary and a loss value
     if initialized with supports_training=False:
         only required attribute is self.precition
     """
 
     __metaclass__ = ABCMeta
-    required_attributes = [["loss", "_train_step"], ["prediction"], ["close_queue_op"]]
+    required_attributes = [["loss"], ["prediction"], ["close_queue_op"]]
 
     def __init__(self, name, output_dir=None, supports_training=True, **config):
         """Set configuration and build the model.
@@ -79,15 +73,23 @@ class BaseModel(object):
                 predictions=tf.reshape(self.prediction, [-1]),
                 num_classes=self.config['num_classes'])
 
-            if self.supports_training and not hasattr(self, '_train_step'):
+            if self.supports_training:
                 self.global_step = tf.Variable(0, trainable=False, name='global_step')
-                self.trainer = tf.train.AdagradOptimizer(
-                    self.config['learning_rate']).minimize(
-                        self.loss, global_step=self.global_step)
+                update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+                with tf.control_dependencies(update_ops):
+                    available_trainers = {'adagrad': tf.train.AdagradOptimizer,
+                                          'adam': tf.train.AdamOptimizer,
+                                          'rmsprop': tf.train.RMSPropOptimizer}
+                    self.trainer = available_trainers[self.config['trainer']](
+                        learning_rate=self.config['learning_rate']).minimize(
+                            self.loss, global_step=self.global_step)
 
             self.saver = tf.train.Saver()
 
-            self.sess = tf.Session()
+            # Limit GPU fraction
+            gpu_options = tf.GPUOptions(
+                per_process_gpu_memory_fraction=self.config.get('gpu_fraction', 1))
+            self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
             self.sess.run(tf.global_variables_initializer())
             # There are local variables in the metrics
             self.sess.run(tf.local_variables_initializer())
@@ -125,13 +127,12 @@ class BaseModel(object):
                 print('INFO: Input queue is closed, cannot enqueue any more data.')
 
     def fit(self, data, iterations, output=True, validation_data=None,
-            validation_interval=100):
+            validation_interval=100, additional_eval_data={}):
         """Train the model for given number of iterations.
 
         Args:
             data: A handler inheriting from DataWrapper
             iterations: The number of training iterations
-            output: Boolean specifiying whether to output the loss progress
         """
         if not self.supports_training:
             raise UserWarning(
@@ -155,28 +156,40 @@ class BaseModel(object):
 
             print('INFO: Start training')
             for i in range(iterations):
-                if hasattr(self, '_train_step'):
-                    summary, loss = self._train_step(loss_summary)
-                else:
-                    summary, loss, _ = self.sess.run([loss_summary, self.loss,
-                                                      self.trainer])
+                summary, loss, _ = self.sess.run([loss_summary, self.loss,
+                                                  self.trainer])
                 if self.output_dir is not None:
                     train_writer.add_summary(summary, i)
 
                 # Every validation_interval, we add a summary of validation values
                 if i % validation_interval == 0 and validation_data is not None:
-                    score, _ = self.score(validation_data)
+                    score, _ = self.score(validation_data())
                     summary = self.sess.run(merged_summary)
                     accuracy = tf.Summary(
                         value=[tf.Summary.Value(tag='accuracy',
                                                 simple_value=score['total_accuracy'])])
+                    iou = tf.Summary(
+                        value=[tf.Summary.Value(tag='IoU',
+                                                simple_value=score['mean_IoU'])])
 
                     if output:
-                        print("{:4d}: loss {:.4f}, accuracy {:.2f}".format(
-                            i, loss, score['total_accuracy']))
+                        print("{:4d}: loss {:.4f}, accuracy {:.2f}, IoU {:.2f}".format(
+                            i, loss, score['total_accuracy'], score['mean_IoU']))
                     if self.output_dir is not None:
                         train_writer.add_summary(accuracy, i)
+                        train_writer.add_summary(iou, i)
                         train_writer.add_summary(summary, i)
+
+                    # Add additional summaries if specified
+                    for key, additional_data in additional_eval_data.items():
+                        val = self.score(additional_data())[0]['mean_IoU']
+                        summary = tf.Summary(value=[tf.Summary.Value(tag=key,
+                                                                     simple_value=val)])
+                        train_writer.add_summary(summary, i)
+
+                    if 'abort_at_iou' in self.config:
+                        if score['mean_IoU'] > self.config['abort_at_iou']:
+                            break
 
             coord.request_stop()
             # Before we can close the queue, wait that the enqueue process stopped,
@@ -186,18 +199,23 @@ class BaseModel(object):
             coord.join([t])
             print('INFO: Training finished.')
 
-    def predict(self, data):
+    def predict(self, data, output_prob=False):
         """Perform semantic segmentation on the input data.
 
         Args:
             data: a dictionary {'rgb': <array of shape [num_images, width, height]>
                                 'depth': <array of shape [num_images, width, height]>}
+            output_prob: a boolean indicting if classe probabilities should be outputted
+                instead of the label of the most likely class
         Returns:
-            per-pixel classification of the input image in form
-                <array of shape [num_images, width, height]>
+            per-pixel classification of the input image in form:
+                - <array of shape [num_images, width, height, num_classes]>
+                  if output_prob is specified and true
+                - <array of shape [num_images, width, height]> else
         """
         with self.graph.as_default():
-            return self.sess.run(self.prediction, feed_dict=self._evaluation_food(data))
+            output = self.prob if output_prob else self.prediction
+            return self.sess.run(output, feed_dict=self._evaluation_food(data))
 
     def score(self, data, max_iterations=None):
         """Measure the performance of the model with respect to the given data.
@@ -230,20 +248,22 @@ class BaseModel(object):
         else:
             confusion_matrix = get_confusion_matrix(data)
 
-        # Now we compute several mesures from the confusion matrix
-        measures = {}
-        measures['confusion_matrix'] = confusion_matrix
-        measures['precision'] = np.diag(confusion_matrix) / confusion_matrix.sum(1)
-        measures['recall'] = np.diag(confusion_matrix) / confusion_matrix.sum(0)
-        measures['F1'] = 2 * measures['precision'] * measures['recall'] / \
-            (measures['precision'] + measures['recall'])
-        measures['mean_F1'] = np.nanmean(measures['F1'])
-        measures['total_accuracy'] = np.diag(confusion_matrix).sum() / \
-            confusion_matrix.sum()
-        measures['IU'] = np.diag(confusion_matrix) / \
-            (confusion_matrix.sum(1) + confusion_matrix.sum(0) -
-             np.diag(confusion_matrix))
-        measures['mean_IU'] = np.nanmean(measures['IU'])
+        with np.errstate(divide='ignore', invalid='ignore'):
+            # Now we compute several mesures from the confusion matrix
+            measures = {}
+            measures['confusion_matrix'] = confusion_matrix
+            measures['precision'] = np.diag(confusion_matrix) / confusion_matrix.sum(1)
+            measures['recall'] = np.diag(confusion_matrix) / confusion_matrix.sum(0)
+            measures['F1'] = 2 * measures['precision'] * measures['recall'] / \
+                (measures['precision'] + measures['recall'])
+            measures['mean_F1'] = np.nanmean(measures['F1'])
+            measures['total_accuracy'] = np.diag(confusion_matrix).sum() / \
+                confusion_matrix.sum()
+            measures['IoU'] = np.diag(confusion_matrix) / \
+                (confusion_matrix.sum(1) + confusion_matrix.sum(0) -
+                 np.diag(confusion_matrix))
+            measures['mean_IoU'] = np.nanmean(measures['IoU'])
+
         return measures, confusion_matrix
 
     def load_weights(self, filepath):
@@ -324,7 +344,7 @@ class BaseModel(object):
             for variable in tf.global_variables():
                 name = variable.op.name
                 # Optimizers like Adagrad have their own variables, do not load these
-                if 'grad' in name or 'Adam' in name:
+                if 'grad' in name or 'Adam' in name or 'RMS' in name:
                     continue
                 if name not in weights and translation is not None:
                     name = translation[name]
@@ -332,10 +352,12 @@ class BaseModel(object):
                     if warnings:
                         print('WARNING: {} not found in saved weights'.format(name))
                 else:
-                    if not variable.shape == weights[name].shape:
+                    if chill_mode and not variable.shape == weights[name].shape:
                         if warnings:
                             print('WARNING: wrong shape found for {}, but ignored in '
                                   'chill mode'.format(name))
+                            print('stored shape: ', weights[name].shape,
+                                  'expected shape: ', variable.shape)
                     else:
                         initializers.append(variable.assign(weights[name]))
             self.sess.run(initializers)

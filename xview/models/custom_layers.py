@@ -82,7 +82,7 @@ def deconv2d(inputs,
              activity_regularizer=None,
              trainable=True,
              name=None,
-             reuse=None,
+             reuse=False,
              batch_normalization=True,
              training=False):
     """Deconvolutional Layer. Upsamples a given image with a bilinear interpolation."""
@@ -113,7 +113,7 @@ def deconv2d(inputs,
     if batch_normalization:
         # Apply batch_normalization after convolution and activation only afterwards
         out = _deconv2d(inputs, None)
-        out = tfl.batch_normalization(out, training=training)
+        out = tfl.batch_normalization(out, training=training, name=name, reuse=reuse)
         if activation is not None:
             out = activation(out)
     else:
@@ -128,7 +128,9 @@ def conv2d(inputs, filters, kernel_size, batch_normalization=False, training=Fal
         activation = kwargs.get('activation', None)
         kwargs.update({'activation': None})
         out = tfl.conv2d(inputs, filters, kernel_size, **kwargs)
-        out = tfl.batch_normalization(out, training=training)
+        out = tfl.batch_normalization(out, training=training,
+                                      reuse=kwargs.get('reuse', False),
+                                      name=kwargs.get('name', None))
         if activation is not None:
             out = activation(out)
     else:
@@ -136,8 +138,9 @@ def conv2d(inputs, filters, kernel_size, batch_normalization=False, training=Fal
     return out
 
 
-def adap_conv(inputs, adapter_inputs, filters, kernel_size,
-              trainable=True, name='adap_conv', reuse=False, **kwargs):
+def adap_conv(inputs, adapter_inputs, filters, kernel_size, trainable=True,
+              name='adap_conv', reuse=False, extra_convolution=True,
+              initial_scales=[1, 0.1], initialize_half_zero=False, **kwargs):
     """Adapter of features from convolutional layers for a progressive convolutional
     network.
 
@@ -146,26 +149,72 @@ def adap_conv(inputs, adapter_inputs, filters, kernel_size,
         adapter_inputs: a list of tensors from the previous layers of all other columns
         filters: innermost dimension of the output space
         other parameters as for tf.layers.conv2d
+        extra_convolution: Bool whether or not convolve adapter-inputs with each other
+            before concatenation
+        initialize_half_zero: Bool whether or not to initialize the combination kernel
+            to initially ignore everything but the adapter_inputs
         Any kwargs are passed through to all used conv2d layers.
     Returns:
         Output of the new column, as defined in https://arxiv.org/pdf/1606.04671.pdf,
             equation 2
     """
+    class half_zeros_initializer(Initializer):
+
+        def __init__(self, only_dampened=True):
+            self.only_dampened = only_dampened
+
+        def __call__(self, shape, dtype=None, partition_info=None):
+            """Initializes the first half of the input channel dim to zero, the second
+            half either to identity (if input dim = 2 output dim), otherwise xavier."""
+            kernel_h, kernel_w, dim_in, dim_out = shape[0], shape[1], shape[2], shape[3]
+            if dtype is None:
+                dtype = 'float32'
+
+            assert dim_in % 2 == 0
+
+            zeros = np.zeros((kernel_h, kernel_w, int(dim_in / 2), dim_out))
+
+            def xavier():
+                """Xavier initializer for a kernel with half the input size."""
+                return tf.contrib.layers.xavier_initializer()([kernel_h, kernel_w,
+                                                               int(dim_in / 2), dim_out])
+
+            first_half = (0.1 * xavier()) if self.only_dampened else zeros.copy()
+            if dim_in == (2 * dim_out):
+                second_half = zeros.copy()
+                # find index for kernel center
+                kc_h = int(np.floor(kernel_h / 2.0))
+                kc_w = int(np.floor(kernel_w / 2.0))
+                second_half[kc_h, kc_w, :, :] = np.eye(dim_out)
+            else:
+                second_half = xavier()
+            return tf.cast(tf.concat([first_half, second_half], axis=2), dtype)
+
+        def get_config(self):
+            return {}
+
     with tf.variable_scope(name, reuse=reuse):
         with tf.variable_scope('adapter', reuse=reuse):
             # Each adapter input gets scaled by a trainable factor.
             scale = tf.get_variable('scale', [len(adapter_inputs)],
-                                    initializer=selection_initializer([1, 1e-1, 1e-2]),
+                                    initializer=selection_initializer(initial_scales),
                                     trainable=trainable)
             scaled_adapter_inputs = tf.concat([scale[i] * adapter_inputs[i]
                                                for i in range(len(adapter_inputs))],
                                               axis=-1)
-            adapter = tfl.conv2d(scaled_adapter_inputs, inputs.shape[-1], [1, 1],
-                                 reuse=reuse, name='adapter', trainable=trainable,
-                                 padding='same',
-                                 activation=kwargs.get('activation', None))
-        out = conv2d(tf.concat([inputs, adapter], axis=-1), filters, kernel_size,
-                     name='combination', **kwargs)
+            if extra_convolution:
+                adapter = tfl.conv2d(scaled_adapter_inputs, inputs.shape[-1], [1, 1],
+                                     reuse=reuse, name='adapter', trainable=trainable,
+                                     padding='same',
+                                     activation=kwargs.get('activation', None))
+            else:
+                adapter = scaled_adapter_inputs
+        # Concatenate both parts together.
+        together = tf.concat([inputs, adapter], axis=-1)
+
+        if initialize_half_zero:
+            kwargs['kernel_initializer'] = half_zeros_initializer()
+        out = conv2d(together, filters, kernel_size, name='combination', **kwargs)
     return out
 
 
