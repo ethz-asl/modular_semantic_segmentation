@@ -126,7 +126,7 @@ class UncertaintyMix(BaseModel):
 
             # For classification, we sample distributions with Dropout-Monte-Carlo and
             # fuse output according to variance
-            samples = tf.stack([sample_pipeline(inputs, reuse=(i != 0))
+            samples = tf.stack([sample_pipeline(inputs, modality, reuse=(i != 0))
                                 for i in range(self.config['num_samples'])], axis=4)
 
             mean, variance = tf.nn.moments(samples, [4])
