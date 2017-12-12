@@ -1,4 +1,5 @@
 import tensorflow as tf
+from tensorflow.python.layers.layers import dropout
 import numpy as np
 from experiments.utils import ExperimentData
 from os import path
@@ -14,15 +15,32 @@ from xview.models.adapnet import adapnet
 from xview.models.simple_fcn import encoder, decoder
 
 
-def dirichlet_fusion(probs, conditionals, prior):
-    num_classes = probs[0].shape[3]
+def dirichlet_uncertainty_fusion(probs, conditional_params, uncertainties, prior):
+    num_classes = int(probs[0].shape[3])
+
+    # Preparation for uncertainty parameter mixture
+    standard_params = np.eye(num_classes) + np.ones((num_classes, num_classes))
+    standard_params = tf.reshape(standard_params.astype('float32'),
+                                 [1, 1, 1, num_classes, num_classes])
 
     # We will collect all posteriors in this list
     log_likelihoods = []
-    for i_expert in range(len(conditionals)):
+    for i_expert in range(len(conditional_params)):
+        mix = tf.reduce_mean(uncertainties[i_expert], axis=3) / \
+            tf.reduce_max(uncertainties[i_expert])
+        mix = tf.expand_dims(tf.expand_dims(mix, axis=-1), axis=-1)
+
+        # The exact dirichlet params are given by the uncertainty and the standard params
+        dirichlet_params = conditional_params[i_expert] * (1 - mix) +\
+            mix * standard_params
+
         # compute p(expert output | groudn truth class x)
+        conditionals = [tf.contrib.distributions.Dirichlet(dirichlet_params[..., c],
+                                                           validate_args=False,
+                                                           allow_nan_stats=False)
+                        for c in range(num_classes)]
         log_likelihood = tf.stack(
-            [conditionals[i_expert][c].log_prob(1e-20 + probs[i_expert])
+            [conditionals[c].log_prob(1e-20 + probs[i_expert])
              for c in range(num_classes)], axis=3)
         log_likelihoods.append(log_likelihood)
 
@@ -71,7 +89,7 @@ class DirichletMix(BaseModel):
         # depth channel
         self.test_X_d = tf.placeholder(tf.float32, shape=[None, None, None, 1])
 
-        def test_pipeline(inputs, modality, reuse=False):
+        def get_prob(inputs, modality, reuse=False):
             prefix = self.config['prefixes'][modality]
 
             if self.config['expert_model'] == 'adapnet':
@@ -83,19 +101,45 @@ class DirichletMix(BaseModel):
                                   trainable=False, reuse=reuse)
                 outputs.update(decoder(outputs['fused'], prefix,
                                        self.config['num_units'],
-                                       self.config['num_classes'], 0.0, trainable=False,
-                                       reuse=reuse))
+                                       self.config['num_classes'], 0.0,
+                                       trainable=False, reuse=reuse))
             else:
                 raise UserWarning('ERROR: Expert Model {} not found'
                                   .format(self.config['expert_model']))
             prob = tf.nn.softmax(outputs['score'])
             return prob
 
+        def test_pipeline(inputs, modality):
+
+            def sample_pipeline(inputs, modality, reuse=False):
+                prefix = self.config['prefixes'][modality]
+
+                # We apply dropout at the input.
+                # We do want to set whole pixels to 0, therefore out noise-shape has
+                # dim 1 for the channel-space:
+                input_shape = tf.shape(inputs)
+                noise_shape = [input_shape[0], input_shape[1], input_shape[2], 1]
+                inputs = dropout(inputs, rate=self.config['dropout_rate'], training=True,
+                                 noise_shape=noise_shape,
+                                 name='{}_dropout'.format(prefix))
+                return get_prob(inputs, modality, reuse=reuse)
+
+            # For classification, we sample distributions with Dropout-Monte-Carlo and
+            # fuse output according to variance
+            samples = tf.stack([sample_pipeline(inputs, reuse=(i != 0))
+                                for i in range(self.config['num_samples'])], axis=4)
+
+            mean, variance = tf.nn.moments(samples, [4])
+            #variance = tf.nn.l2_normalize(variance, 3, epsilon=1e-12)
+
+            # We get the label by passign the input without dropout
+            return get_prob(inputs, modality, reuse=True), variance
+
         # The following part can only be build if measurements are already present.
         if hasattr(self, 'dirichlet_params'):
 
-            rgb_prob = test_pipeline(self.test_X_rgb, 'rgb')
-            depth_prob = test_pipeline(self.test_X_d, 'depth')
+            rgb_prob, rgb_var = test_pipeline(self.test_X_rgb, 'rgb')
+            depth_prob, depth_var = test_pipeline(self.test_X_d, 'depth')
 
             self.rgb_prob = rgb_prob / tf.reduce_sum(rgb_prob, axis=3, keep_dims=True)
             self.depth_prob = depth_prob / tf.reduce_sum(depth_prob, axis=3, keep_dims=True)
@@ -103,23 +147,18 @@ class DirichletMix(BaseModel):
             rgb_label = tf.argmax(self.rgb_prob, 3, name='rgb_label_2d')
             depth_label = tf.argmax(self.depth_prob, 3, name='depth_label_2d')
 
-            self.rgb_branch = {'label': rgb_label, 'prob': self.rgb_prob}
-            self.depth_branch = {'label': depth_label, 'prob': self.depth_prob}
-
+            self.rgb_branch = {'label': rgb_label, 'prob': self.rgb_prob,
+                               'var': rgb_var}
+            self.depth_branch = {'label': depth_label, 'prob': self.depth_prob,
+                                 'var': depth_var}
 
             # Create all the Dirichlet distributions conditional on ground-truth class
             rgb_dirichlets = {}
             depth_dirichlets = {}
 
-            sigma = self.config['sigma']
-
             for c in range(self.config['num_classes']):
-                rgb_dirichlets[c] = tf.contrib.distributions.Dirichlet(
-                    sigma * self.dirichlet_params['rgb'][:, c].astype('float32'),
-                    validate_args=False, allow_nan_stats=False)
-                depth_dirichlets[c] = tf.contrib.distributions.Dirichlet(
-                    sigma * self.dirichlet_params['depth'][:, c].astype('float32'),
-                    validate_args=False, allow_nan_stats=False)
+                rgb_dirichlets = self.dirichlet_params['rgb'].astype('float32')
+                depth_dirichlets = self.dirichlet_params['depth'].astype('float32')
 
             # Set the Prior of the classes
             uniform_prior = 1.0 / 14
@@ -137,9 +176,10 @@ class DirichletMix(BaseModel):
                 prior = weight * uniform_prior + (1 - weight) * data_prior
                 prior = prior / prior.sum()
 
-            self.fused_score = dirichlet_fusion([self.rgb_prob, self.depth_prob],
-                                                [rgb_dirichlets, depth_dirichlets],
-                                                prior)
+            self.fused_score = dirichlet_uncertainty_fusion(
+                [self.rgb_prob, self.depth_prob], [rgb_dirichlets, depth_dirichlets],
+                [rgb_var, depth_var], prior)
+
 
             label = tf.argmax(self.fused_score, 3, name='label_2d')
             self.prediction = label
@@ -148,9 +188,10 @@ class DirichletMix(BaseModel):
 
             # compute p(expert output | groudn truth class x)
 
-            rgb_log_likelihood = tf.stack([rgb_dirichlets[c].log_prob(self.rgb_prob)
+            """
+            rgb_log_likelihood = tf.stack([rgb_dirichlets[c].log_prob(1e-20 + self.rgb_prob)
                                            for c in range(num_classes)], axis=3)
-            depth_log_likelihood = tf.stack([depth_dirichlets[c].log_prob(self.depth_prob)
+            depth_log_likelihood = tf.stack([depth_dirichlets[c].log_prob(1e-20 + self.depth_prob)
                                        for c in range(num_classes)], axis=3)
 
             rgb_log_likelihood_u = tf.stack([rgb_dirichlets[c]._log_unnormalized_prob(self.rgb_prob)
@@ -174,11 +215,12 @@ class DirichletMix(BaseModel):
                                       'u_l': depth_log_likelihood_u,
                                       'n_l': depth_log_likelihood_n,
                                       'log_prob': depth_log_prob})
+            """
         else:
 
             # Build a training pipeline for measuring the differnet classifiers
             def train_pipeline(inputs, modality, labels):
-                prob = test_pipeline(inputs, modality)
+                prob = get_prob(inputs, modality)
 
                 stacked_labels = tf.stack([labels for _ in range(num_classes)], axis=3)
 

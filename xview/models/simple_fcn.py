@@ -81,7 +81,7 @@ def decoder(features, prefix, num_units, num_classes, dropout_rate,
     upscore_params = deepcopy(params)
     upscore_params['trainable'] = False
 
-    features = dropout(features, rate=dropout_rate,
+    features = dropout(features, rate=dropout_rate, training=True,
                        name='{}_dropout'.format(prefix))
     # Upsample the fused features to the output classification size
     features = deconv2d(features, num_units, [16, 16], strides=[8, 8],
