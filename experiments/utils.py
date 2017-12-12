@@ -70,3 +70,8 @@ class ExperimentData:
                     step.append(event.step)
                     value.append(measurement.simple_value)
         return Series(value, index=step)
+
+    def get_weights(self):
+        filename = (artifact['name'] for artifact in self.record['artifacts']
+                    if 'weights' in artifact['name']).next()
+        return self.get_artifact(filename)

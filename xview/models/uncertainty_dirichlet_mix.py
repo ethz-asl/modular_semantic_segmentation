@@ -52,7 +52,7 @@ def dirichlet_uncertainty_fusion(probs, conditional_params, uncertainties, prior
     return fused_likelihood + tf.log(1e-20 + prior)
 
 
-class DirichletMix(BaseModel):
+class UncertaintyMix(BaseModel):
     """FCN implementation following DA-RNN architecture and using tf.layers."""
 
     def __init__(self, output_dir=None, **config):
@@ -126,7 +126,7 @@ class DirichletMix(BaseModel):
 
             # For classification, we sample distributions with Dropout-Monte-Carlo and
             # fuse output according to variance
-            samples = tf.stack([sample_pipeline(inputs, reuse=(i != 0))
+            samples = tf.stack([sample_pipeline(inputs, modality, reuse=(i != 0))
                                 for i in range(self.config['num_samples'])], axis=4)
 
             mean, variance = tf.nn.moments(samples, [4])

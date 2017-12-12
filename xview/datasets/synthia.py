@@ -60,7 +60,7 @@ class Synthia(DataBaseclass):
     given sequences."""
 
     def __init__(self, batchsize, seqs=AVAILABLE_SEQUENCES, base_path=SYNTHIA_BASEPATH,
-                 force_preprocessing=False, direction='F'):
+                 force_preprocessing=False, direction='F', **kwargs):
         if not path.exists(base_path):
             message = 'ERROR: Path to SYNTHIA dataset does not exist.'
             print(message)
@@ -96,7 +96,7 @@ class Synthia(DataBaseclass):
 
         # Intitialize Baseclass
         DataBaseclass.__init__(self, trainset, testset, batchsize,
-                               ['rgb', 'depth', 'labels'], LABELINFO)
+                               ['rgb', 'depth', 'labels'], LABELINFO, **kwargs)
         # Save direction
         self.direction = direction
 
