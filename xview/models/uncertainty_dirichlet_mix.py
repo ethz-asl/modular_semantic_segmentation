@@ -52,7 +52,7 @@ def dirichlet_uncertainty_fusion(probs, conditional_params, uncertainties, prior
     return fused_likelihood + tf.log(1e-20 + prior)
 
 
-class DirichletMix(BaseModel):
+class UncertaintyMix(BaseModel):
     """FCN implementation following DA-RNN architecture and using tf.layers."""
 
     def __init__(self, output_dir=None, **config):
