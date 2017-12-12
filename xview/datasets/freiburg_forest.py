@@ -55,6 +55,9 @@ class FreiburgForest(DataBaseclass):
                                ['rgb', 'depth', 'labels', 'evi', 'ndvi', 'nir', 'nrg'],
                                LABELINFO)
 
+        # Hardcode to include at least one obstacle image into the validation set
+        self.validation_set.append({'fileset': 'test', 'image_name': 'b98-2008'})
+
     def _preprocessing(self, image_list):
         modality_paths = {'rgb': 'rgb', 'depth': 'depth_gray', 'labels': 'GT_color',
                           'evi': 'evi_gray', 'ndvi': 'ndvi_float', 'nir': 'nir',
