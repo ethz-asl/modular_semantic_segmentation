@@ -24,11 +24,27 @@ LABELINFO = {
     5: {'name': 'obstacle', 'color': [0, 0, 0]},
 }
 
+# all training images that contain obstacles
+TRAIN_WITH_OBSTACLE = [
+    'b160-646', 'b225-405', 'b125-992', 'b134-087', 'b396-759', 'b165-789', 'b77-9598',
+    'b78-2974', 'b245-904', 'b206-696', 'b211-549', 'b108-392', 'b227-247', 'b147-797',
+    'b137-492', 'b195-161', 'b40-7064', 'b85-745', 'b241-386', 'b314-513', 'b180-695',
+    'b569-315', 'b85-6986', 'b102-798', 'b115-997', 'b219-143', 'b10-495', 'b165-558',
+    'b324-805', 'b234-66', 'b115-397', 'b50-3464', 'b60-607', 'b186-7', 'b24-7604',
+    'b255-259', 'b274-209', 'b175-943', 'b116-903', 'b299-305', 'b205-86', 'b295-671',
+    'b97-1436', 'b154-945', 'b210-107', 'b234-196', 'b130-441', 'b175-664', 'b223-095',
+    'b187-799', 'b121-193', 'b93-1024', 'b293-413', 'b137-653', 'b196-39', 'b109-006',
+    'b94-8062', 'b140-745', 'b96-8946', 'b341-655', 'b190-053', 'b265-606', 'b216-59',
+    'b122-196', 'b148-743', 'b117-844', 'b300-011', 'b154-308', 'b103-494', 'b113-392',
+    'b234-046', 'b131-451', 'b130-487', 'b161-308', 'b90-3976', 'b269-993', 'b138-651',
+    'b240-76', 'b119-3', 'b170-601', 'b204-354', 'b283-407', 'b65-6474', 'b7-60789',
+]
+
 
 class FreiburgForest(DataBaseclass):
 
     def __init__(self, base_path=FOREST_BASEPATH, batchsize=1,
-                 force_preprocessing=False, **config):
+                 force_preprocessing=False, only_obstacles=False, **config):
 
         if not path.exists(base_path):
             message = 'ERROR: Path to SYNTHIA dataset does not exist.'
@@ -44,6 +60,10 @@ class FreiburgForest(DataBaseclass):
             [{'fileset': fileset, 'image_name': filename.split('.')[0].split('_')[0]}
              for filename in listdir(path.join(self.base_path, fileset, 'GT_color'))]
             for fileset in ['train', 'test'])
+
+        if only_obstacles:
+            trainset = [{'fileset': 'train', 'image_name': filename}
+                        for filename in TRAIN_WITH_OBSTACLE]
 
         if force_preprocessing:
             self._preprocessing(trainset + testset)
