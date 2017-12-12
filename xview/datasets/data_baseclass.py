@@ -25,13 +25,15 @@ class DataBaseclass(DataWrapper):
     """A basic, abstract class for splitting data into batches, compliant with DataWrapper
     interface."""
 
-    def __init__(self, trainset, testset, batchsize, modalities, labelinfo):
+    def __init__(self, trainset, testset, batchsize, modalities, labelinfo,
+                 info=False):
         self.testset, self.validation_set = train_test_split(testset, test_size=15)
         self.trainset = trainset
         self.batch_idx = 0
         self.batchsize = batchsize
         self.modalities = modalities
         self.labelinfo = labelinfo
+        self.print_info = info
 
         shuffle(self.trainset)
 
@@ -95,6 +97,8 @@ class DataBaseclass(DataWrapper):
         # modality
         batch = {mod: [] for mod in self.modalities}
         for item in items:
+            if self.print_info:
+                print(item)
             data = self._get_data(training_format=training_format, **item)
             for mod in self.modalities:
                 batch[mod].append(crop_multiple(data[mod]))
