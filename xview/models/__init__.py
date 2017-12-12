@@ -2,6 +2,7 @@ from .simple_fcn import SimpleFCN
 from .bayes_mix import BayesMix
 from .dirichlet_mix import DirichletMix
 from .progressive_fcn import ProgressiveFCN
+from .uncertainty_dirichlet_mix import UncertaintyMix
 from .adapnet import Adapnet
 
 
@@ -12,6 +13,8 @@ def get_model(name):
         return BayesMix
     elif name == 'dirichlet_mix':
         return DirichletMix
+    elif name == 'uncertainty_mix':
+        return UncertaintyMix
     elif name == 'progressive_fcn':
         return ProgressiveFCN
     elif name == 'adapnet':
