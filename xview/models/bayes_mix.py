@@ -67,10 +67,10 @@ class BayesMix(BaseModel):
         # Network for testing / evaluation
         # As before, we define placeholders for the input. These here now can be fed
         # directly, e.g. with a feed_dict created by _evaluation_food
-        # rgb channel
-        self.test_X_rgb = tf.placeholder(tf.float32, shape=[None, None, None, 3])
-        # depth channel
-        self.test_X_d = tf.placeholder(tf.float32, shape=[None, None, None, 1])
+        self.test_placeholders = {}
+        for modality, channels in self.config['num_channels'].items():
+            self.test_placeholders[modality] = tf.placeholder(
+                tf.float32, shape=[None, None, None, channels])
 
         def test_pipeline(inputs, prefix):
             if self.config['expert_model'] == 'adapnet':
@@ -90,47 +90,22 @@ class BayesMix(BaseModel):
             prob = tf.nn.softmax(outputs['score'])
             return prob
 
-        rgb_prob = test_pipeline(self.test_X_rgb, self.config['prefixes']['rgb'])
-        depth_prob = test_pipeline(self.test_X_d, self.config['prefixes']['depth'])
+        probs = {modality: test_pipeline(self.test_placeholders[modality],
+                                         self.config['prefixes'][modality])
+                 for modality in self.modalities}
 
-        rgb_label = tf.argmax(rgb_prob, 3, name='rgb_label_2d')
-        depth_label = tf.argmax(depth_prob, 3, name='depth_label_2d')
-
-        fused_score = bayes_fusion([rgb_label, depth_label],
+        fused_score = bayes_fusion([tf.argmax(prob, 3) for prob in probs.values()],
                                    [self.confusion_matrices[x]
-                                    for x in ['rgb', 'depth']],
+                                    for x in self.modalities],
                                    self.config)
         label = tf.argmax(fused_score, 3, name='label_2d')
         self.prediction = label
-        # To understand what"s going on under the hood, we expose a lot of intermediate
-        # results for evaluation
-        self.rgb_branch = {'label': rgb_label}
-        self.depth_branch = {'label': depth_label}
 
     def _enqueue_batch(self, batch, sess):
         # This model does not support training
         pass
 
     def _evaluation_food(self, data):
-        feed_dict = {self.test_X_rgb: data['rgb'], self.test_X_d: data['depth']}
+        feed_dict = {self.test_placeholders[modality]: data[modality]
+                     for modality in self.modalities}
         return feed_dict
-
-    def prediction_difference(self, data):
-        """Evaluate prediction of the different individual branches for the given data.
-        """
-        keys = self.rgb_branch.keys()
-        with self.graph.as_default():
-            measures = [self.prediction]
-            for tensors in (self.rgb_branch, self.depth_branch):
-                for key in keys:
-                    measures.append(tensors[key])
-            outputs = self.sess.run(measures,
-                                    feed_dict=self._evaluation_food(data))
-        ret = {}
-        ret['fused_label'] = outputs[0]
-        i = 1
-        for prefix in ('rgb', 'depth'):
-            for key in keys:
-                ret['{}_{}'.format(prefix, key)] = outputs[i]
-                i = i + 1
-        return ret
