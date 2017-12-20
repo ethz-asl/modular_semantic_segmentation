@@ -170,8 +170,8 @@ class DirichletMix(BaseModel):
             # killed by the OS
             q = tf.FIFOQueue(2, [tf.float32 for _ in range(len(self.modalities) + 1)])
             queue = [self.train_Y]
-            for placeholder in self.train_placeholders.values():
-                queue.append(placeholder)
+            for modality in self.modalities:
+                queue.append(self.train_placeholders[modality])
             self.enqueue_op = q.enqueue(queue)
             minibatches = q.dequeue()
             training_labels = minibatches[0]
