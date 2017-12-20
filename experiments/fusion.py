@@ -30,13 +30,16 @@ def test_parameters(net_config, evaluation_data, starting_weights, search_paramt
         import_weights_into_network(net, starting_weights)
         sufficient_statistic = net._get_sufficient_statistic(batches)
 
+    data = load_data(evaluation_data)
+    validation_data = data.get_validation_data()
+
     # Not test all the parameters
     results = []
     for test_parameters in configs_to_test:
         with MixFCN(**test_parameters) as net:
             net._get_sufficient_statistic(*sufficient_statistic)
             import_weights_into_network(net, starting_weights)
-            measurements, _ = evaluate(net, evaluation_data)
+            measurements, _ = net.fit(validation_data())
 
             # put results and parameters all in one dict
             result = {}
