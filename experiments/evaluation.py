@@ -107,6 +107,7 @@ def also_load_config(modelname, net_config, evaluation_data, starting_weights, _
 
     model_config = training_experiment.get_record()['config']['net_config']
     model_config.update(net_config)
+    model_config['gpu_fraction'] = 0.94
 
     # save this
     print('Running with net_config:')
