@@ -28,7 +28,7 @@ class DataBaseclass(DataWrapper):
     def __init__(self, trainset, testset, batchsize, modalities, labelinfo,
                  info=False):
         self.testset, self.validation_set = train_test_split(
-            testset, test_size=15, random_state=3172438964825672433737534442)
+            testset, test_size=15, random_state=317243896)
         self.trainset = trainset
         self.batch_idx = 0
         self.batchsize = batchsize
