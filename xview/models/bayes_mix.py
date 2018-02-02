@@ -7,7 +7,23 @@ from xview.models.adapnet import adapnet
 from xview.models.simple_fcn import encoder, decoder
 
 
-def bayes_fusion(classifications, confusion_matrices, config):
+def bayes_fusion(classifications, confusion_matrices, class_prior='data'):
+    """Bayesian fusion of the classifications based on the classifiers confusion
+    matrices.
+
+    Args:
+        classifications: list of batch tensors for every expert in the dimension
+            <batchsize, image dim1, image dim2>
+        confusion_matrices: list of numpy arrays for every expert, same order as
+            classifications. Confusion matrices need dimension <num classes, num classes>
+        class_prior: either a string in ['data', 'uniform'] or a flaot between 0 and 1
+            - 'data': prior is taken from the total class occurance probability in one
+              of the confusion matrices
+            - 'uniform': unform prior is assigned to all classes
+            - float x: weighted sum x * uniform prior + (1-x) * data prior
+    Returns:
+        class score tensor of dimension <batchsize, image dim1, image dim2, num classes>
+    """
     # We will collect all posteriors in this list
     log_likelihoods = []
 
@@ -21,15 +37,15 @@ def bayes_fusion(classifications, confusion_matrices, config):
 
     uniform_prior = 1.0 / 14
     data_prior = confusion_matrix.sum(0) / confusion_matrix.sum()
-    if config['class_prior'] == 'uniform':
+    if class_prior == 'uniform':
         # set a uniform prior for all classes
         prior = uniform_prior
-    elif config['class_prior'] == 'data':
+    elif class_prior == 'data':
         prior = data_prior
     else:
         # The class_prior parameter is now considered a weight for the mixture
         # between both priors.
-        weight = float(config['class_prior'])
+        weight = float(class_prior)
         prior = weight * uniform_prior + (1 - weight) * data_prior
         prior = prior / prior.sum()
 
@@ -37,7 +53,17 @@ def bayes_fusion(classifications, confusion_matrices, config):
 
 
 class BayesMix(BaseModel):
-    """FCN implementation following DA-RNN architecture and using tf.layers."""
+    """Mixture of CNN experts following the 'bayes mix' method.
+
+    Args:
+        num_units: number of intermediate feature neurons in the single expert
+        num_classes: number of output classes
+        confusion_matrices: if set, should contain a list of confusion matrices for both
+            experts
+        eval_experiments: If confusion_matrices is not set, the matrices are loaded from
+            this list of experiment ids
+        expert_model: model o the CNN experts, either 'adapnet' or 'fcn'
+    """
 
     def __init__(self, output_dir=None, confusion_matrices=False, **config):
         standard_config = {
@@ -97,7 +123,7 @@ class BayesMix(BaseModel):
         fused_score = bayes_fusion([tf.argmax(prob, 3) for prob in probs.values()],
                                    [self.confusion_matrices[x]
                                     for x in self.modalities],
-                                   self.config)
+                                   self.config['class_prior'])
         label = tf.argmax(fused_score, 3, name='label_2d')
         self.prediction = label
 
