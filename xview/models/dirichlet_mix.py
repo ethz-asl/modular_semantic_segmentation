@@ -15,6 +15,14 @@ from xview.models.simple_fcn import encoder, decoder
 
 
 def dirichlet_fusion(probs, conditionals, prior):
+    """Bayes mixture by dirichlet conditionals.
+
+    Args:
+        probs: List of output class score tensors from the 2 experts
+        conditionals: list of list of conditional dirichlet distributions, same order
+            as probs
+        prior: 1dim tensor with the prior probability of every class
+    """
     num_classes = probs[0].shape[3]
 
     # We will collect all posteriors in this list
@@ -27,15 +35,26 @@ def dirichlet_fusion(probs, conditionals, prior):
         log_likelihoods.append(log_likelihood)
 
     fused_likelihood = tf.reduce_sum(tf.stack(log_likelihoods, axis=0), axis=0)
-    #fused_likelihood = tf.Print(
-    #    fused_likelihood, [tf.reduce_any(tf.logical_or(tf.is_nan(fused_likelihood),
-    #                                                   tf.is_inf(fused_likelihood)))],
-    #    message='nans or infs in likelihood')
+
     return fused_likelihood + tf.log(1e-20 + prior)
 
 
 class DirichletMix(BaseModel):
-    """FCN implementation following DA-RNN architecture and using tf.layers."""
+    """Mixture of CNN experts following the 'dirichlet mix' method.
+
+    Args:
+        num_units: number of intermediate feature neurons in the single expert
+        num_classes: number of output classes
+        expert_model: model o the CNN experts, either 'adapnet' or 'fcn'
+        class_prior: either a string in ['data', 'uniform'] or a flaot between 0 and 1
+            - 'data': prior is taken from the total class occurance probability in one
+              of the confusion matrices
+            - 'uniform': unform prior is assigned to all classes
+            - float x: weighted sum x * uniform prior + (1-x) * data prior
+        measurement_exp: If set, will load measurement of expert"s conditional output
+            from this experiment.
+            Otherwise you will have to call 'fit' before any inference is possible
+    """
 
     def __init__(self, output_dir=None, **config):
         standard_config = {
