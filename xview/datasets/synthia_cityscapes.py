@@ -142,6 +142,13 @@ class SynthiaCityscapes(DataBaseclass):
         labels[labels == 12] = 0   # lanemarking -> void
 
         blob['labels'] = labels
+
+        if self.config['resize']:
+            blob['rgb'] = cv2.resize(blob['rgb'], (768, 384),
+                                     interpolation=cv2.INTER_LINEAR)
+            for m in ['depth', 'labels']:
+                blob[m] = cv2.resize(blob[m], (768, 384),
+                                     interpolation=cv2.INTER_NEAREST)
         return blob
 
     def _get_data(self, image_name=False, image=False, training_format=True):
@@ -153,13 +160,6 @@ class SynthiaCityscapes(DataBaseclass):
             blob = self._load_data(image_name)
         if image:
             blob = image
-
-        if self.config['resize']:
-            blob['rgb'] = cv2.resize(blob['rgb'], (768, 384),
-                                     interpolation=cv2.INTER_LINEAR)
-            for m in ['depth', 'labels']:
-                blob[m] = cv2.resize(blob[m], (768, 384),
-                                     interpolation=cv2.INTER_NEAREST)
 
         if training_format:
             blob = augmentate(blob,
