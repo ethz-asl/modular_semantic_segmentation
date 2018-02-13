@@ -70,10 +70,9 @@ class SynthiaCityscapes(DataBaseclass):
             with open(path.join(self.basepath, 'train_test_split.json'), 'r') as f:
                 split = json.load(f)
                 trainset = [{'image': self._load_data(filename)}
-                            for filename in split['trainset']]
+                            for filename in tqdm(split['trainset'])]
                 testset = [{'image': self._load_data(filename)}
-                           for filename in split['testset']]
-            print('INFO dataset loaded')
+                           for filename in tqdm(split['testset'])]
         else:
             with open(path.join(self.basepath, 'train_test_split.json'), 'r') as f:
                 split = json.load(f)
