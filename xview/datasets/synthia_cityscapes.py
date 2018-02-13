@@ -66,12 +66,14 @@ class SynthiaCityscapes(DataBaseclass):
         # to the loaded sequences, we now collect all files from all sequence-subsets
         # into one list.
         if in_memory:
+            print('INFO loading dataset into memory')
             with open(path.join(self.basepath, 'train_test_split.json'), 'r') as f:
                 split = json.load(f)
                 trainset = [{'image': self._load_data(filename)}
                             for filename in split['trainset']]
                 testset = [{'image': self._load_data(filename)}
                            for filename in split['testset']]
+            print('INFO dataset loaded')
         else:
             with open(path.join(self.basepath, 'train_test_split.json'), 'r') as f:
                 split = json.load(f)
