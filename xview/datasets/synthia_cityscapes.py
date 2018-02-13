@@ -1,6 +1,7 @@
 import numpy as np
-from os import listdir, path, makedirs
+from os import listdir, path, makedirs, environ
 from tqdm import tqdm
+import tarfile
 import cv2
 import shutil
 import json
@@ -36,7 +37,7 @@ class SynthiaCityscapes(DataBaseclass):
     given sequences."""
 
     def __init__(self, base_path=SYNTHIA_BASEPATH, force_preprocessing=False,
-                 batchsize=1, resize=False, **data_config):
+                 batchsize=1, resize=False, extract=False, **data_config):
 
         config = {
             'augmentation': {
@@ -59,7 +60,15 @@ class SynthiaCityscapes(DataBaseclass):
             print(message)
             raise IOError(1, message, base_path)
 
-        self.basepath = path.join(base_path, 'RAND_CITYSCAPES')
+        if extract:
+            # extract files to local scratch
+            tar = tarfile.open(path.join(base_path, 'RAND_CITYSCAPES.tar.gz'))
+            localtmp = environ['TMPDIR']
+            print("loading compressed data into {}".format(localtmp))
+            tar.extractall(path=localtmp)
+            self.basepath = localtmp
+        else:
+            self.basepath = path.join(base_path, 'RAND_CITYSCAPES')
 
         # Every sequence got their own train/test split during preprocessing. According
         # to the loaded sequences, we now collect all files from all sequence-subsets
