@@ -1,10 +1,13 @@
 """Evaluation of trained models."""
 from sacred import Experiment
-from experiments.utils import ExperimentData, get_mongo_observer, load_data
 from xview.datasets.synthia import AVAILABLE_SEQUENCES
 from xview.models import get_model
+from xview.settings import DATA_BASEPATH
 from sys import stdout
 from copy import deepcopy
+from os import path
+
+from .utils import ExperimentData, get_mongo_observer, load_data
 
 
 def evaluate(net, data_config, print_results=True):
@@ -75,7 +78,8 @@ def import_weights_into_network(net, starting_weights, **kwargs):
     """
     def import_weights_from_description(experiment_description):
         if experiment_description == 'paul_adapnet':
-            net.import_weights('/media/asl-dalco-105/external_drive/blumh/Adapnet_weights_160000.npz', **kwargs)
+            net.import_weights(path.join(DATA_BASEPATH, 'Adapnet_weights_160000.npz'),
+                               **kwargs)
             return
         training_experiment = ExperimentData(experiment_description['experiment_id'])
         if 'filename' not in experiment_description:
