@@ -37,7 +37,7 @@ class SynthiaCityscapes(DataBaseclass):
     given sequences."""
 
     def __init__(self, base_path=SYNTHIA_BASEPATH, force_preprocessing=False,
-                 batchsize=1, resize=False, extract=False, **data_config):
+                 batchsize=1, resize=False, in_memory=False, **data_config):
 
         config = {
             'augmentation': {
@@ -60,20 +60,20 @@ class SynthiaCityscapes(DataBaseclass):
             print(message)
             raise IOError(1, message, base_path)
 
-        if extract:
-            # extract files to local scratch
-            tar = tarfile.open(path.join(base_path, 'RAND_CITYSCAPES.tar.gz'))
-            localtmp = environ['TMPDIR']
-            print("loading compressed data into {}".format(localtmp))
-            tar.extractall(path=localtmp)
-            self.basepath = localtmp
-        else:
-            self.basepath = path.join(base_path, 'RAND_CITYSCAPES')
+        self.basepath = path.join(base_path, 'RAND_CITYSCAPES')
 
         # Every sequence got their own train/test split during preprocessing. According
         # to the loaded sequences, we now collect all files from all sequence-subsets
         # into one list.
-        with open(path.join(self.basepath, 'train_test_split.json'), 'r') as f:
+        if in_memory:
+            with open(path.join(self.basepath, 'train_test_split.json'), 'r') as f:
+                split = json.load(f)
+                trainset = [{'image': self._load_data(filename)}
+                            for filename in split['trainset']]
+                testset = [{'image': self._load_data(filename)}
+                           for filename in split['testset']]
+        else:
+            with open(path.join(self.basepath, 'train_test_split.json'), 'r') as f:
                 split = json.load(f)
                 trainset = [{'image_name': filename} for filename in split['trainset']]
                 testset = [{'image_name': filename} for filename in split['testset']]
@@ -111,8 +111,7 @@ class SynthiaCityscapes(DataBaseclass):
                       'w') as f:
                 json.dump({'trainset': trainset, 'testset': testset}, f)
 
-    def _get_data(self, image_name, training_format=True):
-        """Returns data for one given image number from the specified sequence."""
+    def _load_data(self, image_name):
         filetype = {'rgb': 'png', 'depth': 'png', 'labels': 'npy'}
 
         rgb_filename, depth_filename, groundtruth_filename = (
@@ -142,6 +141,17 @@ class SynthiaCityscapes(DataBaseclass):
         labels[labels == 12] = 0   # lanemarking -> void
 
         blob['labels'] = labels
+        return blob
+
+    def _get_data(self, image_name=False, image=False, training_format=True):
+        """Returns data for one given image number from the specified sequence."""
+        if not image_name and not image:
+            # one of the two should be specified
+            assert False
+        if image_name:
+            blob = self._load_data(image_name)
+        if image:
+            blob = image
 
         if self.config['resize']:
             blob['rgb'] = cv2.resize(blob['rgb'], (768, 384),
