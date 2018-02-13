@@ -4,10 +4,9 @@ from tqdm import tqdm
 import cv2
 import shutil
 import json
-import random
 from sklearn.model_selection import train_test_split
 
-from .data_baseclass import DataBaseclass
+from .data_baseclass import DataBaseclass, augmentate
 from .synthia import SYNTHIA_BASEPATH, \
     one_channel_image_reader
 
@@ -37,18 +36,22 @@ class SynthiaCityscapes(DataBaseclass):
     given sequences."""
 
     def __init__(self, base_path=SYNTHIA_BASEPATH, force_preprocessing=False,
-                 batchsize=1, **data_config):
+                 batchsize=1, resize=False, **data_config):
 
         config = {
             'augmentation': {
-                'crop': 480,
-                'scale': [0.7, 1.5],
-                'vflip': True,
+                'crop': [1, 350],
+                'scale': [.4, 0.7, 1.5],
+                'vflip': .3,
                 'hflip': False,
-                'gamma': [0.3, 2]
+                'gamma': [.4, 0.3, 1.2],
+                'rotate': [.4, -13, 13],
+                'shear': [.3, 0.03, 0.1],
+                'contrast': [.3, 0.5, 1.5]
             }
         }
         config.update(data_config)
+        config.update({'resize': resize})
         self.config = config
 
         if not path.exists(base_path):
@@ -111,7 +114,8 @@ class SynthiaCityscapes(DataBaseclass):
 
         blob = {}
         blob['rgb'] = cv2.imread(rgb_filename)
-        blob['depth'] = cv2.imread(depth_filename, 2)  # flag 2 -> read image with 16bit depth
+        # flag 2 -> read image with 16bit depth
+        blob['depth'] = cv2.imread(depth_filename, 2)
         labels = np.load(groundtruth_filename)
         # Dirty fix for the class mappings as in adapnet paper
         labels[labels == 12] = 11  # motorcycle -> bicycle
@@ -130,43 +134,20 @@ class SynthiaCityscapes(DataBaseclass):
 
         blob['labels'] = labels
 
+        if self.config['resize']:
+            blob['rgb'] = cv2.resize(blob['rgb'], (768, 384),
+                                     interpolation=cv2.INTER_LINEAR)
+            for m in ['depth', 'labels']:
+                blob[m] = cv2.resize(blob[m], (768, 384),
+                                     interpolation=cv2.INTER_NEAREST)
+
         if training_format:
-            scale = self.config['augmentation']['scale']
-            crop = self.config['augmentation']['crop']
-            hflip = self.config['augmentation']['hflip']
-            vflip = self.config['augmentation']['vflip']
-            gamma = self.config['augmentation']['gamma']
-
-            if scale and crop:
-                h, w, _ = blob['rgb'].shape
-                min_scale = crop / float(min(h, w))
-                k = random.uniform(max(min_scale, scale[0]), scale[1])
-                blob['rgb'] = cv2.resize(blob['rgb'], None, fx=k, fy=k)
-                blob['depth'] = cv2.resize(blob['depth'], None, fx=k, fy=k,
-                                           interpolation=cv2.INTER_NEAREST)
-                blob['labels'] = cv2.resize(blob['labels'], None, fx=k, fy=k,
-                                            interpolation=cv2.INTER_NEAREST)
-
-            if crop:
-                h, w, _ = blob['rgb'].shape
-                h_c = random.randint(0, h - crop)
-                w_c = random.randint(0, w - crop)
-                for m in ['rgb', 'depth', 'labels']:
-                    blob[m] = blob[m][h_c:h_c+crop, w_c:w_c+crop, ...]
-
-            if hflip and np.random.choice([0, 1]):
-                for m in ['rgb', 'depth', 'labels']:
-                    blob[m] = np.flip(blob[m], axis=0)
-
-            if vflip and np.random.choice([0, 1]):
-                for m in ['rgb', 'depth', 'labels']:
-                    blob[m] = np.flip(blob[m], axis=1)
-
-            if gamma:
-                k = random.uniform(gamma[0], gamma[1])
-                lut = np.array([((i / 255.0) ** (1/k)) * 255
-                                for i in np.arange(0, 256)]).astype("uint8")
-                blob['rgb'] = lut[blob['rgb']]
+            blob = augmentate(blob,
+                              scale=self.config['augmentation']['scale'],
+                              crop=self.config['augmentation']['crop'],
+                              hflip=self.config['augmentation']['hflip'],
+                              vflip=self.config['augmentation']['vflip'],
+                              gamma=self.config['augmentation']['gamma'])
 
             # Format labels into one-hot
             blob['labels'] = np.array(one_hot_lookup ==
