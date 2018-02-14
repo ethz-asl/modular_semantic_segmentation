@@ -1,13 +1,13 @@
 import numpy as np
-from os import listdir, path, makedirs, environ
+from os import listdir, path, makedirs
 from tqdm import tqdm
-import tarfile
 import cv2
 import shutil
 import json
 from sklearn.model_selection import train_test_split
 
-from .data_baseclass import DataBaseclass, augmentate
+from .data_baseclass import DataBaseclass
+from .augmentation import augmentate
 from .synthia import SYNTHIA_BASEPATH, \
     one_channel_image_reader
 
@@ -41,14 +41,15 @@ class SynthiaCityscapes(DataBaseclass):
 
         config = {
             'augmentation': {
-                'crop': [1, 350],
+                'crop': [1, 240],
                 'scale': [.4, 0.7, 1.5],
                 'vflip': .3,
                 'hflip': False,
                 'gamma': [.4, 0.3, 1.2],
                 'rotate': [.4, -13, 13],
-                'shear': [.3, 0.03, 0.1],
-                'contrast': [.3, 0.5, 1.5]
+                'shear': [0, 0.01, 0.03],
+                'contrast': [.3, 0.5, 1.5],
+                'brightness': [.2, -40, 40]
             }
         }
         config.update(data_config)
@@ -167,7 +168,11 @@ class SynthiaCityscapes(DataBaseclass):
                               crop=self.config['augmentation']['crop'],
                               hflip=self.config['augmentation']['hflip'],
                               vflip=self.config['augmentation']['vflip'],
-                              gamma=self.config['augmentation']['gamma'])
+                              gamma=self.config['augmentation']['gamma'],
+                              contrast=self.config['augmentation']['contrast'],
+                              brightness=self.config['augmentation']['brightness'],
+                              rotate=self.config['augmentation']['rotate'],
+                              shear=self.config['augmentation']['shear'])
 
             # Format labels into one-hot
             blob['labels'] = np.array(one_hot_lookup ==
