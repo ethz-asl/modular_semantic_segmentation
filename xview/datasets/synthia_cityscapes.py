@@ -160,7 +160,9 @@ class SynthiaCityscapes(DataBaseclass):
         if image_name:
             blob = self._load_data(image_name)
         if image:
-            blob = image
+            blob = {}
+            for m in image:
+                blob[m] = image[m].copy()
 
         if training_format:
             blob = augmentate(blob,
