@@ -1,8 +1,8 @@
 from sacred import Experiment
 from experiments.utils import get_mongo_observer, load_data
 from experiments.evaluation import evaluate, import_weights_into_network
-from sacred.utils import TimeoutInterrupt
 from xview.models import get_model
+from xview.settings import EXP_OUT
 import os
 import shutil
 
@@ -18,7 +18,7 @@ def create_directories(run_id, experiment):
     Returns:
         The path to the created output directory you can store your diagnostics to.
     """
-    root = '/tmp/sacred/training'
+    root = EXP_OUT
     # create temporary directory for output files
     if not os.path.exists(root):
         os.makedirs(root)
