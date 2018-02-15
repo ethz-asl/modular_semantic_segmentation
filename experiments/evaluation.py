@@ -79,7 +79,7 @@ def import_weights_into_network(net, starting_weights, **kwargs):
     def import_weights_from_description(experiment_description):
         if experiment_description == 'paul_adapnet':
             net.import_weights(path.join(DATA_BASEPATH, 'Adapnet_weights_160000.npz'),
-                               **kwargs)
+                               chill_mode=True, **kwargs)
             return
         training_experiment = ExperimentData(experiment_description['experiment_id'])
         if 'filename' not in experiment_description:

@@ -1,6 +1,7 @@
 import numpy as np
-from os import listdir, path, makedirs
+from os import listdir, path, makedirs, environ
 from tqdm import tqdm
+import tarfile
 import cv2
 import shutil
 import json
@@ -68,6 +69,12 @@ class SynthiaCityscapes(DataBaseclass):
         # into one list.
         if in_memory:
             print('INFO loading dataset into memory')
+            # first load the tarfile into a closer memory location, then load all the
+            # images
+            tar = tarfile(path.join(SYNTHIA_BASEPATH, 'RAND_CITYSCAPES.tar.gz'))
+            localtmp = environ['TMPDIR']
+            tar.extractall(path=localtmp)
+            self.basepath = localtmp
             with open(path.join(self.basepath, 'train_test_split.json'), 'r') as f:
                 split = json.load(f)
                 trainset = [{'image': self._load_data(filename)}

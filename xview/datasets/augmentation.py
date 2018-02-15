@@ -154,7 +154,7 @@ def augmentate(blob, scale=False, crop=False, hflip=False, vflip=False, gamma=Fa
         do_crop = True
 
     if scale and do_crop and scale[0] > random.random():
-        h, w, _ = blob[modalities[0]].shape
+        h, w = blob[modalities[0]].shape[:2]
         min_scale = crop[1] / float(min(h, w))
         k = random.uniform(max(min_scale, scale[1]), scale[2])
 
@@ -167,14 +167,14 @@ def augmentate(blob, scale=False, crop=False, hflip=False, vflip=False, gamma=Fa
                                  interpolation=cv2.INTER_NEAREST)
 
     if rotate and rotate[0] > random.random():
-        h, w, _ = blob[modalities[0]].shape
+        h, w = blob[modalities[0]].shape[:2]
         deg = np.random.randint(rotate[1], rotate[2])
         rect = largest_rotated_rect(w, h, math.radians(deg))
         for m in modalities:
             blob[m] = crop_around_center(rotate_image(blob[m], deg), *rect)
 
     if shear and do_crop and shear[0] > random.random():
-        h, w, _ = blob[modalities[0]].shape
+        h, w = blob[modalities[0]].shape[:2]
         shear_px = np.random.randint(shear[1] * w, shear[2] * w) \
             * np.random.choice([-1, 1])
         print(shear_px)
@@ -183,7 +183,7 @@ def augmentate(blob, scale=False, crop=False, hflip=False, vflip=False, gamma=Fa
             blob[m] = augmentation.augment_image(blob[m])
 
     if do_crop:
-        h, w, _ = blob[modalities[0]].shape
+        h, w = blob[modalities[0]].shape[:2]
         h_c = random.randint(0, h - crop[1])
         w_c = random.randint(0, w - crop[1])
         for m in modalities:
