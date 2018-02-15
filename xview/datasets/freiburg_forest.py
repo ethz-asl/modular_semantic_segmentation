@@ -70,7 +70,8 @@ class FreiburgForest(DataBaseclass):
                 [{'image': self._load_data(fileset,
                                            filename.split('.')[0].split('_')[0]),
                   'fileset': fileset}
-                 for filename in listdir(path.join(self.base_path, fileset, 'GT_color'))]
+                 for filename in listdir(path.join(self.base_path, fileset,
+                                                   'resized_rgb'))]
                 for fileset in ['train', 'test'])
         else:
             trainset, testset = (
