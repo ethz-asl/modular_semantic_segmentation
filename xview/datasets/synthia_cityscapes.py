@@ -71,9 +71,10 @@ class SynthiaCityscapes(DataBaseclass):
             print('INFO loading dataset into memory')
             # first load the tarfile into a closer memory location, then load all the
             # images
-            tar = tarfile(path.join(SYNTHIA_BASEPATH, 'RAND_CITYSCAPES.tar.gz'))
+            tar = tarfile.open(path.join(SYNTHIA_BASEPATH, 'RAND_CITYSCAPES.tar.gz'))
             localtmp = environ['TMPDIR']
             tar.extractall(path=localtmp)
+            tar.close()
             self.basepath = localtmp
             with open(path.join(self.basepath, 'train_test_split.json'), 'r') as f:
                 split = json.load(f)

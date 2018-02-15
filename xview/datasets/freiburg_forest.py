@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.misc import imread
-from os import listdir, path, mkdir
+from os import listdir, path, mkdir, environ
 from tqdm import tqdm
 from PIL import Image
 from scipy.ndimage import zoom
@@ -60,9 +60,10 @@ class FreiburgForest(DataBaseclass):
             print('INFO loading dataset into memory')
             # first load the tarfile into a closer memory location, then load all the
             # images
-            tar = tarfile(path.join(FOREST_BASEPATH, 'freiburg_forest.tar.gz'))
+            tar = tarfile.open(path.join(FOREST_BASEPATH, 'freiburg_forest.tar.gz'))
             localtmp = environ['TMPDIR']
             tar.extractall(path=localtmp)
+            tar.close()
             self.basepath = localtmp
             trainset, testset = (
                 [{'image': self._load_data(fileset,
