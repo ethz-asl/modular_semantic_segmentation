@@ -5,11 +5,11 @@ from tqdm import tqdm
 from PIL import Image
 from scipy.ndimage import zoom
 import tifffile as tiff
-import random
-import cv2
+import tarfile
 
 from xview.settings import DATA_BASEPATH
-from .data_baseclass import DataBaseclass, crop_multiple
+from .data_baseclass import DataBaseclass
+from .augmentation import augmentate, crop_multiple
 from .synthia import one_channel_image_reader
 
 
@@ -44,7 +44,7 @@ TRAIN_WITH_OBSTACLE = [
 class FreiburgForest(DataBaseclass):
 
     def __init__(self, base_path=FOREST_BASEPATH, batchsize=1,
-                 force_preprocessing=False, only_obstacles=False, **config):
+                 force_preprocessing=False, in_memory=False, **config):
 
         if not path.exists(base_path):
             message = 'ERROR: Path to SYNTHIA dataset does not exist.'
@@ -56,19 +56,44 @@ class FreiburgForest(DataBaseclass):
         # Every sequence got their own train/test split during preprocessing. According
         # to the loaded sequences, we now collect all files from all sequence-subsets
         # into one list.
-        trainset, testset = (
-            [{'fileset': fileset, 'image_name': filename.split('.')[0].split('_')[0]}
-             for filename in listdir(path.join(self.base_path, fileset, 'GT_color'))]
-            for fileset in ['train', 'test'])
-
-        if only_obstacles:
-            trainset = [{'fileset': 'train', 'image_name': filename}
-                        for filename in TRAIN_WITH_OBSTACLE]
+        if in_memory:
+            print('INFO loading dataset into memory')
+            # first load the tarfile into a closer memory location, then load all the
+            # images
+            tar = tarfile(path.join(FOREST_BASEPATH, 'freiburg_forest.tar.gz'))
+            localtmp = environ['TMPDIR']
+            tar.extractall(path=localtmp)
+            self.basepath = localtmp
+            trainset, testset = (
+                [{'image': self._load_data(fileset,
+                                           filename.split('.')[0].split('_')[0]),
+                  'fileset': fileset}
+                 for filename in listdir(path.join(self.base_path, fileset, 'GT_color'))]
+                for fileset in ['train', 'test'])
+        else:
+            trainset, testset = (
+                [{'fileset': fileset, 'image_name': filename.split('.')[0].split('_')[0]}
+                 for filename in listdir(path.join(self.base_path, fileset, 'GT_color'))]
+                for fileset in ['train', 'test'])
 
         if force_preprocessing:
             self._preprocessing(trainset + testset)
 
-        self.config = config
+        default_config = {
+            'augmentation': {
+                'crop': [1, 150],
+                'scale': [.4, 0.7, 1.5],
+                'vflip': .3,
+                'hflip': False,
+                'gamma': [.4, 0.3, 1.2],
+                'rotate': [.4, -13, 13],
+                'shear': False,
+                'contrast': [.3, 0.5, 1.5],
+                'brightness': [.2, -40, 40]
+            }
+        }
+        default_config.update(config)
+        self.config = default_config
 
         # Intitialize Baseclass
         DataBaseclass.__init__(self, trainset, testset, batchsize,
@@ -159,8 +184,7 @@ class FreiburgForest(DataBaseclass):
                         print(image_name, modality)
                         raise ve
 
-    def _get_data(self, fileset, image_name, training_format=True):
-        """Returns data for one given image number from the specified sequence."""
+    def _load_data(self, fileset, image_name):
         blob = {}
         for modality in self.modalities:
             # image_name is in format (train/test)_ID. Therefore, the first part tells
@@ -173,47 +197,31 @@ class FreiburgForest(DataBaseclass):
 
             if modality == 'labels':
                 labels = np.load(filepath)
-
-                if training_format:
-                    # Convert the labels into one-hot encoding.
-                    blob['labels'] = np.array(np.array(list(range(6))) ==
-                                              labels[:, :, None]).astype('int')
-                else:
-                    blob['labels'] = labels
+                blob['labels'] = labels
             else:
-                blob[modality] = imread(filepath)
+                blob[modality] = tiff.imread(filepath)
+        return blob
+
+    def _get_data(self, fileset=False, image_name=False, image=False,
+                  training_format=True):
+        """Returns data for one given image number from the specified sequence."""
+        if not image_name and not image:
+            # one of the two has to be set
+            assert False
+
+        if image:
+            blob = {}
+            for m in image:
+                blob[m] = image[m].copy()
+        else:
+            blob = self._load_data(fileset, image_name)
 
         if training_format:
-            scale = self.config['augmentation']['scale']
-            crop = self.config['augmentation']['crop']
-            hflip = self.config['augmentation']['hflip']
-            vflip = self.config['augmentation']['vflip']
+            blob = augmentate(blob, **self.config['augmentation'])
 
-            if scale and crop:
-                h, w, _ = blob['rgb'].shape
-                min_scale = crop / float(min(h, w))
-                k = random.uniform(max(min_scale, scale[0]), scale[1])
-                for modality in self.modalities:
-                    if modality == 'rgb':
-                        blob['rgb'] = cv2.resize(blob['rgb'], None, fx=k, fy=k)
-                    else:
-                        blob[modality] = cv2.resize(blob[modality], None, fx=k, fy=k,
-                                                    interpolation=cv2.INTER_NEAREST)
-
-            if crop:
-                h, w, _ = blob['rgb'].shape
-                h_c = random.randint(0, h - crop)
-                w_c = random.randint(0, w - crop)
-                for m in self.modalities:
-                    blob[m] = blob[m][h_c:h_c+crop, w_c:w_c+crop, ...]
-
-            if hflip and np.random.choice([0, 1]):
-                for m in self.modalities:
-                    blob[m] = np.flip(blob[m], axis=0)
-
-            if vflip and np.random.choice([0, 1]):
-                for m in self.modalities:
-                    blob[m] = np.flip(blob[m], axis=1)
+            # Convert the labels into one-hot encoding.
+            blob['labels'] = np.array(np.array(list(range(6))) ==
+                                      blob['labels'][:, :, None]).astype('int')
 
         for modality in self.modalities:
             # We have to add a dimension for the channels, as there is only one and the
