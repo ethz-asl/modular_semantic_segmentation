@@ -51,7 +51,6 @@ class FreiburgForest(DataBaseclass):
             print(message)
             raise IOError(1, message, base_path)
 
-        self.base_path = base_path
         self.modalities = ['rgb', 'depth', 'labels', 'evi', 'ndvi', 'nir', 'nrg']
 
         # Every sequence got their own train/test split during preprocessing. According
@@ -65,7 +64,7 @@ class FreiburgForest(DataBaseclass):
             localtmp = environ['TMPDIR']
             tar.extractall(path=localtmp)
             tar.close()
-            self.basepath = localtmp
+            self.base_path = localtmp
             trainset, testset = (
                 [{'image': self._load_data(fileset,
                                            filename.split('.')[0].split('_')[0]),
@@ -74,6 +73,7 @@ class FreiburgForest(DataBaseclass):
                                                    'resized_rgb'))]
                 for fileset in ['train', 'test'])
         else:
+            self.base_path = base_path
             trainset, testset = (
                 [{'fileset': fileset, 'image_name': filename.split('.')[0].split('_')[0]}
                  for filename in listdir(path.join(self.base_path, fileset, 'GT_color'))]
