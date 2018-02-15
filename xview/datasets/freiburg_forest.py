@@ -52,6 +52,7 @@ class FreiburgForest(DataBaseclass):
             raise IOError(1, message, base_path)
 
         self.base_path = base_path
+        self.modalities = ['rgb', 'depth', 'labels', 'evi', 'ndvi', 'nir', 'nrg']
 
         # Every sequence got their own train/test split during preprocessing. According
         # to the loaded sequences, we now collect all files from all sequence-subsets
