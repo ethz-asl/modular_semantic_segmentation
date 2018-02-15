@@ -92,7 +92,7 @@ class SynthiaCityscapes(DataBaseclass):
                                ['rgb', 'depth', 'labels'], LABELINFO)
 
     def _preprocessing(self, sequence):
-        rootpath = path.join(self.base_path, sequence, 'GT')
+        rootpath = path.join(self.basepath, sequence, 'GT')
 
         for direction in ['F', 'B', 'L', 'R']:
             inpath, outpath = (path.join(rootpath, pref,
@@ -112,12 +112,12 @@ class SynthiaCityscapes(DataBaseclass):
                 break
 
         # create train-test-split if necessary
-        if not path.exists(path.join(self.base_path, sequence, 'train_test_split.json')):
+        if not path.exists(path.join(self.basepath, sequence, 'train_test_split.json')):
             print("INFO: Creating Train-Test-Split")
             filenames = [filename.split('.')[0] for filename
                          in listdir(path.join(rootpath, 'LABELS/Stereo_Right/Omni_F'))]
             trainset, testset = train_test_split(filenames, test_size=0.2)
-            with open(path.join(self.base_path, sequence, '/train_test_split.json'),
+            with open(path.join(self.basepath, sequence, '/train_test_split.json'),
                       'w') as f:
                 json.dump({'trainset': trainset, 'testset': testset}, f)
 
