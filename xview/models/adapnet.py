@@ -33,7 +33,7 @@ def block_a(inputs, intermed_filters, filters, strides, is_training, name, reuse
     """
     # Common parameters of the convolutions
     params = {'activation': tf.nn.relu, 'padding': 'same', 'reuse': reuse,
-              'batch_normalization': True, 'training': is_training}
+              'batch_normalization': True, 'training': is_training, 'use_bias': False}
 
     with tf.variable_scope(name):
         stage_1 = conv2d(inputs, intermed_filters, 1, strides=strides, name='stage_1',
@@ -74,7 +74,8 @@ def block_b(inputs, filters_1, filters_2, filters_3, dilation1, dilation2, is_tr
     """
     # Common parameters of the convolutions
     params = {'activation': tf.nn.relu, 'padding': 'same', 'reuse': reuse,
-              'batch_normalization': True, 'training': is_training}
+              'batch_normalization': True, 'training': is_training, 'use_bias': False}
+
     with tf.variable_scope(name):
         stage_1 = conv2d(inputs, filters_1, 1, name='stage_1', **params)
         # As an adaption to regular ResNet, the stage 2 gets split up into 2 atrous
