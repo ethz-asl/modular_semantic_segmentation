@@ -11,7 +11,7 @@ class DataBaseclass(DataWrapper):
     interface."""
 
     def __init__(self, trainset, testset, batchsize, modalities, labelinfo,
-                 info=False):
+                 info=False, single_test_batches=False):
         self.testset, self.validation_set = train_test_split(
             testset, test_size=15, random_state=317243896)
         self.trainset = trainset
@@ -20,6 +20,8 @@ class DataBaseclass(DataWrapper):
         self.modalities = modalities
         self.labelinfo = labelinfo
         self.print_info = info
+        # in case images have different sizes, we want single images per test batch
+        self.single_test_batches = single_test_batches
 
         shuffle(self.trainset)
 
@@ -58,6 +60,8 @@ class DataBaseclass(DataWrapper):
         """Return generator for test-data."""
         if batch_size is None:
             batch_size = self.batchsize
+        if self.single_test_batches:
+            batch_size = 1
         testset_size = len(self.testset)
         for start_idx in range(0, testset_size, batch_size):
             yield self._get_batch((self.testset[idx] for idx
@@ -72,7 +76,8 @@ class DataBaseclass(DataWrapper):
             num_items = len(self.validation_set)
         if batch_size is None:
             batch_size = self.batchsize
-
+        if self.single_test_batches:
+            batch_size = 1
         def data_generator():
             for start_idx in range(0, num_items, batch_size):
                 yield self._get_batch((self.testset[idx] for idx

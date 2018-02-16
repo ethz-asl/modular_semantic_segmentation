@@ -103,7 +103,7 @@ class FreiburgForest(DataBaseclass):
         # Intitialize Baseclass
         DataBaseclass.__init__(self, trainset, testset, batchsize,
                                ['rgb', 'depth', 'labels', 'evi', 'ndvi', 'nir', 'nrg'],
-                               LABELINFO)
+                               LABELINFO, single_test_batches=(not resize))
 
         # Hardcode to include at least one obstacle image into the validation set
         self.validation_set.append({'fileset': 'test', 'image_name': 'b98-2008'})
