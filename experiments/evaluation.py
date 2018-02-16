@@ -81,6 +81,10 @@ def import_weights_into_network(net, starting_weights, **kwargs):
             net.import_weights(path.join(DATA_BASEPATH, 'Adapnet_weights_160000.npz'),
                                chill_mode=True, **kwargs)
             return
+        if experiment_description == 'imagenet_adapnet':
+            net.import_weights(path.join(DATA_BASEPATH, 'resnet50_imagenet.npz'),
+                               chill_mode=True, **kwargs)
+            return
         training_experiment = ExperimentData(experiment_description['experiment_id'])
         if 'filename' not in experiment_description:
             # If no specific file specified, take first found
