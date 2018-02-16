@@ -54,6 +54,23 @@ class FreiburgForest(DataBaseclass):
 
         self.modalities = ['rgb', 'depth', 'labels', 'evi', 'ndvi', 'nir', 'nrg']
 
+        default_config = {
+            'augmentation': {
+                'crop': [1, 150],
+                'scale': [.4, 0.7, 1.5],
+                'vflip': .3,
+                'hflip': False,
+                'gamma': [.4, 0.3, 1.2],
+                'rotate': [.4, -13, 13],
+                'shear': False,
+                'contrast': [.3, 0.5, 1.5],
+                'brightness': [.2, -40, 40]
+            }
+        }
+        default_config.update(config)
+        default_config.update({'resize': resize})
+        self.config = default_config
+
         # Every sequence got their own train/test split during preprocessing. According
         # to the loaded sequences, we now collect all files from all sequence-subsets
         # into one list.
@@ -82,23 +99,6 @@ class FreiburgForest(DataBaseclass):
 
         if force_preprocessing:
             self._preprocessing(trainset + testset)
-
-        default_config = {
-            'augmentation': {
-                'crop': [1, 150],
-                'scale': [.4, 0.7, 1.5],
-                'vflip': .3,
-                'hflip': False,
-                'gamma': [.4, 0.3, 1.2],
-                'rotate': [.4, -13, 13],
-                'shear': False,
-                'contrast': [.3, 0.5, 1.5],
-                'brightness': [.2, -40, 40]
-            }
-        }
-        default_config.update(config)
-        default_config.update({'resize': resize})
-        self.config = default_config
 
         # Intitialize Baseclass
         DataBaseclass.__init__(self, trainset, testset, batchsize,
