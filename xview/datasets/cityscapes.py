@@ -4,7 +4,7 @@ import cv2
 import random
 
 from xview.settings import DATA_BASEPATH
-from .baseclass import DataBaseclass
+from .data_baseclass import DataBaseclass
 
 
 CITYSCAPES_BASEPATH = path.join(DATA_BASEPATH, 'cityscapes')
