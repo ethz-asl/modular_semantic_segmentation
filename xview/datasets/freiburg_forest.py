@@ -6,6 +6,7 @@ from PIL import Image
 from scipy.ndimage import zoom
 import tifffile as tiff
 import tarfile
+import cv2
 
 from xview.settings import DATA_BASEPATH
 from .data_baseclass import DataBaseclass
@@ -43,7 +44,7 @@ TRAIN_WITH_OBSTACLE = [
 
 class FreiburgForest(DataBaseclass):
 
-    def __init__(self, base_path=FOREST_BASEPATH, batchsize=1,
+    def __init__(self, base_path=FOREST_BASEPATH, batchsize=1, resize=True,
                  force_preprocessing=False, in_memory=False, **config):
 
         if not path.exists(base_path):
@@ -96,6 +97,7 @@ class FreiburgForest(DataBaseclass):
             }
         }
         default_config.update(config)
+        default_config.update({'resize': resize})
         self.config = default_config
 
         # Intitialize Baseclass
@@ -123,7 +125,6 @@ class FreiburgForest(DataBaseclass):
                 # We resize every image to a width of 600px (depth is only given in this
                 # format) and then crop the height to 300px. Afterwards, we crop
                 # everything to match a multiple of 16.
-
                 if modality in ['rgb', 'evi', 'nir', 'nrg', 'ndvi']:
                     image = Image.open(filepath)
                     width, height = image.size
@@ -133,6 +134,7 @@ class FreiburgForest(DataBaseclass):
                         resized = np.asarray(resized, dtype='float32')
                     else:
                         resized = np.asarray(resized, dtype='uint8')
+
                 elif modality == 'labels':
                     # LABELS get resized with nearest-neighbour method
                     # The label is encoded as color and has to get looked up in the
@@ -152,6 +154,12 @@ class FreiburgForest(DataBaseclass):
                     labels[color_sum == 0] = 5
 
                     assert np.sum(labels == -1) == 0
+
+                    # first store original size labels
+                    new_filepath = path.join(self.base_path, fileset, 'npy_labels')
+                    if not path.exists(new_filepath):
+                        mkdir(new_filepath)
+                    np.save(path.join(new_filepath, '{}.npy'.format(image_name)), labels)
 
                     zoom_factor = 600.0 / labels.shape[1]
                     resized = zoom(labels, zoom_factor, mode='nearest', order=0)
@@ -188,12 +196,20 @@ class FreiburgForest(DataBaseclass):
                         raise ve
 
     def _load_data(self, fileset, image_name):
+        modality_paths = {'rgb': 'rgb', 'depth': 'depth_gray', 'labels': 'npy_labels',
+                          'evi': 'evi_gray', 'ndvi': 'ndvi_float', 'nir': 'nir',
+                          'nrg': 'nrg'}
+
         blob = {}
-        for modality in self.modalities:
+        for modality, data_path in modality_paths.items():
             # image_name is in format (train/test)_ID. Therefore, the first part tells
             # whether the image is located in train- or test-directory and the second the
             # prefix of the filename.
-            directory = path.join(self.base_path, fileset, 'resized_{}'.format(modality))
+            if self.config['resize']:
+                directory = path.join(self.base_path, fileset,
+                                      'resized_{}'.format(modality))
+            else:
+                directory = path.join(self.base_path, fileset, data_path)
             filename = (file for file in listdir(directory)
                         if file.startswith(image_name)).next()
             filepath = path.join(directory, filename)
@@ -201,6 +217,9 @@ class FreiburgForest(DataBaseclass):
             if modality == 'labels':
                 labels = np.load(filepath)
                 blob['labels'] = labels
+            elif modality in ['nrg', 'depth', 'rgb', 'nir'] and \
+                    not self.config['resize']:
+                blob[modality] = cv2.imread(filepath)
             else:
                 blob[modality] = tiff.imread(filepath)
         return blob
