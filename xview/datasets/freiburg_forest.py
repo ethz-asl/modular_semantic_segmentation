@@ -238,7 +238,6 @@ class FreiburgForest(DataBaseclass):
                 blob[modality] = cv2.imread(filepath)
             else:
                 blob[modality] = tiff.imread(filepath)
-            print(modality, blob[modality].shape)
         return blob
 
     def _get_data(self, fileset=False, image_name=False, image=False,
