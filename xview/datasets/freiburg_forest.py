@@ -104,10 +104,14 @@ class FreiburgForest(DataBaseclass):
         if force_preprocessing:
             self._preprocessing(trainset + testset)
 
+        # don't include depth and nir when resizing is off
+        modalities = ['rgb', 'labels', 'evi', 'ndvi', 'nrg']
+        if resize:
+            modalities.extend(['depth', 'nir'])
+
         # Intitialize Baseclass
-        DataBaseclass.__init__(self, trainset, testset, batchsize,
-                               ['rgb', 'depth', 'labels', 'evi', 'ndvi', 'nir', 'nrg'],
-                               LABELINFO, single_test_batches=(not resize))
+        DataBaseclass.__init__(self, trainset, testset, batchsize, modalities, LABELINFO,
+                               single_test_batches=(not resize))
 
         # Hardcode to include at least one obstacle image into the validation set
         if in_memory:
@@ -217,6 +221,10 @@ class FreiburgForest(DataBaseclass):
                 directory = path.join(self.base_path, fileset,
                                       'resized_{}'.format(modality))
             else:
+                if modality in ['depth', 'nir']:
+                    # these modalities are ignored if not resizing as the images have
+                    # different dimensions compared to all others
+                    continue
                 directory = path.join(self.base_path, fileset, data_path)
             filename = (file for file in listdir(directory)
                         if file.startswith(image_name)).next()
@@ -230,8 +238,7 @@ class FreiburgForest(DataBaseclass):
                 blob[modality] = cv2.imread(filepath)
             else:
                 blob[modality] = tiff.imread(filepath)
-            if modality == 'depth':
-                    print(blob[modality].shape)
+            print(modality, blob[modality].shape)
         return blob
 
     def _get_data(self, fileset=False, image_name=False, image=False,
