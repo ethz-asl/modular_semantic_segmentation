@@ -63,7 +63,7 @@ def evaluate_on_all_synthia_seqs(net, data_config):
     return all_measurements
 
 
-def import_weights_into_network(net, starting_weights, **kwargs):
+def import_weights_into_network(net, starting_weights):
     """Based on either a list of descriptions of training experiments or one description,
     load the weights produced by these trainigns into the given network.
 
@@ -76,14 +76,14 @@ def import_weights_into_network(net, starting_weights, **kwargs):
             if list: a list of dicts where each dict will be evaluated as above
         kwargs are passed to net.import_weights
     """
-    def import_weights_from_description(experiment_description):
+    def import_weights_from_description(experiment_description, prefix=False):
         if experiment_description == 'paul_adapnet':
             net.import_weights(path.join(DATA_BASEPATH, 'Adapnet_weights_160000.npz'),
-                               chill_mode=True, **kwargs)
+                               chill_mode=True, translate_prefix=prefix)
             return
         if experiment_description == 'imagenet_adapnet':
             net.import_weights(path.join(DATA_BASEPATH, 'resnet50_imagenet.npz'),
-                               chill_mode=True, **kwargs)
+                               chill_mode=True, translate_prefix=prefix)
             return
         training_experiment = ExperimentData(experiment_description['experiment_id'])
         if 'filename' not in experiment_description:
@@ -93,11 +93,15 @@ def import_weights_into_network(net, starting_weights, **kwargs):
                         if 'weights' in artifact['name']).next()
         else:
             filename = experiment_description['filename']
-        net.import_weights(training_experiment.get_artifact(filename), **kwargs)
+        net.import_weights(training_experiment.get_artifact(filename),
+                           translate_prefix=prefix)
 
     if isinstance(starting_weights, list):
         for experiment_description in starting_weights:
             import_weights_from_description(experiment_description)
+    elif isinstance(starting_weights, dict):
+        for prefix, experiment_description in starting_weights.items():
+            import_weights_from_description(experiment_description, prefix=prefix)
     else:
         import_weights_from_description(starting_weights)
 

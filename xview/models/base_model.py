@@ -326,28 +326,37 @@ class BaseModel(object):
             print('INFO: Weights saved to {}'.format(output_path))
             return output_path
 
-    def import_weights(self, filepath, translation=None, chill_mode=False,
+    def import_weights(self, filepath, translate_prefix=False, chill_mode=False,
                        warnings=True):
         """Import weights given by a numpy file. Variables are assigned to arrays which's
         key matches the variable name.
 
         Args:
             filepath: Full path to the file containing the weights.
-            translation: Dictionary mapping variables in the network on differently named
-                keys in the file.
+            translate_prefix: If set, will translate weights with a different prefix
+                into the given prefix
             chill_mode: If True, ignores variables that do not match in shape and leaves
                 them unassigned
         """
         with self.graph.as_default():
             initializers = []
             weights = np.load(filepath, mmap_mode='w+')
+            import_prefix = weights.keys()[0].split('/')[0]
+
+            def translate_name(name):
+                """May translate the prefix of the name according to settings."""
+                if not translate_prefix:
+                    return name
+                splitted = name.split('/')
+                # exchange prefix
+                splitted[0] = import_prefix
+                return '/'.join(splitted)
+
             for variable in tf.global_variables():
-                name = variable.op.name
+                name = translate_name(variable.op.name)
                 # Optimizers like Adagrad have their own variables, do not load these
                 if 'grad' in name or 'Adam' in name or 'RMS' in name:
                     continue
-                if name not in weights and translation is not None:
-                    name = translation[name]
                 if name not in weights:
                     if warnings:
                         print('WARNING: {} not found in saved weights'.format(name))
