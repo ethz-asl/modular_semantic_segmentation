@@ -45,7 +45,8 @@ TRAIN_WITH_OBSTACLE = [
 class FreiburgForest(DataBaseclass):
 
     def __init__(self, base_path=FOREST_BASEPATH, batchsize=1, resize=True,
-                 force_preprocessing=False, in_memory=False, **config):
+                 force_preprocessing=False, in_memory=False, only_obstacle=False,
+                 **config):
 
         if not path.exists(base_path):
             message = 'ERROR: Path to SYNTHIA dataset does not exist.'
@@ -57,11 +58,11 @@ class FreiburgForest(DataBaseclass):
         default_config = {
             'augmentation': {
                 'crop': [1, 150],
-                'scale': [.4, 0.7, 1.5],
+                'scale': [.4, 1, 1.5],
                 'vflip': .3,
                 'hflip': False,
                 'gamma': [.4, 0.3, 1.2],
-                'rotate': [.4, -13, 13],
+                'rotate': False,
                 'shear': False,
                 'contrast': [.3, 0.5, 1.5],
                 'brightness': [.2, -40, 40]
@@ -74,6 +75,14 @@ class FreiburgForest(DataBaseclass):
         # Every sequence got their own train/test split during preprocessing. According
         # to the loaded sequences, we now collect all files from all sequence-subsets
         # into one list.
+        def get_filenames(fileset):
+            files = [filename.split('.')[0].split('_')[0]
+                     for filename in listdir(path.join(self.base_path, fileset,
+                                                       'resized_rgb'))]
+            if only_obstacle and fileset == 'train':
+                files = TRAIN_WITH_OBSTACLE
+            return files
+
         if in_memory:
             print('INFO loading dataset into memory')
             # first load the tarfile into a closer memory location, then load all the
@@ -84,18 +93,13 @@ class FreiburgForest(DataBaseclass):
             tar.close()
             self.base_path = localtmp
             trainset, testset = (
-                [{'image': self._load_data(fileset,
-                                           filename.split('.')[0].split('_')[0]),
-                  'fileset': fileset}
-                 for filename in listdir(path.join(self.base_path, fileset,
-                                                   'resized_rgb'))]
-                for fileset in ['train', 'test'])
+                [{'image': self._load_data(fileset, filename), 'fileset': fileset}
+                 for filename in get_filenames(fileset)] for fileset in ['train', 'test'])
         else:
             self.base_path = base_path
             trainset, testset = (
-                [{'fileset': fileset, 'image_name': filename.split('.')[0].split('_')[0]}
-                 for filename in listdir(path.join(self.base_path, fileset, 'GT_color'))]
-                for fileset in ['train', 'test'])
+                [{'image_name': filename, 'fileset': fileset}
+                 for filename in get_filenames(fileset)] for fileset in ['train', 'test'])
 
         if force_preprocessing:
             self._preprocessing(trainset + testset)
@@ -106,7 +110,11 @@ class FreiburgForest(DataBaseclass):
                                LABELINFO, single_test_batches=(not resize))
 
         # Hardcode to include at least one obstacle image into the validation set
-        self.validation_set.append({'fileset': 'test', 'image_name': 'b98-2008'})
+        if in_memory:
+            self.validation_set.append({'fileset': 'test',
+                                       'image': self._load_data('test', 'b98-2008')})
+        else:
+            self.validation_set.append({'fileset': 'test', 'image_name': 'b98-2008'})
 
     def _preprocessing(self, image_list):
         modality_paths = {'rgb': 'rgb', 'depth': 'depth_gray', 'labels': 'GT_color',
@@ -222,6 +230,8 @@ class FreiburgForest(DataBaseclass):
                 blob[modality] = cv2.imread(filepath)
             else:
                 blob[modality] = tiff.imread(filepath)
+            if modality == 'depth':
+                    print(blob[modality].shape)
         return blob
 
     def _get_data(self, fileset=False, image_name=False, image=False,
