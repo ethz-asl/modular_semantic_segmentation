@@ -35,7 +35,7 @@ def evaluate(net, data_config, print_results=True):
 
     if print_results:
         print('Evaluated network on {}:'.format(data_config['dataset']))
-        print('total accuracy {:.2f} mean F1 {:.2f} IoU {:.2f}'.format(
+        print('total accuracy {:.3f} mean F1 {:.3f} IoU {:.3f}'.format(
             measures['total_accuracy'], measures['mean_F1'], measures['mean_IoU']))
         for label in data.labelinfo:
             print("{:>15}: {:.2f} precision, {:.2f} recall, {:.2f} IoU".format(
@@ -85,14 +85,12 @@ def import_weights_into_network(net, starting_weights):
             net.import_weights(path.join(DATA_BASEPATH, 'resnet50_imagenet.npz'),
                                chill_mode=True, translate_prefix=prefix)
             return
-        training_experiment = ExperimentData(experiment_description['experiment_id'])
-        if 'filename' not in experiment_description:
-            # If no specific file specified, take first found
-            filename = (artifact['name']
-                        for artifact in training_experiment.get_record()['artifacts']
-                        if 'weights' in artifact['name']).next()
-        else:
-            filename = experiment_description['filename']
+        # description is an experiment id
+        training_experiment = ExperimentData(experiment_description)
+        # If no specific file specified, take first found
+        filename = (artifact['name']
+                    for artifact in training_experiment.get_record()['artifacts']
+                    if 'weights' in artifact['name']).next()
         net.import_weights(training_experiment.get_artifact(filename),
                            translate_prefix=prefix)
 
