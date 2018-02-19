@@ -1,31 +1,47 @@
 import numpy as np
-from os import listdir, path
+from os import listdir, path, environ
 import cv2
-import random
+import tarfile
 
 from xview.settings import DATA_BASEPATH
 from .data_baseclass import DataBaseclass
+from .augmentation import augmentate
 
 
 CITYSCAPES_BASEPATH = path.join(DATA_BASEPATH, 'cityscapes')
 
+CITIES = ['aachen', 'bremen', 'darmstadt', 'erfurt', 'hanover', 'krefeld', 'strasbourg',
+          'tubingen', 'weimar', 'bochum', 'cologne', 'dusseldorf', 'hamburg', 'jena',
+          'monchengladbach', 'stuttgart', 'ulm', 'zurich']
+
 
 class Cityscapes(DataBaseclass):
 
-    def __init__(self, base_path=CITYSCAPES_BASEPATH, **data_config):
+    def __init__(self, base_path=CITYSCAPES_BASEPATH, batchsize=1, in_memory=False,
+                 cities=CITIES, **data_config):
 
         config = {
-            'batchsize': 1,
-            'preprocessing': {'type': 'offline'}
+            'augmentation': {
+                'crop': [1, 240],
+                'scale': [.4, 1, 1.5],
+                'vflip': .3,
+                'hflip': False,
+                'gamma': [.4, 0.3, 1.2],
+                'rotate': False,
+                'shear': False,
+                'contrast': [.3, 0.5, 1.5],
+                'brightness': [.2, -40, 40]
+            },
+            'resize': False
         }
         config.update(data_config)
+        self.config = config
 
         if not path.exists(base_path):
             message = 'ERROR: Path to CITYSCAPES dataset does not exist.'
             print(message)
             raise IOError(1, message, base_path)
 
-        self.base_path = base_path
         self.modality_paths = {
                 'rgb': 'leftImg8bit_trainvaltest/leftImg8bit',
                 'labels': 'gtFine_trainvaltest/gtFine',
@@ -37,18 +53,39 @@ class Cityscapes(DataBaseclass):
                 'depth': 'disparity'
         }
 
+        # load training and test sets
         # Generate train/test splits
-        trainset = []
-        testset = []
-        for s, set_name in zip([trainset, testset], ['train', 'val']):
-            base_dir = path.join(base_path, self.modality_paths['rgb'], set_name)
+        def get_filenames(fileset, ):
+            filenames = []
+            base_dir = path.join(self.base_path, self.modality_paths['rgb'], fileset)
             for city in listdir(base_dir):
+                # do only include specified cities into trainset
+                if fileset == 'train' and city not in cities:
+                    continue
+
                 search_path = path.join(base_dir, city)
-                s.extend(
+                filenames.extend(
                     [{'image_name': '_'.join(path.splitext(n)[0].split('_')[:3]),
-                      'image_path': path.join(set_name, city)}
-                     for n in listdir(search_path)]
-                )
+                      'image_path': path.join(fileset, city)}
+                     for n in listdir(search_path)])
+            return filenames
+
+        if in_memory:
+            print('INFO loading dataset into memory')
+            # first load the tarfile into a closer memory location, then load all the
+            # images
+            tar = tarfile.open(path.join(base_path, 'freiburg_forest.tar.gz'))
+            localtmp = environ['TMPDIR']
+            tar.extractall(path=localtmp)
+            tar.close()
+            self.base_path = localtmp
+            trainset, testset = (
+                [{'image': self._load_data(i['filename'], i['filepath'])}
+                 for i in get_filenames(fileset)] for fileset in ['train', 'test'])
+        else:
+            self.base_path = base_path
+            trainset = get_filenames('train')
+            testset = get_filenames('test')
 
         original_labelinfo = {
                 0: {'name': 'unlabeled', 'mapping': 'void'},
@@ -108,26 +145,20 @@ class Cityscapes(DataBaseclass):
                              for _, k in original_labelinfo.iteritems()]
 
         # Intitialize Baseclass
-        DataBaseclass.__init__(self, trainset, testset, ['rgb', 'depth', 'labels'],
-                               labelinfo, **config)
+        DataBaseclass.__init__(self, trainset, testset, batchsize,
+                               ['rgb', 'depth', 'labels'], labelinfo)
 
     @property
     def one_hot_lookup(self):
         return np.arange(len(self.labelinfo), dtype=np.int)
 
-    def _get_data(self, image_name, image_path, one_hot=True, preproc_type=-1):
-        """Returns data for one given image number from the specified sequence."""
-        preproc_type = self.config['preprocessing']['type'] \
-            if preproc_type is -1 else preproc_type
-        filetype = {'rgb': 'png', 'depth': 'png', 'labels': 'png'}
-
+    def _load_data(self, image_name, image_path):
         rgb_filename, depth_filename, labels_filename = (
             path.join(self.base_path,
                       self.modality_paths[m],
                       image_path,
-                      '{}_{}.{}'.format(image_name,
-                                        self.modality_suffixes[m],
-                                        filetype[m]))
+                      '{}_{}.png'.format(image_name,
+                                         self.modality_suffixes[m]))
             for m in ['rgb', 'depth', 'labels']
         )
 
@@ -135,57 +166,37 @@ class Cityscapes(DataBaseclass):
         blob['rgb'] = cv2.imread(rgb_filename)
         blob['depth'] = cv2.imread(depth_filename, cv2.IMREAD_ANYDEPTH)
         blob['labels'] = cv2.imread(labels_filename, cv2.IMREAD_ANYDEPTH)
-
-        if preproc_type == 'online':
-            scale = self.config['preprocessing'].get('scale')
-            crop  = self.config['preprocessing'].get('crop')
-            hflip = self.config['preprocessing'].get('hflip')
-            vflip = self.config['preprocessing'].get('vflip')
-            gamma = self.config['preprocessing'].get('gamma')
-
-            if scale and crop:
-                h, w, _ = blob['rgb'].shape
-                min_scale = crop / float(min(h, w))
-                k = random.uniform(max(min_scale, scale[0]), scale[1])
-                blob['rgb'] = cv2.resize(blob['rgb'], None, fx=k, fy=k)
-                blob['depth'] = cv2.resize(blob['depth'], None, fx=k, fy=k,
-                                           interpolation=cv2.INTER_NEAREST)
-                blob['labels'] = cv2.resize(blob['labels'], None, fx=k, fy=k,
-                                            interpolation=cv2.INTER_NEAREST)
-
-            if crop:
-                h, w, _ = blob['rgb'].shape
-                h_c = random.randint(0, h - crop)
-                w_c = random.randint(0, w - crop)
-                for m in ['rgb', 'depth', 'labels']:
-                    blob[m] = blob[m][h_c:h_c+crop, w_c:w_c+crop, ...]
-
-            if hflip and np.random.choice([0, 1]):
-                for m in ['rgb', 'depth', 'labels']:
-                    blob[m] = np.flip(blob[m], axis=0)
-
-            if vflip and np.random.choice([0, 1]):
-                for m in ['rgb', 'depth', 'labels']:
-                    blob[m] = np.flip(blob[m], axis=1)
-
-            if gamma:
-                k = random.uniform(gamma[0], gamma[1])
-                lut = np.array([((i / 255.0) ** (1/k)) * 255
-                                for i in np.arange(0, 256)]).astype("uint8")
-                blob['rgb'] = lut[blob['rgb']]
-
-        force_multiple = self.config['preprocessing'].get('force_multiple')
-        if force_multiple:
-            h, w, _ = blob['rgb'].shape
-            h_c, w_c = [d - (d % force_multiple) for d in [h, w]]
-            if h_c != h or w_c != w:
-                for m in ['rgb', 'depth', 'labels']:
-                    blob[m] = blob[m][:h_c, :w_c, ...]
-
-        blob['depth'] = np.expand_dims(blob['depth'], 3)
+        # apply label mapping
         blob['labels'] = np.asarray(self.label_lookup)[blob['labels']]
 
-        if one_hot:
+        blob['depth'] = np.expand_dims(blob['depth'], 3)
+
+        if self.config['resize']:
+            blob['rgb'] = cv2.resize(blob['rgb'], (768, 384),
+                                     interpolation=cv2.INTER_LINEAR)
+            for m in ['depth', 'labels']:
+                blob[m] = cv2.resize(blob[m], (768, 384),
+                                     interpolation=cv2.INTER_NEAREST)
+
+        return blob
+
+    def _get_data(self, image_name=False, image_path=False, image=False,
+                  training_format=False):
+        """Returns data for one given image number from the specified sequence."""
+        if not image_name and not image:
+            # one of the two has to be set
+            assert False
+
+        if image:
+            blob = {}
+            for m in image:
+                blob[m] = image[m].copy()
+        else:
+            blob = self._load_data(image_name, image_path)
+
+        if training_format:
+            blob = augmentate(blob, **self.config['augmentation'])
             blob['labels'] = np.array(self.one_hot_lookup ==
                                       blob['labels'][:, :, None]).astype(int)
+
         return blob
