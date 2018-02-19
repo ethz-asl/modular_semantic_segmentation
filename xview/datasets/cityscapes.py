@@ -80,7 +80,7 @@ class Cityscapes(DataBaseclass):
             tar.close()
             self.base_path = localtmp
             trainset, testset = (
-                [{'image': self._load_data(i['filename'], i['filepath'])}
+                [{'image': self._load_data(i['image_name'], i['image_path'])}
                  for i in get_filenames(fileset)] for fileset in ['train', 'test'])
         else:
             self.base_path = base_path
