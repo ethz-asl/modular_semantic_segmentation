@@ -74,7 +74,7 @@ class Cityscapes(DataBaseclass):
             print('INFO loading dataset into memory')
             # first load the tarfile into a closer memory location, then load all the
             # images
-            tar = tarfile.open(path.join(base_path, 'freiburg_forest.tar.gz'))
+            tar = tarfile.open(path.join(base_path, 'cityscapes.tar.gz'))
             localtmp = environ['TMPDIR']
             tar.extractall(path=localtmp)
             tar.close()
