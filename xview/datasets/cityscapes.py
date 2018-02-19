@@ -53,40 +53,6 @@ class Cityscapes(DataBaseclass):
                 'depth': 'disparity'
         }
 
-        # load training and test sets
-        # Generate train/test splits
-        def get_filenames(fileset, ):
-            filenames = []
-            base_dir = path.join(self.base_path, self.modality_paths['rgb'], fileset)
-            for city in listdir(base_dir):
-                # do only include specified cities into trainset
-                if fileset == 'train' and city not in cities:
-                    continue
-
-                search_path = path.join(base_dir, city)
-                filenames.extend(
-                    [{'image_name': '_'.join(path.splitext(n)[0].split('_')[:3]),
-                      'image_path': path.join(fileset, city)}
-                     for n in listdir(search_path)])
-            return filenames
-
-        if in_memory:
-            print('INFO loading dataset into memory')
-            # first load the tarfile into a closer memory location, then load all the
-            # images
-            tar = tarfile.open(path.join(base_path, 'cityscapes.tar.gz'))
-            localtmp = environ['TMPDIR']
-            tar.extractall(path=localtmp)
-            tar.close()
-            self.base_path = localtmp
-            trainset, testset = (
-                [{'image': self._load_data(i['image_name'], i['image_path'])}
-                 for i in get_filenames(fileset)] for fileset in ['train', 'test'])
-        else:
-            self.base_path = base_path
-            trainset = get_filenames('train')
-            testset = get_filenames('test')
-
         original_labelinfo = {
                 0: {'name': 'unlabeled', 'mapping': 'void'},
                 1: {'name': 'ego vehicle', 'mapping': 'void'},
@@ -143,6 +109,40 @@ class Cityscapes(DataBaseclass):
         self.label_lookup = [(i for i in labelinfo
                               if labelinfo[i]['name'] == k['mapping']).next()
                              for _, k in original_labelinfo.iteritems()]
+
+        # load training and test sets
+        # Generate train/test splits
+        def get_filenames(fileset, ):
+            filenames = []
+            base_dir = path.join(self.base_path, self.modality_paths['rgb'], fileset)
+            for city in listdir(base_dir):
+                # do only include specified cities into trainset
+                if fileset == 'train' and city not in cities:
+                    continue
+
+                search_path = path.join(base_dir, city)
+                filenames.extend(
+                    [{'image_name': '_'.join(path.splitext(n)[0].split('_')[:3]),
+                      'image_path': path.join(fileset, city)}
+                     for n in listdir(search_path)])
+            return filenames
+
+        if in_memory:
+            print('INFO loading dataset into memory')
+            # first load the tarfile into a closer memory location, then load all the
+            # images
+            tar = tarfile.open(path.join(base_path, 'cityscapes.tar.gz'))
+            localtmp = environ['TMPDIR']
+            tar.extractall(path=localtmp)
+            tar.close()
+            self.base_path = localtmp
+            trainset, testset = (
+                [{'image': self._load_data(i['image_name'], i['image_path'])}
+                 for i in get_filenames(fileset)] for fileset in ['train', 'test'])
+        else:
+            self.base_path = base_path
+            trainset = get_filenames('train')
+            testset = get_filenames('test')
 
         # Intitialize Baseclass
         DataBaseclass.__init__(self, trainset, testset, batchsize,
