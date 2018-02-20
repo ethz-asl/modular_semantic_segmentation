@@ -68,6 +68,7 @@ class BayesMix(BaseModel):
     def __init__(self, output_dir=None, confusion_matrices=False, **config):
         standard_config = {
             'learning_rate': 0.0,
+            'class_prior': 'data'
         }
         standard_config.update(config)
 
