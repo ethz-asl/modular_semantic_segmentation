@@ -73,7 +73,7 @@ class Cityscapes(DataBaseclass):
                 16: {'name': 'tunnel', 'mapping': 'void'},
                 17: {'name': 'pole', 'mapping': 'pole'},
                 18: {'name': 'polegroup', 'mapping': 'void'},
-                19: {'name': 'traffic light', 'mapping': 'traffic light'},
+                19: {'name': 'traffic light', 'mapping': 'void'},
                 20: {'name': 'traffic sign', 'mapping': 'traffic sign'},
                 21: {'name': 'vegetation', 'mapping': 'vegetation'},
                 22: {'name': 'terrain', 'mapping': 'vegetation'},
@@ -103,7 +103,6 @@ class Cityscapes(DataBaseclass):
             9: {'name': 'traffic sign', 'color': [192, 128, 128]},
             10: {'name': 'person', 'color': [64, 64, 0]},
             11: {'name': 'bicycle', 'color': [0, 128, 192]},
-            12: {'name': 'traffic light', 'color': [0, 128, 128]}
         }
 
         self.label_lookup = [(i for i in labelinfo
