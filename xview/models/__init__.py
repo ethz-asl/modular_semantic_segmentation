@@ -8,7 +8,7 @@ from .adapnet import Adapnet
 
 
 def get_model(name):
-    if name == 'simple_fcn':
+    if name == 'fcn':
         return SimpleFCN
     elif name == 'bayes_mix':
         return BayesMix
