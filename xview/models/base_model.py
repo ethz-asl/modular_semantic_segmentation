@@ -5,7 +5,6 @@ from os import path
 from abc import ABCMeta, abstractmethod
 from time import sleep
 from types import GeneratorType
-import tempfile
 
 
 class BaseModel(object):
