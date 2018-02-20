@@ -27,7 +27,7 @@ def evaluate(net, data_config, print_results=True):
     # 'use_trainset' defaults to False if not set
     if data_config.get('use_trainset', False):
         print('INFO: Evaluating against trainset')
-        batches = data.get_train_data(batch_size=1)
+        batches = data.get_train_data(batch_size=1, training_format=False)
     else:
         batches = data.get_test_data(batch_size=1)
 

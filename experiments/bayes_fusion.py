@@ -17,6 +17,9 @@ def fit_and_evaluate(net_config, evaluation_data, starting_weights, _run):
     # Load the dataset, we expect config to include the arguments
     dataset_params = {key: val for key, val in evaluation_data.items()
                       if key not in ['dataset', 'use_trainset']}
+    dataset_params['augmentation'] = {
+        key: False for key in ['crop', 'scale', 'vflip', 'hflip', 'gamma', 'rotate',
+                               'shear', 'contrast', 'brightness']}
     data = get_dataset(evaluation_data['dataset'], dataset_params)
 
     # evaluate individual experts
@@ -25,12 +28,12 @@ def fit_and_evaluate(net_config, evaluation_data, starting_weights, _run):
     for expert in net_config['num_channels']:
         model_config = deepcopy(net_config)
         model_config['num_channels'] = net_config['num_channels'][expert]
-        model_config['modaliy'] = expert
+        model_config['modality'] = expert
         model_config['prefix'] = net_config['prefixes'][expert]
         with model(**model_config) as net:
             import_weights_into_network(net, starting_weights[model_config['prefix']])
             if evaluation_data['use_trainset']:
-                m, conf_mat = net.score(data.get_train_data())
+                m, conf_mat = net.score(data.get_train_data(training_format=False))
             else:
                 m, conf_mat = net.score(data.get_validation_data()())
             confusion_matrices[expert] = conf_mat
