@@ -113,7 +113,7 @@ def also_load_config(modelname, net_config, evaluation_data, starting_weights, _
     """In case of only a single training experiment, we also load the exact network
     config from this experiment as a default"""
     # Load the training experiment
-    training_experiment = ExperimentData(starting_weights['experiment_id'])
+    training_experiment = ExperimentData(starting_weights)
 
     model_config = training_experiment.get_record()['config']['net_config']
     model_config.update(net_config)
