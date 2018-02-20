@@ -169,14 +169,14 @@ class Cityscapes(DataBaseclass):
         # apply label mapping
         blob['labels'] = np.asarray(self.label_lookup)[blob['labels']]
 
-        blob['depth'] = np.expand_dims(blob['depth'], 3)
-
         if self.config['resize']:
             blob['rgb'] = cv2.resize(blob['rgb'], (768, 384),
                                      interpolation=cv2.INTER_LINEAR)
             for m in ['depth', 'labels']:
                 blob[m] = cv2.resize(blob[m], (768, 384),
                                      interpolation=cv2.INTER_NEAREST)
+
+        blob['depth'] = np.expand_dims(blob['depth'], 3)
 
         return blob
 
