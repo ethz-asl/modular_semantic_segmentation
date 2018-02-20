@@ -42,6 +42,7 @@ class Cityscapes(DataBaseclass):
             print(message)
             raise IOError(1, message, base_path)
 
+        self.base_path = base_path
         self.modality_paths = {
                 'rgb': 'leftImg8bit_trainvaltest/leftImg8bit',
                 'labels': 'gtFine_trainvaltest/gtFine',
@@ -102,7 +103,7 @@ class Cityscapes(DataBaseclass):
             8: {'name': 'vehicle', 'color': [64, 0, 128]},
             9: {'name': 'traffic sign', 'color': [192, 128, 128]},
             10: {'name': 'person', 'color': [64, 64, 0]},
-            11: {'name': 'bicycle', 'color': [0, 128, 192]},
+            11: {'name': 'bicycle', 'color': [0, 128, 192]}
         }
 
         self.label_lookup = [(i for i in labelinfo
@@ -111,7 +112,7 @@ class Cityscapes(DataBaseclass):
 
         # load training and test sets
         # Generate train/test splits
-        def get_filenames(fileset, ):
+        def get_filenames(fileset):
             filenames = []
             base_dir = path.join(self.base_path, self.modality_paths['rgb'], fileset)
             for city in listdir(base_dir):
@@ -137,11 +138,10 @@ class Cityscapes(DataBaseclass):
             self.base_path = localtmp
             trainset, testset = (
                 [{'image': self._load_data(i['image_name'], i['image_path'])}
-                 for i in get_filenames(fileset)] for fileset in ['train', 'test'])
+                 for i in get_filenames(fileset)] for fileset in ['train', 'val'])
         else:
-            self.base_path = base_path
             trainset = get_filenames('train')
-            testset = get_filenames('test')
+            testset = get_filenames('val')
 
         # Intitialize Baseclass
         DataBaseclass.__init__(self, trainset, testset, batchsize,
