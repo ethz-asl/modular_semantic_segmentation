@@ -1,4 +1,5 @@
 from sacred import Experiment
+from sacred.utils import apply_backspaces_and_linefeeds
 from experiments.utils import get_mongo_observer
 from experiments.evaluation import evaluate, import_weights_into_network
 from xview.datasets import get_dataset
@@ -7,6 +8,8 @@ from copy import deepcopy
 
 
 ex = Experiment()
+# reduce output of progress bars
+ex.captured_out_filter = apply_backspaces_and_linefeeds
 ex.observers.append(get_mongo_observer())
 
 @ex.automain

@@ -1,4 +1,5 @@
 from sacred import Experiment
+from sacred.utils import apply_backspaces_and_linefeeds
 from experiments.utils import get_mongo_observer, load_data
 from experiments.evaluation import evaluate, import_weights_into_network
 from xview.models import get_model
@@ -26,7 +27,8 @@ def create_directories(run_id, experiment):
     # decorator.
     output_dir = '{}/{}'.format(root, run_id)
     if os.path.exists(output_dir):
-        # Directory may already exist if run_id is None (in case of an unobserved test-run)
+        # Directory may already exist if run_id is None (in case of an unobserved
+        # test-run)
         shutil.rmtree(output_dir)
     os.mkdir(output_dir)
 
@@ -37,6 +39,8 @@ def create_directories(run_id, experiment):
 
 
 ex = Experiment()
+# reduce output of progress bars
+ex.captured_out_filter = apply_backspaces_and_linefeeds
 ex.observers.append(get_mongo_observer())
 
 
@@ -67,7 +71,7 @@ def train_network(net, output_dir, data_config, num_iterations, starting_weights
 
     try:
         net.fit(data, num_iterations, validation_data=validation_set,
-                additional_eval_data=additional_eval_data)
+                additional_eval_data=additional_eval_data, output=False)
         timeout = False
     except KeyboardInterrupt:
         print('WARNING: Got Keyboard Interrupt, will save weights and close')

@@ -1,5 +1,6 @@
 """Evaluation of trained models."""
 from sacred import Experiment
+from sacred.utils import apply_backspaces_and_linefeeds
 from xview.datasets.synthia import AVAILABLE_SEQUENCES
 from xview.models import get_model
 from xview.settings import DATA_BASEPATH
@@ -105,6 +106,8 @@ def import_weights_into_network(net, starting_weights):
 
 
 ex = Experiment()
+# reduce output of progress bars
+ex.captured_out_filter = apply_backspaces_and_linefeeds
 ex.observers.append(get_mongo_observer())
 
 
