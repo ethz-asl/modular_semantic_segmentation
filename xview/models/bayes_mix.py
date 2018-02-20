@@ -36,7 +36,7 @@ def bayes_fusion(classifications, confusion_matrices, class_prior='data'):
         log_likelihoods.append(tf.log(tf.gather(conditional, classifications[i_expert])))
 
     uniform_prior = 1.0 / 14
-    data_prior = confusion_matrix.sum(0) / confusion_matrix.sum()
+    data_prior = confusion_matrices[0].sum(0) / confusion_matrices[0].sum()
     if class_prior == 'uniform':
         # set a uniform prior for all classes
         prior = uniform_prior
