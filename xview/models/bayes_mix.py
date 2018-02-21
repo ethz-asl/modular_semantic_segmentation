@@ -74,13 +74,14 @@ class BayesMix(BaseModel):
 
         # load confusion matrices
         self.modalities = []
+        self.confusion_matrices = {}
         if confusion_matrices:
-            self.confusion_matrices = confusion_matrices
-            self.modalities = list(confusion_matrices.keys())
-        else:
-            self.confusion_matrices = {}
-            for key, exp_id in config['eval_experiments'].items():
+            for key, matrix in confusion_matrices.items():
                 self.modalities.append(key)
+                self.confusion_matrices[key] = matrix.astype('float32').T
+        else:
+            for key, exp_id in config['eval_experiments'].items():
+
                 self.confusion_matrices[key] = np.array(
                     ExperimentData(exp_id).get_record()['info']['confusion_matrix']
                     ['values']).astype('float32').T

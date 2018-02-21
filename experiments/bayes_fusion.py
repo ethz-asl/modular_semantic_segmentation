@@ -51,13 +51,13 @@ def fit_and_evaluate(net_config, evaluation_data, starting_weights, _run):
     with BayesMix(confusion_matrices=confusion_matrices, **net_config) as net:
         import_weights_into_network(net, starting_weights)
 
-        # never evaluate against test data
+        # never evaluate against train data
         evaluation_data['use_trainset'] = False
         measurements, confusion_matrix = evaluate(net, evaluation_data)
         _run.info['measurements'] = measurements
         _run.info['confusion_matrix'] = confusion_matrix
 
-    print('Evaluated Bayes Fusion on {} train data:'.format(evaluation_data['dataset']))
+    print('Evaluated Bayes Fusion on {} data:'.format(evaluation_data['dataset']))
     print('total accuracy {:.3f} IoU {:.3f}'.format(measurements['total_accuracy'],
                                                     measurements['mean_IoU']))
 
