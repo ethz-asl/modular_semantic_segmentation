@@ -5,6 +5,7 @@ from experiments.evaluation import evaluate, import_weights_into_network
 from xview.datasets import get_dataset
 from xview.models import get_model, BayesMix
 from copy import deepcopy
+from os import stdout
 
 
 ex = Experiment()
@@ -55,3 +56,10 @@ def fit_and_evaluate(net_config, evaluation_data, starting_weights, _run):
         measurements, confusion_matrix = evaluate(net, evaluation_data)
         _run.info['measurements'] = measurements
         _run.info['confusion_matrix'] = confusion_matrix
+
+    print('Evaluated Bayes Fusion on {} train data:'.format(evaluation_data['dataset']))
+    print('total accuracy {:.3f} IoU {:.3f}'.format(measurements['total_accuracy'],
+                                                    measurements['mean_IoU']))
+
+    # There seems to be a problem with capturing the print output, flush to be sure
+    stdout.flush()
