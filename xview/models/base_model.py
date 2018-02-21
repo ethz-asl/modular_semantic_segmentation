@@ -343,6 +343,8 @@ class BaseModel(object):
                 """May translate the prefix of the name according to settings."""
                 if not translate_prefix:
                     return name
+                if not name.startswith(translate_prefix):
+                    return name
                 splitted = name.split('/')
                 # exchange prefix
                 splitted[0] = import_prefix
