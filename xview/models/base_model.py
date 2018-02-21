@@ -142,7 +142,7 @@ class BaseModel(object):
             loss_summary = tf.summary.scalar('loss', self.loss)
             merged_summary = tf.summary.merge_all()
             if self.output_dir is not None:
-                train_writer = tf.summary.FileWriter(self.output_dir, self.graph)
+                train_writer = tf.summary.FileWriter(self.output_dir)
 
             # Create a thread to load data.
             coord = tf.train.Coordinator()
@@ -155,10 +155,7 @@ class BaseModel(object):
 
             print('INFO: Start training')
             for i in range(iterations):
-                summary, loss, _ = self.sess.run([loss_summary, self.loss,
-                                                  self.trainer])
-                if self.output_dir is not None:
-                    train_writer.add_summary(summary, i)
+                self.sess.run(self.trainer)
 
                 # Every validation_interval, we add a summary of validation values
                 if i % validation_interval == 0 and validation_data is not None:
@@ -172,8 +169,8 @@ class BaseModel(object):
                                                 simple_value=score['mean_IoU'])])
 
                     if output:
-                        print("{:4d}: loss {:.4f}, accuracy {:.2f}, IoU {:.2f}".format(
-                            i, loss, score['total_accuracy'], score['mean_IoU']))
+                        print("{:4d}: accuracy {:.2f}, IoU {:.2f}".format(
+                            i, score['total_accuracy'], score['mean_IoU']))
                     if self.output_dir is not None:
                         train_writer.add_summary(accuracy, i)
                         train_writer.add_summary(iou, i)
