@@ -86,6 +86,8 @@ def decoder(features, prefix, num_units, num_classes, dropout_rate,
     # Upsample the fused features to the output classification size
     features = deconv2d(features, num_units, [16, 16], strides=[8, 8],
                         name='{}_upscore'.format(prefix), **upscore_params)
+    # no activation before the softmax
+    params['activation'] = None
     score = conv2d(features, num_classes, [1, 1],
                    name='{}_score'.format(prefix), **params)
     return {'upscore': features, 'score': score}
