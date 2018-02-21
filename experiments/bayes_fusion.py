@@ -5,7 +5,7 @@ from experiments.evaluation import evaluate, import_weights_into_network
 from xview.datasets import get_dataset
 from xview.models import get_model, BayesMix
 from copy import deepcopy
-from os import stdout
+from sys import stdout
 
 
 ex = Experiment()
