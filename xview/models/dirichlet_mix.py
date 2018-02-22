@@ -1,9 +1,9 @@
 import tensorflow as tf
 import numpy as np
 from experiments.utils import ExperimentData
-from os import path
 from types import GeneratorType
 import threading
+from copy import deepcopy
 
 from .dirichlet_fastfit import meanprecision_with_sufficient_statistic, \
                                fixedpoint_with_sufficient_statistic
@@ -312,10 +312,6 @@ class DirichletMix(BaseModel):
                                  for modality in self.modalities}
         self.class_counts = class_counts
 
-        if self.output_dir is not None:
-            np.savez(path.join(self.output_dir, 'counts.npz'), class_counts=class_counts,
-                     **self.dirichlet_params)
-
         # Rebuild the graph with the new measurements:
         self._initialize_graph()
 
@@ -330,6 +326,10 @@ class DirichletMix(BaseModel):
 
         self._fit_sufficient_statistic(modality_counts, class_counts)
         print("INFO: MixFCN fitted to data")
+
+        return_dict = deepcopy(self.dirichlet_params)
+        return_dict['class_counts'] = self.class_counts
+        return return_dict
 
     def _evaluation_food(self, data):
         feed_dict = {self.test_placeholders[modality]: data[modality]
