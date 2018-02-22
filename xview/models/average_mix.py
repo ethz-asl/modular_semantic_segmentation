@@ -20,11 +20,10 @@ class AverageMix(BaseModel):
         }
         standard_config.update(config)
 
-        # load confusion matrices
-        self.modalities = []
+        self.modalities = list(standard_config['prefixes'].keys())
 
         BaseModel.__init__(self, 'AverageMixture', output_dir=output_dir,
-                           supports_training=False, **config)
+                           supports_training=False, **standard_config)
 
     def _build_graph(self):
         """Builds the whole network. Network is split into 2 similar pipelines with shared
