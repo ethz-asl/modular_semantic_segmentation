@@ -45,45 +45,38 @@ class DataBaseclass(DataWrapper):
         return self._get_batch([self.trainset[self._next_batch_idx()]
                                 for _ in range(self.batchsize)])
 
-    def get_train_data(self, batch_size=None, training_format=True):
-        """Return generator for train-data."""
+    def get_set_data(self, setlist, batch_size=None, training_format=False):
         if batch_size is None:
             batch_size = self.batchsize
-        trainset_size = len(self.trainset)
-        for start_idx in range(0, trainset_size, batch_size):
-            yield self._get_batch((self.trainset[idx] for idx
+        size = len(setlist)
+        for start_idx in range(0, size, batch_size):
+            yield self._get_batch((setlist[idx] for idx
                                    in range(start_idx,
-                                            min(start_idx + batch_size, trainset_size))),
+                                            min(start_idx + batch_size, size))),
                                   training_format=training_format)
+
+    def get_train_data(self, batch_size=None, training_format=True):
+        """Return generator for train-data."""
+        return self.get_set_data(self.trainset, batch_size=batch_size,
+                                 training_format=training_format)
 
     def get_test_data(self, batch_size=None):
         """Return generator for test-data."""
-        if batch_size is None:
-            batch_size = self.batchsize
         if self.single_test_batches:
             batch_size = 1
-        testset_size = len(self.testset)
-        for start_idx in range(0, testset_size, batch_size):
-            yield self._get_batch((self.testset[idx] for idx
-                                   in range(start_idx,
-                                            min(start_idx + batch_size, testset_size))),
-                                  training_format=False)
+        return self.get_set_data(self.testset, batch_size=batch_size,
+                                 training_format=False)
 
     def get_validation_data(self, num_items=None, batch_size=None):
         """Return a function without arguments that returns a generator for the
         validation data."""
         if num_items is None:
             num_items = len(self.validation_set)
-        if batch_size is None:
-            batch_size = self.batchsize
         if self.single_test_batches:
             batch_size = 1
         def data_generator():
-            for start_idx in range(0, num_items, batch_size):
-                yield self._get_batch((self.testset[idx] for idx
-                                       in range(start_idx,
-                                                min(start_idx + batch_size, num_items))),
-                                      training_format=False)
+            return self.get_set_data(self.validation_set[:num_items],
+                                     batch_size=batch_size, training_format=False)
         return data_generator
 
     def _get_batch(self, items, training_format=True):
