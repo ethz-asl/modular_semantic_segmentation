@@ -56,9 +56,10 @@ class AverageMix(BaseModel):
             prob = tf.nn.softmax(outputs['score'])
             return prob
 
-        fused_score = tf.reduce_mean([test_pipeline(self.test_placeholders[m],
-                                                    self.config['prefixes'][m])
-                                      for m in self.modalities], axis=0)
+        fused_score = tf.reduce_mean(tf.stack([test_pipeline(self.test_placeholders[m],
+                                                             self.config['prefixes'][m])
+                                               for m in self.modalities]),
+                                     axis=0)
 
         label = tf.argmax(fused_score, 3, name='label_2d')
         self.prediction = label
