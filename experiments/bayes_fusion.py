@@ -16,7 +16,7 @@ ex.observers.append(get_mongo_observer())
 
 
 @ex.command
-def evaluate_average(net_config, evaluation_data, starting_weights, _run):
+def average(net_config, evaluation_data, starting_weights, _run):
     """Load weigths from training experiments and evalaute fusion against specified
     data."""
 
@@ -31,13 +31,13 @@ def evaluate_average(net_config, evaluation_data, starting_weights, _run):
     _, test_set = train_test_split(data.testset, test_size=.5, random_state=1)
 
     # now evaluate average mix
-    with BayesMix(confusion_matrices=confusion_matrices, **net_config) as net:
+    with AverageMix(**net_config) as net:
         import_weights_into_network(net, starting_weights)
         measurements, confusion_matrix = net.score(data.get_set_data(test_set))
         _run.info['measurements'] = measurements
         _run.info['confusion_matrix'] = confusion_matrix
 
-    print('Evaluated Bayes Fusion on {} data:'.format(evaluation_data['dataset']))
+    print('Evaluated Average Fusion on {} data:'.format(evaluation_data['dataset']))
     print('total accuracy {:.3f} IoU {:.3f}'.format(measurements['total_accuracy'],
                                                     measurements['mean_IoU']))
 
