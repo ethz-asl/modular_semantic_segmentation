@@ -4,6 +4,7 @@ from experiments.utils import get_mongo_observer
 from experiments.evaluation import import_weights_into_network
 from experiments.different_evaluation_parameters import parameter_combinations
 from experiments.bayes_fusion import split_test_data
+from sklearn.model_selection import train_test_split
 from xview.datasets import get_dataset
 from xview.models import DirichletMix
 from sys import stdout
@@ -21,29 +22,23 @@ def test_parameters(net_config, evaluation_data, starting_weights, search_paramt
     # get the different configs we will test
     configs_to_test = parameter_combinations(search_paramters, net_config)
 
-    # generate sufficient statistic
-    some_config = configs_to_test[0]
-
-    dataset_params = {key: val for key, val in evaluation_data.items()
-                      if key not in ['dataset', 'use_trainset']}
-    dataset_params['batchsize'] = 1
-    # Load the dataset, we expect config to include the arguments
-    data = get_dataset(evaluation_data['dataset'], dataset_params)
-    batches = data.get_train_data(batch_size=6)
-    with DirichletMix(**some_config) as net:
+    # load data
+    data, measure_data, _ = split_test_data(evaluation_data)
+    search_data, search_validation = train_test_split(measure_data, test_size=.5,
+                                                      random_state=1)
+    # get sufficient statistic
+    with DirichletMix(**configs_to_test[0]) as net:
         import_weights_into_network(net, starting_weights)
-        sufficient_statistic = net._get_sufficient_statistic(batches)
-
-    data = load_data(evaluation_data)
-    validation_data = data.get_validation_data()
+        sufficient_statistic = net._get_sufficient_statistic(
+            data.get_set_data(search_data))
 
     # Not test all the parameters
     results = []
     for test_parameters in configs_to_test:
         with DirichletMix(**test_parameters) as net:
-            net._get_sufficient_statistic(*sufficient_statistic)
+            net._fit_sufficient_statistic(*sufficient_statistic)
             import_weights_into_network(net, starting_weights)
-            measurements, _ = net.fit(validation_data())
+            measurements, _ = net.fit(data.get_set_data(search_validation))
 
             # put results and parameters all in one dict
             result = {}
@@ -62,18 +57,18 @@ def test_parameters(net_config, evaluation_data, starting_weights, search_paramt
 def fit_and_evaluate(net_config, evaluation_data, starting_weights, _run):
     """Load weigths from trainign experiments and evalaute network against specified
     data."""
-
-    measure_data, test_data = split_test_data(evaluation_data)
+    data, measure_data, test_data = split_test_data(evaluation_data)
+    _, measure_data = train_test_split(measure_data, test_size=.5, random_state=1)
 
     with DirichletMix(**net_config) as net:
         import_weights_into_network(net, starting_weights)
 
-        dirichlet_params = net.fit(measure_data)
+        dirichlet_params = net.fit(data.get_set_data(measure_data))
 
         # import weights again has fitting created new graph
         import_weights_into_network(net, starting_weights)
 
-        measurements, confusion_matrix = net.score(test_data)
+        measurements, confusion_matrix = net.score(data.get_set_data(test_data))
         _run.info['measurements'] = measurements
         _run.info['confusion_matrix'] = confusion_matrix
         _run.info['dirichlet_params'] = dirichlet_params
