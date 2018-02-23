@@ -5,11 +5,14 @@ from .progressive_fcn import ProgressiveFCN
 from .uncertainty_dirichlet_mix import UncertaintyMix
 from .average_mix import AverageMix
 from .adapnet import Adapnet
+from .fusion_fcn import FusionFCN
 
 
 def get_model(name):
     if name == 'fcn':
         return SimpleFCN
+    elif name == 'fusion_fcn':
+        return FusionFCN
     elif name == 'bayes_mix':
         return BayesMix
     elif name == 'dirichlet_mix':
