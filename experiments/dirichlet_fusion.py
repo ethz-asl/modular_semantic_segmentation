@@ -1,10 +1,12 @@
 from sacred import Experiment
 from sacred.utils import apply_backspaces_and_linefeeds
 from experiments.utils import get_mongo_observer
-from experiments.evaluation import evaluate, import_weights_into_network
+from experiments.evaluation import import_weights_into_network
 from experiments.different_evaluation_parameters import parameter_combinations
+from experiments.bayes_fusion import split_test_data
 from xview.datasets import get_dataset
 from xview.models import DirichletMix
+from sys import stdout
 
 
 ex = Experiment()
@@ -60,26 +62,24 @@ def test_parameters(net_config, evaluation_data, starting_weights, search_paramt
 def fit_and_evaluate(net_config, evaluation_data, starting_weights, _run):
     """Load weigths from trainign experiments and evalaute network against specified
     data."""
+
+    measure_data, test_data = split_test_data(evaluation_data)
+
     with DirichletMix(**net_config) as net:
         import_weights_into_network(net, starting_weights)
 
-        # Measure the single experts against the trainingset.
-        dataset_params = {key: val for key, val in evaluation_data.items()
-                          if key not in ['dataset', 'use_trainset']}
-        dataset_params['batchsize'] = 1
-        # Load the dataset, we expect config to include the arguments
-        data = get_dataset(evaluation_data['dataset'], dataset_params)
-        if evaluation_data['use_trainset']:
-            dirichlet_params = net.fit(data.get_train_data(training_format=False))
-        else:
-            dirichlet_params = net.fit(data.get_validation_data()())
+        dirichlet_params = net.fit(measure_data)
 
         # import weights again has fitting created new graph
         import_weights_into_network(net, starting_weights)
 
-        # never evaluate against train data
-        evaluation_data['use_trainset'] = False
-        measurements, confusion_matrix = evaluate(net, evaluation_data)
+        measurements, confusion_matrix = net.score(test_data)
         _run.info['measurements'] = measurements
         _run.info['confusion_matrix'] = confusion_matrix
         _run.info['dirichlet_params'] = dirichlet_params
+
+    print('Evaluated Dirichlet Fusion on {} data:'.format(evaluation_data['dataset']))
+    print('total accuracy {:.3f} IoU {:.3f}'.format(measurements['total_accuracy'],
+                                                    measurements['mean_IoU']))
+    # There seems to be a problem with capturing the print output, flush to be sure
+    stdout.flush()
