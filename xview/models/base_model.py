@@ -248,8 +248,8 @@ class BaseModel(object):
             # Now we compute several mesures from the confusion matrix
             measures = {}
             measures['confusion_matrix'] = confusion_matrix
-            measures['precision'] = np.diag(confusion_matrix) / confusion_matrix.sum(1)
-            measures['recall'] = np.diag(confusion_matrix) / confusion_matrix.sum(0)
+            measures['recall'] = np.diag(confusion_matrix) / confusion_matrix.sum(1)
+            measures['precision'] = np.diag(confusion_matrix) / confusion_matrix.sum(0)
             measures['F1'] = 2 * measures['precision'] * measures['recall'] / \
                 (measures['precision'] + measures['recall'])
             measures['mean_F1'] = np.nanmean(measures['F1'])
