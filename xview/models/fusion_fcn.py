@@ -104,7 +104,7 @@ class FusionFCN(BaseModel):
         score = fusion_fcn(self.test_placeholders, self.config['prefixes'],
                            self.config['num_units'], self.config['num_classes'],
                            trainable=False, is_training=False, reuse=True)['score']
-        label = tf.nn.softmax(score, self.config['num_classes'], name='prob_normalized')
+        label = tf.nn.softmax(score, name='prob_normalized')
         self.prediction = tf.argmax(label, 3, name='label_2d')
 
     def _evaluation_food(self, data):
