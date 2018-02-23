@@ -86,7 +86,7 @@ class FusionFCN(BaseModel):
         self.queue_is_closed = False
 
         score = fusion_fcn(train_data, self.config['prefixes'], self.config['num_units'],
-                           self.config['num_classes'], trainable=True, is_training=True,
+                           self.config['num_classes'], is_training=True,
                            reuse=False)['score']
         prob = log_softmax(score, self.config['num_classes'], name='prob')
         # The loss is given by the cross-entropy with the ground-truth
@@ -103,7 +103,7 @@ class FusionFCN(BaseModel):
 
         score = fusion_fcn(self.test_placeholders, self.config['prefixes'],
                            self.config['num_units'], self.config['num_classes'],
-                           trainable=False, is_training=False, reuse=True)['score']
+                           is_training=False, reuse=True)['score']
         label = tf.nn.softmax(score, name='prob_normalized')
         self.prediction = tf.argmax(label, 3, name='label_2d')
 
