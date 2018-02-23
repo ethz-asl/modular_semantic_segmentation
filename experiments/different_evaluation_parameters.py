@@ -13,11 +13,9 @@ def parameter_combinations(search_parameters, net_config):
     # We want to tets all the different combinations of the search_parameters, therefore,
     # we create a list of the different network configurations.
     configs_to_test = [net_config]
-    for param in search_parameters:
+    for parameter, values in search_parameters.items():
         # For all existing configs_to_test, we create one copy for every tested value of
         # this parameter.
-        parameter = param.keys()[0]
-        values = param[parameter]
         new_configs_to_test = []
         for config in configs_to_test:
             for value in values:
