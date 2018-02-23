@@ -17,10 +17,10 @@ ex.observers.append(get_mongo_observer())
 
 
 @ex.command
-def test_parameters(net_config, evaluation_data, starting_weights, search_paramters,
+def test_parameters(net_config, evaluation_data, starting_weights, search_parameters,
                     _run):
     # get the different configs we will test
-    configs_to_test = parameter_combinations(search_paramters, net_config)
+    configs_to_test = parameter_combinations(search_parameters, net_config)
 
     # load data
     data, measure_data, _ = split_test_data(evaluation_data)
@@ -38,7 +38,7 @@ def test_parameters(net_config, evaluation_data, starting_weights, search_paramt
         with DirichletMix(**test_parameters) as net:
             net._fit_sufficient_statistic(*sufficient_statistic)
             import_weights_into_network(net, starting_weights)
-            measurements, _ = net.fit(data.get_set_data(search_validation))
+            measurements, _ = net.score(data.get_set_data(search_validation))
 
             # put results and parameters all in one dict
             result = {}
