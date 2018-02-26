@@ -337,7 +337,7 @@ class BaseModel(object):
         with self.graph.as_default():
             initializers = []
             weights = np.load(filepath, mmap_mode='w+')
-            import_prefix = weights.keys()[0].split('/')[0]
+            import_prefix = weights.keys()[0].split('/')[0].split('_')[0]
 
             def translate_name(name):
                 """May translate the prefix of the name according to settings."""
@@ -346,8 +346,10 @@ class BaseModel(object):
                 if not name.startswith(translate_prefix):
                     return name
                 splitted = name.split('/')
+                further_splitted = splitted[0].split('_')
                 # exchange prefix
-                splitted[0] = import_prefix
+                further_splitted[0] = import_prefix
+                splitted[0] = '_'.join(further_splitted)
                 return '/'.join(splitted)
 
             for variable in tf.global_variables():
