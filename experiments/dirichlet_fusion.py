@@ -5,7 +5,6 @@ from experiments.evaluation import import_weights_into_network
 from experiments.different_evaluation_parameters import parameter_combinations
 from experiments.bayes_fusion import split_test_data
 from sklearn.model_selection import train_test_split
-from xview.datasets import get_dataset
 from xview.models import DirichletMix
 from sys import stdout
 
