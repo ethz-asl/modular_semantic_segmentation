@@ -359,12 +359,14 @@ class BaseModel(object):
                     if warnings:
                         print('WARNING: {} not found in saved weights'.format(name))
                 else:
-                    if chill_mode and not variable.shape == weights[name].shape:
+                    if not variable.shape == weights[name].shape:
                         if warnings:
                             print('WARNING: wrong shape found for {}, but ignored in '
                                   'chill mode'.format(name))
                             print('stored shape: ', weights[name].shape,
                                   'expected shape: ', variable.shape)
+                        if chill_mode:
+                            initializers.append(variable.assign(weights[name]))
                     else:
                         initializers.append(variable.assign(weights[name]))
             self.sess.run(initializers)
