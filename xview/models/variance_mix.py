@@ -13,6 +13,10 @@ def variance_fusion(probs, variances):
     certainties = tf.stack([1 / (1e-20 + variance) for variance in variances], axis=0)
     probs = tf.stack(probs, axis=0)
 
+    print('variance', variances[0].shape)
+    print('certainties', certainties.shape)
+    print('probs', probs.shape)
+
     return tf.reduce_sum(certainties * probs, axis=0) / \
         tf.reduce_sum(certainties, axis=0)
 
@@ -83,7 +87,7 @@ class VarianceMix(BaseModel):
             samples = tf.stack([sample_pipeline(inputs, modality, reuse=(i != 0))
                                 for i in range(self.config['num_samples'])], axis=4)
 
-            variance = tf.reduce_mean(tf.nn.moments(samples, [4]), axis=3,
+            variance = tf.reduce_mean(tf.nn.moments(samples, [4])[0], axis=3,
                                       keep_dims=True)
 
             # We get the label by passing the input without dropout
@@ -99,7 +103,7 @@ class VarianceMix(BaseModel):
                       tf.reduce_sum(probs[modality], axis=3, keep_dims=True)
                       for modality in self.modalities}
 
-        self.fused_score = variance_fusion(self.probs.values(), vars.values())
+        self.fused_score = variance_fusion(probs.values(), vars.values())
         label = tf.argmax(self.fused_score, 3, name='label_2d')
         self.prediction = label
 
