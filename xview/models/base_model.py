@@ -318,7 +318,7 @@ class BaseModel(object):
             step = int(self.sess.run(self.global_step))
             output_path = path.join(output_path, '{}_weights_{}.npz'.format(self.name,
                                                                             step))
-            np.savez(output_path, **save_dict)
+            np.savez_compressed(output_path, **save_dict)
             print('INFO: Weights saved to {}'.format(output_path))
             return output_path
 
