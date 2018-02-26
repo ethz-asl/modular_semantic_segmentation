@@ -10,7 +10,7 @@ def variance_fusion(probs, variances):
     # 'certainty' is used as a pseudonym for 1/sigma^2
     # we have to expand the last dimension so all class scores are multiplied with the
     # same variance per pixel
-    certainties = tf.stack(variances, axis=0)
+    certainties = tf.stack([1 / (1e-20 + variance) for variance in variances], axis=0)
     probs = tf.stack(probs, axis=0)
 
     return tf.reduce_sum(certainties * probs, axis=0) / \
