@@ -172,7 +172,7 @@ class SimpleFCN(BaseModel):
                                  trainable=self.config.get('train_encoder', True))
         decoder_layers = decoder(encoder_layers['fused'], self.prefix,
                                  self.config['num_units'], self.config['num_classes'],
-                                 train_dropout_rate, is_training=True, reuse=False)
+                                 is_training=True, reuse=False)
         prob = log_softmax(decoder_layers['score'], self.config['num_classes'],
                            name='prob')
         # The loss is given by the cross-entropy with the ground-truth
