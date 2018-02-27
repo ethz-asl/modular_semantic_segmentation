@@ -29,8 +29,6 @@ LABELINFO = {
    11: {'name': 'bicycle', 'color': [0, 128, 192]}
 }
 
-one_hot_lookup = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
-
 
 class SynthiaCityscapes(DataBaseclass):
     """Driver for SYNTHIA dataset (http://synthia-dataset.net/).
@@ -51,6 +49,9 @@ class SynthiaCityscapes(DataBaseclass):
                 'shear': [0, 0.01, 0.03],
                 'contrast': [.3, 0.5, 1.5],
                 'brightness': [.2, -40, 40]
+            },
+            'labels': {
+                'lanemarkings': False
             }
         }
         config.update(data_config)
@@ -87,9 +88,19 @@ class SynthiaCityscapes(DataBaseclass):
                 split = json.load(f)
                 trainset = [{'image_name': filename} for filename in split['trainset']]
                 testset = [{'image_name': filename} for filename in split['testset']]
+
+        # Update labelinfo according to config
+        labelinfo = LABELINFO
+        if self.config['labels']['lanemarkings']:
+            labelinfo[12] = {'name': 'lanemarking', 'color': [0, 192, 0]}
+
         # Intitialize Baseclass
         DataBaseclass.__init__(self, trainset, testset, batchsize,
                                ['rgb', 'depth', 'labels'], LABELINFO)
+
+    @property
+    def one_hot_lookup(self):
+        return np.arange(len(self.labelinfo), dtype=np.int)
 
     def _preprocessing(self, sequence):
         rootpath = path.join(self.basepath, sequence, 'GT')
@@ -148,7 +159,8 @@ class SynthiaCityscapes(DataBaseclass):
         labels[labels == 21] = 0   # wall -> void
         labels[labels == 22] = 12  # lanemarking
 
-        labels[labels == 12] = 0   # lanemarking -> void
+        if not self.config['labels']['lanemarkings']:
+            labels[labels == 12] = 0   # lanemarking -> void
 
         blob['labels'] = labels
 
@@ -185,7 +197,7 @@ class SynthiaCityscapes(DataBaseclass):
                               shear=self.config['augmentation']['shear'])
 
             # Format labels into one-hot
-            blob['labels'] = np.array(one_hot_lookup ==
+            blob['labels'] = np.array(self.one_hot_lookup ==
                                       blob['labels'][:, :, None]).astype(int)
 
         # We have to add a dimension for the channels, as there is only one and the
