@@ -139,9 +139,9 @@ class Cityscapes(DataBaseclass):
             trainset = [{'image': self._load_data(i['image_name'], i['image_path'])}
                         for i in get_filenames('train', cities=cities)]
             measureset = [{'image': self._load_data(i['image_name'], i['image_path'])}
-                          for i in get_filenames('test', cities=['munster'])]
+                          for i in get_filenames('val', cities=['munster'])]
             testset = [{'image': self._load_data(i['image_name'], i['image_path'])}
-                       for i in get_filenames('test', cities=['frankfurt', 'lindau'])]
+                       for i in get_filenames('val', cities=['frankfurt', 'lindau'])]
         else:
             trainset = get_filenames('train', cities=cities)
             measureset = get_filenames('val', cities=['munster'])
