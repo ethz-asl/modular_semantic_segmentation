@@ -59,7 +59,7 @@ class VarianceMix(BaseModel):
                                   trainable=False, reuse=reuse)
                 outputs.update(decoder(outputs['fused'], prefix,
                                        self.config['num_units'],
-                                       self.config['num_classes'], 0.0,
+                                       self.config['num_classes'],
                                        trainable=False, reuse=reuse))
             else:
                 raise UserWarning('ERROR: Expert Model {} not found'
@@ -75,12 +75,22 @@ class VarianceMix(BaseModel):
                 # We apply dropout at the input.
                 # We do want to set whole pixels to 0, therefore out noise-shape has
                 # dim 1 for the channel-space:
-                input_shape = tf.shape(inputs)
-                noise_shape = [input_shape[0], input_shape[1], input_shape[2], 1]
-                inputs = dropout(inputs, rate=self.config['dropout_rate'], training=True,
-                                 noise_shape=noise_shape,
-                                 name='{}_dropout'.format(prefix))
-                return get_prob(inputs, modality, reuse=reuse)
+                #input_shape = tf.shape(inputs)
+                #noise_shape = [input_shape[0], input_shape[1], input_shape[2], 1]
+                #inputs = dropout(inputs, rate=self.config['dropout_rate'], training=True,
+                #                 noise_shape=noise_shape,
+                #                 name='{}_dropout'.format(prefix))
+                assert self.config['expert_model'] == 'fcn'
+
+                outputs = encoder(inputs, prefix, self.config['num_units'],
+                                  self.config['dropout_rate'], trainable=False,
+                                  is_training=True, reuse=reuse)
+                outputs.update(decoder(outputs['fused'], prefix,
+                                       self.config['num_units'],
+                                       self.config['num_classes'],
+                                       trainable=False, reuse=reuse))
+                prob = tf.nn.softmax(outputs['score'])
+                return prob
 
             # For classification, we sample distributions with Dropout-Monte-Carlo and
             # fuse output according to variance
