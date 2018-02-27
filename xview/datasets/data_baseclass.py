@@ -10,10 +10,11 @@ class DataBaseclass(DataWrapper):
     """A basic, abstract class for splitting data into batches, compliant with DataWrapper
     interface."""
 
-    def __init__(self, trainset, testset, batchsize, modalities, labelinfo,
+    def __init__(self, trainset, measureset, testset, batchsize, modalities, labelinfo,
                  info=False, single_test_batches=False):
         self.testset, self.validation_set = train_test_split(
             testset, test_size=15, random_state=317243896)
+        self.measureset = measureset
         self.trainset = trainset
         self.batch_idx = 0
         self.batchsize = batchsize
@@ -65,6 +66,13 @@ class DataBaseclass(DataWrapper):
         if self.single_test_batches:
             batch_size = 1
         return self.get_set_data(self.testset, batch_size=batch_size,
+                                 training_format=False)
+
+    def get_measure_data(self, batch_size=None):
+        """Return generator for test-data."""
+        if self.single_test_batches:
+            batch_size = 1
+        return self.get_set_data(self.measureset, batch_size=batch_size,
                                  training_format=False)
 
     def get_validation_data(self, num_items=None, batch_size=None):

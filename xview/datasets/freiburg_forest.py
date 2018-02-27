@@ -7,6 +7,7 @@ from scipy.ndimage import zoom
 import tifffile as tiff
 import tarfile
 import cv2
+from sklearn.model_selection import train_test_split
 
 from xview.settings import DATA_BASEPATH
 from .data_baseclass import DataBaseclass
@@ -109,9 +110,11 @@ class FreiburgForest(DataBaseclass):
         if resize:
             modalities.extend(['depth', 'nir'])
 
+        measureset, testset = train_test_split(testset, test_size=0.5, random_state=1)
+
         # Intitialize Baseclass
-        DataBaseclass.__init__(self, trainset, testset, batchsize, modalities, LABELINFO,
-                               single_test_batches=(not resize))
+        DataBaseclass.__init__(self, trainset, measureset, testset, batchsize,
+                               modalities, LABELINFO, single_test_batches=(not resize))
 
         # Hardcode to include at least one obstacle image into the validation set
         if in_memory:

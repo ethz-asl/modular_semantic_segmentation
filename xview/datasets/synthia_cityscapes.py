@@ -89,13 +89,15 @@ class SynthiaCityscapes(DataBaseclass):
                 trainset = [{'image_name': filename} for filename in split['trainset']]
                 testset = [{'image_name': filename} for filename in split['testset']]
 
+        measureset, testset = train_test_split(testset, test_size=0.5, random_state=1)
+
         # Update labelinfo according to config
         labelinfo = LABELINFO
         if self.config['labels']['lanemarkings']:
             labelinfo[12] = {'name': 'lanemarking', 'color': [0, 192, 0]}
 
         # Intitialize Baseclass
-        DataBaseclass.__init__(self, trainset, testset, batchsize,
+        DataBaseclass.__init__(self, trainset, measureset, testset, batchsize,
                                ['rgb', 'depth', 'labels'], LABELINFO)
 
     @property

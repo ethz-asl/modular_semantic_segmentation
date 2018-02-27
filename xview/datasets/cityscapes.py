@@ -112,12 +112,12 @@ class Cityscapes(DataBaseclass):
 
         # load training and test sets
         # Generate train/test splits
-        def get_filenames(fileset):
+        def get_filenames(fileset, cities=False):
             filenames = []
             base_dir = path.join(self.base_path, self.modality_paths['rgb'], fileset)
             for city in listdir(base_dir):
                 # do only include specified cities into trainset
-                if fileset == 'train' and city not in cities:
+                if cities and city not in cities:
                     continue
 
                 search_path = path.join(base_dir, city)
@@ -136,15 +136,19 @@ class Cityscapes(DataBaseclass):
             tar.extractall(path=localtmp)
             tar.close()
             self.base_path = localtmp
-            trainset, testset = (
-                [{'image': self._load_data(i['image_name'], i['image_path'])}
-                 for i in get_filenames(fileset)] for fileset in ['train', 'val'])
+            trainset = [{'image': self._load_data(i['image_name'], i['image_path'])}
+                        for i in get_filenames('train', cities=cities)]
+            measureset = [{'image': self._load_data(i['image_name'], i['image_path'])}
+                          for i in get_filenames('test', cities=['munster'])]
+            testset = [{'image': self._load_data(i['image_name'], i['image_path'])}
+                       for i in get_filenames('test', cities=['frankfurt', 'lindau'])]
         else:
-            trainset = get_filenames('train')
-            testset = get_filenames('val')
+            trainset = get_filenames('train', cities=cities)
+            measureset = get_filenames('val', cities=['munster'])
+            testset = get_filenames('val', cities=['frankfurt', 'lindau'])
 
         # Intitialize Baseclass
-        DataBaseclass.__init__(self, trainset, testset, batchsize,
+        DataBaseclass.__init__(self, trainset, measureset, testset, batchsize,
                                ['rgb', 'depth', 'labels'], labelinfo)
 
     @property
