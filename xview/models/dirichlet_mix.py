@@ -65,9 +65,12 @@ class DirichletMix(BaseModel):
         self.modalities = config['modalities']
 
         # If specified, load mesaurements of the experts.
-        if 'measurement_exp' in config:
-            measurements = np.load(ExperimentData(config["measurement_exp"])
-                                   .get_artifact("counts.npz"))
+        if 'measurement_exp' in config or 'dirichlet_params' in config:
+            if 'measurement_exp' in config:
+                measurements = np.load(ExperimentData(config["measurement_exp"])
+                                       .get_artifact("counts.npz"))
+            else:
+                measurements = config['dirichlet_params']
             self.dirichlet_params = {modality: measurements[modality].astype('float32')
                                      for modality in self.modalities}
             self.class_counts = measurements['class_counts'].astype('float32')
