@@ -396,4 +396,9 @@ class DirichletMix(BaseModel):
         with self.graph.as_default():
             probs = self.sess.run(self.probs.values(),
                                   feed_dict=self._evaluation_food(data))
-        return rgb_prob, depth_prob
+            likelihoods = self.sess.run([
+                tf.stack([self.dirichlets.values()[i][c].log_prob(1e-20 + probs[i])
+                          for c in range(self.config['num_classes'])], axis=3)
+                for i in range(len(self.modalities))])
+
+        return probs, likelihoods
