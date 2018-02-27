@@ -101,10 +101,10 @@ class DirichletMix(BaseModel):
                                   self.config['num_classes'], reuse=reuse)
             elif self.config['expert_model'] == 'fcn':
                 outputs = encoder(inputs, prefix, self.config['num_units'],
-                                  trainable=False, reuse=reuse)
+                                  0.0, trainable=False, reuse=reuse)
                 outputs.update(decoder(outputs['fused'], prefix,
                                        self.config['num_units'],
-                                       self.config['num_classes'], 0.0, trainable=False,
+                                       self.config['num_classes'], trainable=False,
                                        reuse=reuse))
             else:
                 raise UserWarning('ERROR: Expert Model {} not found'
@@ -156,6 +156,8 @@ class DirichletMix(BaseModel):
 
             label = tf.argmax(self.fused_score, 3, name='label_2d')
             self.prediction = label
+
+            self.dirichlets = dirichlets
 
             # debugging stuff
 
