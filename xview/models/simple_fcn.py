@@ -37,6 +37,8 @@ def encoder(inputs, prefix, num_units, dropout_rate, trainable=True,
     # dropout after pool3
     l['pool3_drop'] = dropout(l['pool3'], rate=dropout_rate, training=is_training,
                               name='{}_dropout'.format(prefix))
+    # now we have to overwrite the following layers:
+    params['reuse'] = True
     l['conv4_1'] = conv2d(l['pool3'], 512, [3, 3], name='{}_conv4_1'.format(prefix),
                           **params)
     l['conv4_2'] = conv2d(l['conv4_1'], 512, [3, 3], name='{}_conv4_2'.format(prefix),
@@ -51,6 +53,7 @@ def encoder(inputs, prefix, num_units, dropout_rate, trainable=True,
                           **params)
     l['conv5_3'] = conv2d(l['conv5_2'], 512, [3, 3], name='{}_conv5_3'.format(prefix),
                           **params)
+    params['reuse'] = reuse
 
     # Use 1x1 convolutions on conv4_3 and conv5_3 to define features.
     score_conv4 = conv2d(l['conv4_3'], num_units, [1, 1],
