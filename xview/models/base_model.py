@@ -253,12 +253,12 @@ class BaseModel(object):
             measures['F1'] = 2 * measures['precision'] * measures['recall'] / \
                 (measures['precision'] + measures['recall'])
             measures['mean_F1'] = np.nanmean(measures['F1'])
-            measures['total_accuracy'] = np.diag(confusion_matrix).sum() / \
-                confusion_matrix.sum()
+            measures['total_accuracy'] = np.diag(confusion_matrix)[1:].sum() / \
+                confusion_matrix[1:, :].sum()
             measures['IoU'] = np.diag(confusion_matrix) / \
                 (confusion_matrix.sum(1) + confusion_matrix.sum(0) -
                  np.diag(confusion_matrix))
-            measures['mean_IoU'] = np.nanmean(measures['IoU'])
+            measures['mean_IoU'] = np.nanmean(measures['IoU'][1:])
 
         return measures, confusion_matrix
 
