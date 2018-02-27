@@ -87,7 +87,7 @@ class VarianceMix(BaseModel):
             samples = tf.stack([sample_pipeline(inputs, modality, reuse=(i != 0))
                                 for i in range(self.config['num_samples'])], axis=4)
 
-            variance = tf.reduce_mean(tf.nn.moments(samples, [4])[0], axis=3,
+            variance = tf.reduce_mean(tf.nn.moments(samples, [4])[1], axis=3,
                                       keep_dims=True)
 
             # We get the label by passing the input without dropout
