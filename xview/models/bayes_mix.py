@@ -33,7 +33,7 @@ def bayes_fusion(classifications, confusion_matrices, class_prior='data'):
         conditional = np.nan_to_num(confusion_matrix / confusion_matrix.sum(0))
 
         # likelihood is conditional at the row of the output class
-        log_likelihoods.append(tf.log(tf.gather(conditional, classifications[i_expert])))
+        log_likelihoods.append(tf.log(1e-20 + tf.gather(conditional, classifications[i_expert])))
 
     uniform_prior = 1.0 / 14
     data_prior = confusion_matrix.sum(0) / confusion_matrix.sum()
