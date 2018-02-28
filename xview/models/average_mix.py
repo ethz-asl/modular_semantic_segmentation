@@ -43,11 +43,11 @@ class AverageMix(BaseModel):
                 outputs = adapnet(inputs, prefix, self.config['num_units'],
                                   self.config['num_classes'], reuse=False)
             elif self.config['expert_model'] == 'fcn':
-                outputs = encoder(inputs, prefix, self.config['num_units'],
+                outputs = encoder(inputs, prefix, self.config['num_units'], 0.0,
                                   trainable=False, reuse=False)
                 outputs.update(decoder(outputs['fused'], prefix,
                                        self.config['num_units'],
-                                       self.config['num_classes'], 0.0, trainable=False,
+                                       self.config['num_classes'], trainable=False,
                                        reuse=False))
             else:
                 raise UserWarning('ERROR: Expert Model {} not found'
