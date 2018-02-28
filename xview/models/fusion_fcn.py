@@ -34,7 +34,7 @@ def fusion_fcn(inputs, prefixes, num_units, num_classes, trainable=True,
 
     layers['features'] = tf.add_n([layers['score_conv4'], layers['upscore_conv5']],
                                   name='fused_add_score')
-    layers.update(decoder(layers['features'], 'fused', num_units, num_classes, 0.0,
+    layers.update(decoder(layers['features'], 'fused', num_units, num_classes,
                           trainable=trainable, is_training=is_training, reuse=reuse))
     return layers
 
