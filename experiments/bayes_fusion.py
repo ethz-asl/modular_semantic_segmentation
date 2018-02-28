@@ -55,12 +55,12 @@ def evaluate(net_config, evaluation_data, modelname, starting_weights, _run):
 def average(net_config, evaluation_data, starting_weights, _run):
     """Load weigths from training experiments and evalaute fusion against specified
     data."""
-    data, _, test_set = split_test_data(evaluation_data)
+    data, _, _ = split_test_data(evaluation_data)
 
     # now evaluate average mix
     with AverageMix(**net_config) as net:
         import_weights_into_network(net, starting_weights)
-        measurements, confusion_matrix = net.score(data.get_set_data(test_set))
+        measurements, confusion_matrix = net.score(data.get_test_data())
         _run.info['measurements'] = measurements
         _run.info['confusion_matrix'] = confusion_matrix
 
@@ -76,7 +76,7 @@ def average(net_config, evaluation_data, starting_weights, _run):
 def fit_and_evaluate(net_config, evaluation_data, starting_weights, _run):
     """Load weigths from training experiments and evalaute fusion against specified
     data."""
-    data, measure_set, test_set = split_test_data(evaluation_data)
+    data, _, _ = split_test_data(evaluation_data)
 
     # evaluate individual experts
     model = get_model(net_config['expert_model'])
@@ -88,12 +88,12 @@ def fit_and_evaluate(net_config, evaluation_data, starting_weights, _run):
         model_config['prefix'] = net_config['prefixes'][expert]
         with model(**model_config) as net:
             import_weights_into_network(net, starting_weights[model_config['prefix']])
-            m, conf_mat = net.score(data.get_set_data(measure_set))
+            m, conf_mat = net.score(data.get_measure_data())
             confusion_matrices[expert] = conf_mat
             print('Evaluated network {} on {} train data:'.format(
                 expert, evaluation_data['dataset']))
             print("INFO now getting test results")
-            m, _ = net.score(data.get_set_data(test_set))
+            m, _ = net.score(data.get_test_data())
             print('total accuracy {:.3f} IoU {:.3f}'.format(m['total_accuracy'],
                                                             m['mean_IoU']))
         _run.info.setdefault('measurements', {}).setdefault(expert, m)
@@ -102,7 +102,7 @@ def fit_and_evaluate(net_config, evaluation_data, starting_weights, _run):
     # now evaluate bayes mix
     with BayesMix(confusion_matrices=confusion_matrices, **net_config) as net:
         import_weights_into_network(net, starting_weights)
-        measurements, confusion_matrix = net.score(data.get_set_data(test_set))
+        measurements, confusion_matrix = net.score(data.get_test_data())
         _run.info['measurements']['fusion'] = measurements
         _run.info['confusion_matrix'] = confusion_matrix
 

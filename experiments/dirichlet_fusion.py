@@ -22,8 +22,8 @@ def test_parameters(net_config, evaluation_data, starting_weights, search_parame
     configs_to_test = parameter_combinations(search_parameters, net_config)
 
     # load data
-    data, measure_data, _ = split_test_data(evaluation_data)
-    search_data, search_validation = train_test_split(measure_data, test_size=.5,
+    data, _, _ = split_test_data(evaluation_data)
+    search_data, search_validation = train_test_split(data.measureset, test_size=.5,
                                                       random_state=1)
     # get sufficient statistic
     with DirichletMix(**configs_to_test[0]) as net:
@@ -56,18 +56,17 @@ def test_parameters(net_config, evaluation_data, starting_weights, search_parame
 def fit_and_evaluate(net_config, evaluation_data, starting_weights, _run):
     """Load weigths from trainign experiments and evalaute network against specified
     data."""
-    data, measure_data, test_data = split_test_data(evaluation_data)
-    _, measure_data = train_test_split(measure_data, test_size=.5, random_state=1)
+    data, _, _ = split_test_data(evaluation_data)
 
     with DirichletMix(**net_config) as net:
         import_weights_into_network(net, starting_weights)
 
-        dirichlet_params = net.fit(data.get_set_data(measure_data))
+        dirichlet_params = net.fit(data.get_measure_data())
 
         # import weights again has fitting created new graph
         import_weights_into_network(net, starting_weights)
 
-        measurements, confusion_matrix = net.score(data.get_set_data(test_data))
+        measurements, confusion_matrix = net.score(data.get_test_data())
         _run.info['measurements'] = measurements
         _run.info['confusion_matrix'] = confusion_matrix
         _run.info['dirichlet_params'] = dirichlet_params
