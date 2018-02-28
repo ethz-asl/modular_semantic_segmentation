@@ -5,6 +5,7 @@ from .freiburg_forest import FreiburgForest
 from .cityscapes import Cityscapes
 from .cityscapesA import Cityscapes as CityA
 from .cityscapesB import Cityscapes as CityB
+from .cityscapesC import Cityscapes as CityC
 from .synthia_rand import SynthiaRand
 from .mixed_data import MixedData
 
@@ -24,6 +25,8 @@ def get_dataset(name, config):
         return CityA(**config)
     elif name == 'cityscapes_b':
         return CityB(**config)
+    elif name == 'cityscapes_c':
+        return CityC(**config)
     elif name == 'synthiarand':
         return SynthiaRand(**config)
     if name == 'mixeddata':
