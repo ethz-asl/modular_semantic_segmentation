@@ -347,6 +347,9 @@ class BaseModel(object):
                     return name
                 splitted = name.split('/')
                 further_splitted = splitted[0].split('_')
+                # dirty fix for forest
+                if further_splitted[0] == 'forest':
+                    return name
                 # exchange prefix
                 further_splitted[0] = import_prefix
                 splitted[0] = '_'.join(further_splitted)
