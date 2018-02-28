@@ -56,7 +56,7 @@ class VarianceMix(BaseModel):
                                   self.config['num_classes'], reuse=reuse)
             elif self.config['expert_model'] == 'fcn':
                 outputs = encoder(inputs, prefix, self.config['num_units'],
-                                  trainable=False, reuse=reuse)
+                                  0.0, trainable=False, reuse=reuse)
                 outputs.update(decoder(outputs['fused'], prefix,
                                        self.config['num_units'],
                                        self.config['num_classes'],
