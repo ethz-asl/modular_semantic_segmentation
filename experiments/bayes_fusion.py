@@ -62,11 +62,12 @@ def collect_data(fitting_experiment):
 
     outpath = '/cluster/work/riner/users/blumh/measurements/{}'.format(
         fitting_experiment)
-    mkdir(outpath)
-    np.savez(path.join(outpath, 'predictions.npz'), *predictions)
-    np.savez(path.join(outpath, 'likelihoods.npz'), *likelihoods)
-    np.savez(path.join(outpath, 'conditionals.npz'), *conditionals)
-    np.savez(path.join(outpath, 'probs.npz'), *probs)
+    if not path.exists(outpath):
+        mkdir(outpath)
+    np.savez_compressed(path.join(outpath, 'predictions.npz'), *predictions)
+    np.savez_compressed(path.join(outpath, 'likelihoods.npz'), *likelihoods)
+    np.savez_compressed(path.join(outpath, 'conditionals.npz'), *conditionals)
+    np.savez_compressed(path.join(outpath, 'probs.npz'), *probs)
 
 
 @ex.command
