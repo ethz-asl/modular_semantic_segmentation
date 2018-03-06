@@ -39,6 +39,10 @@ def collect_data(fitting_experiment):
     net_config = exp.get_record()['config']['net_config']
     starting_weights = exp.get_record()['config']['starting_weights']
     confusion_matrices = exp.get_record()['info']['confusion_matrices']
+    # load numpy confusion matrices
+    confusion_matrices = {
+        key: np.array(val['values']) for key, val in confusion_matrices.items()
+    }
 
     data, _, _ = split_test_data(evaluation_data)
 
@@ -58,7 +62,7 @@ def collect_data(fitting_experiment):
 
     outpath = '/cluster/work/riner/users/blumh/measurements/{}'.format(
         fitting_experiment)
-    os.mkdir(outpath)
+    mkdir(outpath)
     np.save(path.join(outpath, 'predictions.npy'), np.array(predictions))
     np.save(path.join(outpath, 'likelihoods.npy'), np.array(likelihoods))
     np.save(path.join(outpath, 'conditionals.npy'), np.array(conditionals))
