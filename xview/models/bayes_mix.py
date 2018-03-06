@@ -26,11 +26,13 @@ def bayes_fusion(classifications, confusion_matrices, class_prior='data'):
     """
     # We will collect all posteriors in this list
     log_likelihoods = []
+    conditionals = []
 
     for i_expert in range(len(confusion_matrices)):
         # compute p(expert output | groudn truth class x)
         confusion_matrix = confusion_matrices[i_expert]
         conditional = np.nan_to_num(confusion_matrix / confusion_matrix.sum(0))
+        conditionals.append(tf.gather(conditional, classifications[i_expert]))
 
         # likelihood is conditional at the row of the output class
         log_likelihoods.append(tf.log(1e-20 + tf.gather(conditional, classifications[i_expert])))
@@ -49,7 +51,9 @@ def bayes_fusion(classifications, confusion_matrices, class_prior='data'):
         prior = weight * uniform_prior + (1 - weight) * data_prior
         prior = prior / prior.sum()
 
-    return tf.reduce_sum(tf.stack(log_likelihoods, axis=0), axis=0) + tf.log(prior)
+    return (tf.reduce_sum(tf.stack(log_likelihoods, axis=0), axis=0) + tf.log(prior),
+            log_likelihoods,
+            conditionals)
 
 
 class BayesMix(BaseModel):
@@ -123,12 +127,15 @@ class BayesMix(BaseModel):
                                          self.config['prefixes'][modality])
                  for modality in self.modalities}
 
-        fused_score = bayes_fusion([tf.argmax(prob, 3) for prob in probs.values()],
+        fused_score, likelihoods, conditionals = bayes_fusion([tf.argmax(prob, 3) for prob in probs.values()],
                                    [self.confusion_matrices[x]
                                     for x in self.modalities],
                                    self.config['class_prior'])
         label = tf.argmax(fused_score, 3, name='label_2d')
         self.prediction = label
+        self.likelihoods = likelihoods
+        self.conditionals = conditionals
+        self.probs = probs
 
     def _enqueue_batch(self, batch, sess):
         # This model does not support training
@@ -138,3 +145,11 @@ class BayesMix(BaseModel):
         feed_dict = {self.test_placeholders[modality]: data[modality]
                      for modality in self.modalities}
         return feed_dict
+
+    def get_insight(self, data):
+        with self.graph.as_default():
+            probs, likelihoods, conditionals, prediciton = \
+                self.sess.run([self.probs.values(), self.likelihoods,
+                               self.conditionals, self.prediction],
+                              feed_dict=self._evaluation_food(data))
+        return probs, likelihoods, conditionals, prediciton
