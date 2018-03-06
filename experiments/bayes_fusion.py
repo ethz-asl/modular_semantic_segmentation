@@ -63,10 +63,10 @@ def collect_data(fitting_experiment):
     outpath = '/cluster/work/riner/users/blumh/measurements/{}'.format(
         fitting_experiment)
     mkdir(outpath)
-    np.save(path.join(outpath, 'predictions.npy'), np.array(predictions))
-    np.save(path.join(outpath, 'likelihoods.npy'), np.array(likelihoods))
-    np.save(path.join(outpath, 'conditionals.npy'), np.array(conditionals))
-    np.save(path.join(outpath, 'probs.npy'), np.array(probs))
+    np.savez(path.join(outpath, 'predictions.npz'), *predictions)
+    np.savez(path.join(outpath, 'likelihoods.npz'), *likelihoods)
+    np.savez(path.join(outpath, 'conditionals.npz'), *conditionals)
+    np.savez(path.join(outpath, 'probs.npz'), *probs)
 
 
 @ex.command
