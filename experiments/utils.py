@@ -6,6 +6,8 @@ from tensorflow.python.summary.summary_iterator import summary_iterator
 from xview.settings import EXPERIMENT_DB_HOST, EXPERIMENT_DB_USER, EXPERIMENT_DB_PWD,\
     EXPERIMENT_DB_NAME
 from xview.datasets import get_dataset
+from bson.json_util import dumps
+import zipfile
 
 
 def load_data(data_config):
@@ -75,3 +77,12 @@ class ExperimentData:
         filename = (artifact['name'] for artifact in self.record['artifacts']
                     if 'weights' in artifact['name']).next()
         return self.get_artifact(filename)
+
+    def dump(self, path):
+        """Dump the entire record and it's artifacts as a zip archieve."""
+        if not path.endswith('.zip'):
+            path = path + '.zip'
+        archive = zipfile.ZipFile(path, 'w')
+        for artifact in self.record['artifacts']:
+            archive.writestr(artifact['name'], self.fs.get(artifact['file_id']).read())
+        archive.writestr('record.json', dumps(self.get_record()))
