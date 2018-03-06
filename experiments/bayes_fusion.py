@@ -9,7 +9,7 @@ from copy import deepcopy
 from sys import stdout
 from sklearn.model_selection import train_test_split
 import numpy as np
-from os import path
+from os import path, mkdir
 
 
 ex = Experiment()
@@ -58,6 +58,7 @@ def collect_data(fitting_experiment):
 
     outpath = '/cluster/work/riner/users/blumh/measurements/{}'.format(
         fitting_experiment)
+    os.mkdir(outpath)
     np.save(path.join(outpath, 'predictions.npy'), np.array(predictions))
     np.save(path.join(outpath, 'likelihoods.npy'), np.array(likelihoods))
     np.save(path.join(outpath, 'conditionals.npy'), np.array(conditionals))
