@@ -2,11 +2,14 @@ from sacred import Experiment
 from sacred.utils import apply_backspaces_and_linefeeds
 from experiments.utils import get_mongo_observer
 from experiments.evaluation import import_weights_into_network
+from experiments.utils import ExperimentData
 from xview.datasets import get_dataset
 from xview.models import get_model, BayesMix, AverageMix
 from copy import deepcopy
 from sys import stdout
 from sklearn.model_selection import train_test_split
+import numpy as np
+from os import path
 
 
 ex = Experiment()
@@ -27,6 +30,38 @@ def split_test_data(data_config):
     measure_set, test_set = train_test_split(data.testset, test_size=.5, random_state=1)
 
     return data, measure_set, test_set
+
+
+@ex.command
+def collect_data(fitting_experiment):
+    exp = ExperimentData(fitting_experiment)
+    evaluation_data = exp.get_record()['config']['evaluation_data']
+    net_config = exp.get_record()['config']['net_config']
+    starting_weights = exp.get_record()['config']['starting_weights']
+    confusion_matrices = exp.get_record()['info']['confusion_matrices']
+
+    data, _, _ = split_test_data(evaluation_data)
+
+    # now collect insight on bayes mix
+    predictions = []
+    likelihoods = []
+    conditionals = []
+    probs = []
+    with BayesMix(confusion_matrices=confusion_matrices, **net_config) as net:
+        import_weights_into_network(net, starting_weights)
+        for batch in data.get_test_data():
+            insight = net.get_insight(batch)
+            probs.append(insight[0])
+            likelihoods.append(insight[1])
+            conditionals.append(insight[2])
+            predictions.append(insight[3])
+
+    outpath = '/cluster/work/riner/users/blumh/measurements/{}'.format(
+        fitting_experiment)
+    np.save(path.join(outpath, 'predictions.npy'), np.array(predictions))
+    np.save(path.join(outpath, 'likelihoods.npy'), np.array(likelihoods))
+    np.save(path.join(outpath, 'conditionals.npy'), np.array(conditionals))
+    np.save(path.join(outpath, 'probs.npy'), np.array(probs))
 
 
 @ex.command
