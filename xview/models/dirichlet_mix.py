@@ -392,7 +392,7 @@ class DirichletMix(BaseModel):
                 i = i + 1
         return ret
 
-    def get_probs(self, data):
+    def get_insight(self, data):
         with self.graph.as_default():
             probs = self.sess.run(self.probs.values(),
                                   feed_dict=self._evaluation_food(data))
