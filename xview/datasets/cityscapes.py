@@ -152,7 +152,7 @@ class Cityscapes(DataBaseclass):
 
         # Intitialize Baseclass
         DataBaseclass.__init__(self, trainset, measureset, testset, 14, {
-            'rgb': (1024, 2048, 3), 'depth': (1024, 2048, 1), 'labels': (1024, 2048)},
+            'rgb': (None, None, 3), 'depth': (None, None, 1), 'labels': (None, None)},
             labelinfo)
 
     def _load_data(self, image_name, image_path):
