@@ -2,6 +2,7 @@ import numpy as np
 from os import listdir, path, environ
 import cv2
 import tarfile
+from copy import deepcopy
 
 from xview.settings import DATA_BASEPATH
 from .data_baseclass import DataBaseclass
@@ -202,4 +203,18 @@ class Cityscapes(DataBaseclass):
             blob['labels'] = np.array(self.one_hot_lookup ==
                                       blob['labels'][:, :, None]).astype(int)
 
+        return blob
+
+    def get_ego_vehicle_mask(self, image_name, image_path):
+        # save the old label mapping
+        old_label_lookup = deepcopy(self.label_lookup)
+
+        # now map everything on 0 except for ego-vehicle, which is mapped on 1
+        self.label_lookup = [0 for _ in range(34)]
+        self.label_lookup[1] = 1
+
+        blob = self._load_data(image_name, image_path)
+
+        # restore labellookup
+        self.label_lookup = old_label_lookup
         return blob
