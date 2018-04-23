@@ -5,6 +5,8 @@ from os import path
 from abc import ABCMeta, abstractmethod
 from time import sleep
 from types import GeneratorType
+from copy import deepcopy
+from tqdm import tqdm
 
 
 class BaseModel(object):
@@ -20,9 +22,10 @@ class BaseModel(object):
     """
 
     __metaclass__ = ABCMeta
-    required_attributes = [["loss"], ["prediction"], ["close_queue_op"]]
+    required_attributes = [["loss"], ["prediction"]]
 
-    def __init__(self, name, output_dir=None, supports_training=True, **config):
+    def __init__(self, name, data_description, output_dir=None, supports_training=True,
+                 batchsize=1, **config):
         """Set configuration and build the model.
 
         Requires method _build_model to build the tensorflow graph.
@@ -36,18 +39,39 @@ class BaseModel(object):
         self.output_dir = output_dir
         self.supports_training = supports_training
         self.config = config
+        self.config['batchsize'] = batchsize
+        self.config['num_classes'] = data_description[2]
+        # add a new dim for the batchsize into the data description
+        self.testdata_description = [data_description[0], {
+            key: [None, *description]
+            for key, description in data_description[1].items()}]
+        # data does have a one-hot format in the labels
+        data_description = deepcopy(self.testdata_description[1])
+        data_description['labels'] = list(data_description['labels'])
+        data_description['labels'].append(self.config['num_classes'])
+        self.data_description = [self.testdata_description[0], data_description]
 
         self._initialize_graph()
 
     def _initialize_graph(self):
-        tf.reset_default_graph()
-
         # Now we build the network.
         self.graph = tf.Graph()
+        self.graph_context = self.graph.as_default()
         with self.graph.as_default():
-            self.global_step = tf.Variable(0, trainable=False)
+            # inference data coming packed as tf.data.dataset, therefore we create
+            # a feedable dataset iterator
+            self.training_handle = tf.placeholder(tf.string, shape=[])
+            iterator = tf.data.Iterator.from_string_handle(
+                self.training_handle, *self.data_description)
+            training_batch = iterator.get_next()
 
-            self._build_graph()
+            self.testing_handle = tf.placeholder(tf.string, shape=[])
+            iterator = tf.data.Iterator.from_string_handle(
+                self.testing_handle, *self.testdata_description)
+            test_batch = iterator.get_next()
+            evaluation_labels = test_batch['labels']
+
+            self._build_graph(training_batch, test_batch)
 
             # For any child class, we require the attributes specified in the docstring
             # and defined in self.required_attributes. After self._build_graph(), we can
@@ -65,10 +89,9 @@ class BaseModel(object):
                 if not hasattr(self, 'prediction'):
                     raise AttributeError("Model class required attribute prediction")
 
-            # To evaluate accuracy atc, we have to define soem structures here
-            self.evaluation_labels = tf.placeholder(tf.float32, shape=[None, None, None])
+            # To evaluate accuracy atc, we have to define some structures here
             self.confusion_matrix = tf.confusion_matrix(
-                labels=tf.reshape(self.evaluation_labels, [-1]),
+                labels=tf.reshape(evaluation_labels, [-1]),
                 predictions=tf.reshape(self.prediction, [-1]),
                 num_classes=self.config['num_classes'])
 
@@ -76,11 +99,11 @@ class BaseModel(object):
                 self.global_step = tf.Variable(0, trainable=False, name='global_step')
                 update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
                 with tf.control_dependencies(update_ops):
-                    available_trainers = {'adagrad': tf.train.AdagradOptimizer,
-                                          'adam': tf.train.AdamOptimizer,
-                                          'rmsprop': tf.train.RMSPropOptimizer}
-                    self.trainer = available_trainers[self.config['trainer']](
-                        learning_rate=self.config['learning_rate']).minimize(
+                    trainers = {'adagrad': tf.train.AdagradOptimizer,
+                                'adam': tf.train.AdamOptimizer,
+                                'rmsprop': tf.train.RMSPropOptimizer}
+                    self.trainer = trainers[self.config.get('trainer', 'adam')](
+                        learning_rate=self.config.get('learning_rate', 0.0001)).minimize(
                             self.loss, global_step=self.global_step)
 
             self.saver = tf.train.Saver()
@@ -98,69 +121,50 @@ class BaseModel(object):
         """Set up the whole network here."""
         raise NotImplementedError
 
-    def _enqueue_batch(self, batch, sess):
-        """Load the given training data into the correct inputs."""
-        raise NotImplementedError
-
-    @abstractmethod
-    def _evaluation_food(self, data):
-        """Return a feed_dict for a prediction run on the network."""
-        raise NotImplementedError
-
-    def _load_and_enqueue(self, sess, data, coord):
-        """Internal handler method for the input data queue. Will run in a seperate thread.
-
-        Args:
-            sess: The current session, needs to be the same as in the main thread.
-            data: The data to load. See method predict for specifications.
-            coord: The training coordinator (from tensorflow)
-        """
-        with self.graph.as_default():
-            # We enqueue new data until it tells us to stop.
-            try:
-                while not coord.should_stop():
-                    batch = data.next()
-                    if not coord.should_stop():
-                        self._enqueue_batch(batch, sess)
-            except tf.errors.CancelledError:
-                print('INFO: Input queue is closed, cannot enqueue any more data.')
-
-    def fit(self, data, iterations, output=True, validation_data=None,
-            validation_interval=100, additional_eval_data={}):
+    def fit(self, dataset, iterations, output=True, validation_dataset=None,
+            validation_interval=100, additional_eval_datasets={}):
         """Train the model for given number of iterations.
 
         Args:
-            data: A handler inheriting from DataWrapper
+            dataset: tf.data.Dataset
             iterations: The number of training iterations
         """
         if not self.supports_training:
-            raise UserWarning(
-                "ERROR: Model {} does not support training".format(self.name))
+            raise UserWarning("ERROR: Model %s does not support training" % self.name)
 
         with self.graph.as_default():
             # Merge all summary creation into one op. Add summary for loss.
-            loss_summary = tf.summary.scalar('loss', self.loss)
+            tf.summary.scalar('loss', self.loss)
             merged_summary = tf.summary.merge_all()
             if self.output_dir is not None:
                 train_writer = tf.summary.FileWriter(self.output_dir)
 
-            # Create a thread to load data.
-            coord = tf.train.Coordinator()
-            t = threading.Thread(target=self._load_and_enqueue,
-                                 args=(self.sess, data, coord))
-            t.start()
+            # initialize datasets
+            def _onehot_mapper(blob):
+                blob['labels'] = tf.one_hot(blob['labels'], self.config['num_classes'],
+                                            dtype=tf.int32)
+                return blob
 
-            # Now we can make the graph read-only.
-            self.graph.finalize()
+            train_iterator = dataset.map(_onehot_mapper, 10)\
+                .batch(self.config['batchsize'])\
+                .make_one_shot_iterator()
+            train_handle = self.sess.run(train_iterator.string_handle())
+
+            if validation_dataset is None:
+                validation_iterator = dataset.take(10).batch(self.config['batchsize'])\
+                    .make_initializable_iterator()
+            else:
+                validation_iterator = validation_dataset.batch(self.config['batchsize'])\
+                    .make_initializable_iterator()
 
             print('INFO: Start training')
-            for i in range(iterations):
-                self.sess.run(self.trainer)
-
-                # Every validation_interval, we add a summary of validation values
-                if i % validation_interval == 0 and validation_data is not None:
-                    score, _ = self.score(validation_data())
-                    summary = self.sess.run(merged_summary)
+            for i in tqdm(range(iterations), disable=output):
+                # Every validation_interval, we run the summary and validation values
+                if i % validation_interval == 0 and validation_dataset is not None:
+                    _, summary = self.sess.run(
+                        (self.trainer, merged_summary),
+                        feed_dict={self.training_handle: train_handle})
+                    score, _ = self.score(validation_iterator)
                     accuracy = tf.Summary(
                         value=[tf.Summary.Value(tag='accuracy',
                                                 simple_value=score['total_accuracy'])])
@@ -177,8 +181,8 @@ class BaseModel(object):
                         train_writer.add_summary(summary, i)
 
                     # Add additional summaries if specified
-                    for key, additional_data in additional_eval_data.items():
-                        val = self.score(additional_data())[0]['mean_IoU']
+                    for key, additional_dataset in additional_eval_datasets.items():
+                        val = self.score(additional_dataset)[0]['mean_IoU']
                         summary = tf.Summary(value=[tf.Summary.Value(tag=key,
                                                                      simple_value=val)])
                         train_writer.add_summary(summary, i)
@@ -186,13 +190,9 @@ class BaseModel(object):
                     if 'abort_at_iou' in self.config:
                         if score['mean_IoU'] > self.config['abort_at_iou']:
                             break
-
-            coord.request_stop()
-            # Before we can close the queue, wait that the enqueue process stopped,
-            # otherwise it will produce an error.
-            sleep(20)
-            self.sess.run(self.close_queue_op)
-            coord.join([t])
+                else:
+                    self.sess.run(self.trainer,
+                                  feed_dict={self.training_handle: train_handle})
             print('INFO: Training finished.')
 
     def predict(self, data, output_prob=False):
@@ -210,8 +210,11 @@ class BaseModel(object):
                 - <array of shape [num_images, width, height]> else
         """
         with self.graph.as_default():
-            output = self.prob if output_prob else self.prediction
-            return self.sess.run(output, feed_dict=self._evaluation_food(data))
+            iterator = tf.data.Dataset.from_tensor_slices(data)\
+                .batch(self.config['batchsize']).make_one_shot_iterator()
+            handle = self.sess.run(iterator.string_handle())
+            output = self.prob if (output_prob and self.prob) else self.prediction
+            return self.sess.run(output, feed_dict={self.testing_handle: handle})
 
     def score(self, data, max_iterations=None):
         """Measure the performance of the model with respect to the given data.
@@ -222,27 +225,27 @@ class BaseModel(object):
         Returns:
             dictionary of some measures, total confusion matrix
         """
+        with self.graph.as_default():
+            # initialize the data dependent on the type
+            if isinstance(data, tf.data.Dataset):
+                iterator = data.batch(self.config['batchsize']).make_one_shot_iterator()
+            elif isinstance(data, tf.data.Iterator):
+                iterator = data
+                self.sess.run(iterator.initializer)
+            else:
+                iterator = tf.data.Dataset.from_tensor_slices(data)\
+                    .batch(self.config['batchsize']).make_one_shot_iterator()
+            handle = self.sess.run(iterator.string_handle())
 
-        def get_confusion_matrix(batch):
-            """Evaluate confusion matrix of network for given batch of data."""
-            with self.graph.as_default():
-                feed_dict = self._evaluation_food(batch)
-                feed_dict[self.evaluation_labels] = batch['labels']
-                confusion = self.sess.run(self.confusion_matrix, feed_dict=feed_dict)
-                return np.array(confusion).astype(np.float32)
-
-        if isinstance(data, GeneratorType):
+            # run through batches of the data and collect all in this confusion matrix
             confusion_matrix = np.zeros((self.config['num_classes'],
                                          self.config['num_classes']))
-            i = 0
-            for batch in data:
-                confusion_matrix += get_confusion_matrix(batch)
-                if max_iterations is not None:
-                    i = i + 1
-                    if i == max_iterations:
-                        break
-        else:
-            confusion_matrix = get_confusion_matrix(data)
+            while True:
+                try:
+                    confusion_matrix += self.sess.run(
+                        self.confusion_matrix, feed_dict={self.testing_handle: handle})
+                except tf.errors.OutOfRangeError:
+                    break
 
         with np.errstate(divide='ignore', invalid='ignore'):
             # Now we compute several mesures from the confusion matrix
@@ -283,9 +286,11 @@ class BaseModel(object):
                 net.predict()
         """
         self.close()
+        self.graph_context.__exit__(*args)
 
     def __enter__(self):
         """Contexthandler for convenience. See __exit__ for more information."""
+        self.graph_context.__enter__()
         return self
 
     def export_weights(self, save_dir=None):

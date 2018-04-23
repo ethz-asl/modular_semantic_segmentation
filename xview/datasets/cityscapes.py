@@ -2,11 +2,12 @@ import numpy as np
 from os import listdir, path, environ
 import cv2
 import tarfile
-from copy import deepcopy
+from sklearn.model_selection import train_test_split
 
 from xview.settings import DATA_BASEPATH
 from .data_baseclass import DataBaseclass
 from .augmentation import augmentate
+from copy import deepcopy
 
 
 CITYSCAPES_BASEPATH = path.join(DATA_BASEPATH, 'cityscapes')
@@ -107,9 +108,9 @@ class Cityscapes(DataBaseclass):
             11: {'name': 'bicycle', 'color': [0, 128, 192]}
         }
 
-        self.label_lookup = [(i for i in labelinfo
-                              if labelinfo[i]['name'] == k['mapping']).next()
-                             for _, k in original_labelinfo.iteritems()]
+        self.label_lookup = [next(i for i in labelinfo
+                                  if labelinfo[i]['name'] == k['mapping'])
+                             for _, k in original_labelinfo.items()]
 
         # load training and test sets
         # Generate train/test splits
@@ -139,22 +140,20 @@ class Cityscapes(DataBaseclass):
             self.base_path = localtmp
             trainset = [{'image': self._load_data(i['image_name'], i['image_path'])}
                         for i in get_filenames('train', cities=cities)]
-            measureset = [{'image': self._load_data(i['image_name'], i['image_path'])}
-                          for i in get_filenames('val', cities=['munster'])]
             testset = [{'image': self._load_data(i['image_name'], i['image_path'])}
-                       for i in get_filenames('val', cities=['frankfurt', 'lindau'])]
+                       for i in get_filenames('val', cities=['munster', 'frankfurt',
+                                                             'lindau'])]
         else:
             trainset = get_filenames('train', cities=cities)
-            measureset = get_filenames('val', cities=['munster'])
-            testset = get_filenames('val', cities=['frankfurt', 'lindau'])
+            testset = get_filenames('val', cities=['munster', 'frankfurt', 'lindau'])
+
+        trainset, measureset = train_test_split(trainset, test_size=0.05,
+                                                random_state=4)
 
         # Intitialize Baseclass
-        DataBaseclass.__init__(self, trainset, measureset, testset, batchsize,
-                               ['rgb', 'depth', 'labels'], labelinfo)
-
-    @property
-    def one_hot_lookup(self):
-        return np.arange(len(self.labelinfo), dtype=np.int)
+        DataBaseclass.__init__(self, trainset, measureset, testset, 14, {
+            'rgb': (1024, 2048, 3), 'depth': (1024, 2048, 1), 'labels': (1024, 2048)},
+            labelinfo)
 
     def _load_data(self, image_name, image_path):
         rgb_filename, depth_filename, labels_filename = (
@@ -171,7 +170,7 @@ class Cityscapes(DataBaseclass):
         blob['depth'] = cv2.imread(depth_filename, cv2.IMREAD_ANYDEPTH)
         blob['labels'] = cv2.imread(labels_filename, cv2.IMREAD_ANYDEPTH)
         # apply label mapping
-        blob['labels'] = np.asarray(self.label_lookup)[blob['labels']]
+        blob['labels'] = np.asarray(self.label_lookup, dtype='int32')[blob['labels']]
 
         if self.config['resize']:
             blob['rgb'] = cv2.resize(blob['rgb'], (768, 384),
@@ -181,7 +180,6 @@ class Cityscapes(DataBaseclass):
                                      interpolation=cv2.INTER_NEAREST)
 
         blob['depth'] = np.expand_dims(blob['depth'], 3)
-
         return blob
 
     def _get_data(self, image_name=False, image_path=False, image=False,
@@ -200,9 +198,9 @@ class Cityscapes(DataBaseclass):
 
         if training_format:
             blob = augmentate(blob, **self.config['augmentation'])
-            blob['labels'] = np.array(self.one_hot_lookup ==
+            # transformation into one-hot-format
+            blob['labels'] = np.array(np.arange(len(self.labelinfo), dtype=np.int) ==
                                       blob['labels'][:, :, None]).astype(int)
-
         return blob
 
     def get_ego_vehicle_mask(self, image_name, image_path):

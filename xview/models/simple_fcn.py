@@ -3,7 +3,7 @@ from tensorflow.python.layers.layers import dropout, max_pooling2d
 from copy import deepcopy
 
 from .base_model import BaseModel
-from .custom_layers import conv2d, deconv2d, log_softmax, softmax
+from .custom_layers import conv2d, deconv2d
 from .utils import cross_entropy
 from .vgg16 import vgg16
 
@@ -123,76 +123,46 @@ class SimpleFCN(BaseModel):
         Other Args see encoder and decoder
     """
 
-    def __init__(self, prefix, output_dir=None, **config):
+    def __init__(self, prefix, data_description, modality, output_dir=None, **config):
         self.prefix = prefix
+        self.modality = modality
 
         standard_config = {
             'train_encoder': True
         }
         standard_config.update(config)
-        BaseModel.__init__(self, 'SimpleFCN', output_dir=output_dir, **standard_config)
+        BaseModel.__init__(self, 'SimpleFCN', data_description, output_dir=output_dir,
+                           **standard_config)
 
-    def _build_graph(self):
+    def _build_graph(self, train_data, test_data):
         """Builds the whole network. Network is split into 2 similar pipelines with shared
         weights, one for training and one for testing."""
 
         # Training network
-        # First we define placeholders for the input into the input-queue.
-        # This is not the direct input into the network, the enqueue-op has to be called
-        # to evaluate any data that is fed here.
-        # rgb channel
-        self.train_X = tf.placeholder(tf.float32, shape=[None, None, None,
-                                                         self.config['num_channels']])
+        train_x = train_data[self.modality]
         # ground truth labels
-        self.train_Y = tf.placeholder(tf.float32, shape=[None, None, None,
-                                                         self.config['num_classes']])
-        # dropout rate is also an input as it will be different between training and
-        # evaluation
-        self.train_dropout_rate = tf.placeholder(tf.float32)
-        # An input queue is defined to load the data for several batches in advance and
-        # keep the gpu as busy as we can.
-        # IMPORTANT: The size of this queue can grow big very easily with growing
-        # batchsize, therefore do not make the queue too long, otherwise we risk getting
-        # killed by the OS
-        q = tf.FIFOQueue(3, [tf.float32, tf.float32, tf.float32])
-        self.enqueue_op = q.enqueue([self.train_X, self.train_Y,
-                                     self.train_dropout_rate])
-        train_x, training_labels, train_dropout_rate = q.dequeue()
-
-        # This operation has to be called to close the input queue and free the space it
-        # occupies in memory.
-        self.close_queue_op = q.close(cancel_pending_enqueues=True)
-
-        # The queue output does not have a defined shape, so we have to define it here to
-        # be compatible with tf.layers.
-        train_x.set_shape([None, None, None, self.config['num_channels']])
+        train_y = tf.to_float(train_data['labels'])
 
         encoder_layers = encoder(train_x, self.prefix, self.config['num_units'],
-                                 train_dropout_rate, is_training=True, reuse=False,
+                                 self.config['dropout_rate'], is_training=True,
+                                 reuse=False,
                                  trainable=self.config.get('train_encoder', True))
         decoder_layers = decoder(encoder_layers['fused'], self.prefix,
                                  self.config['num_units'], self.config['num_classes'],
                                  is_training=True, reuse=False)
-        prob = log_softmax(decoder_layers['score'], self.config['num_classes'],
-                           name='prob')
+        prob = tf.nn.log_softmax(decoder_layers['score'], name='prob')
         # The loss is given by the cross-entropy with the ground-truth
-        self.loss = tf.div(tf.reduce_sum(cross_entropy(training_labels, prob)),
-                           tf.reduce_sum(training_labels))
+        self.loss = tf.div(tf.reduce_sum(cross_entropy(prob, train_y)),
+                           tf.reduce_sum(train_y))
 
         # Network for testing / evaluation
-        # As before, we define placeholders for the input. These here now can be fed
-        # directly, e.g. with a feed_dict created by _evaluation_food
-        # rgb channel
-        self.test_X = tf.placeholder(tf.float32, shape=[None, None, None,
-                                                        self.config['num_channels']])
-
-        encoder_layers = encoder(self.test_X, self.prefix, self.config['num_units'],
+        test_x = test_data[self.modality]
+        encoder_layers = encoder(test_x, self.prefix, self.config['num_units'],
                                  tf.constant(0.0), is_training=False, reuse=True)
         decoder_layers = decoder(encoder_layers['fused'], self.prefix,
                                  self.config['num_units'], self.config['num_classes'],
                                  is_training=False, reuse=True)
-        label = softmax(decoder_layers['score'], self.config['num_classes'],
-                        name='prob_normalized')
+        label = tf.nn.softmax(decoder_layers['score'], name='prob_normalized')
         self.prediction = tf.argmax(label, 3, name='label_2d')
 
         # Add summaries for some weights
@@ -201,14 +171,3 @@ class SimpleFCN(BaseModel):
         for name in variable_names:
             var = next(v for v in tf.global_variables() if v.name == name)
             tf.summary.histogram(name, var)
-
-    def _enqueue_batch(self, batch, sess):
-        with self.graph.as_default():
-            feed_dict = {self.train_X: batch[self.config['modality']],
-                         self.train_Y: batch['labels'],
-                         self.train_dropout_rate: self.config['dropout_rate']}
-            sess.run(self.enqueue_op, feed_dict=feed_dict)
-
-    def _evaluation_food(self, data):
-        feed_dict = {self.test_X: data[self.config['modality']]}
-        return feed_dict
