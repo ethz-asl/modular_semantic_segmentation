@@ -174,7 +174,7 @@ def adapnet(inputs, prefix, num_units, num_classes, is_training=False, reuse=Tru
 
 class Adapnet(BaseModel):
 
-    def __init__(self, prefix=None, output_dir=None, **config):
+    def __init__(self, data_description, prefix=None, output_dir=None, **config):
         standard_config = {
             'train_encoder': True
         }
@@ -185,38 +185,17 @@ class Adapnet(BaseModel):
         else:
             self.prefix = prefix
 
-        BaseModel.__init__(self, 'Adapnet', output_dir=output_dir, **standard_config)
+        BaseModel.__init__(self, 'Adapnet', data_description, output_dir=output_dir,
+                           **standard_config)
 
-    def _build_graph(self):
+    def _build_graph(self, train_data, test_data):
         """Builds the whole network. Network is split into 2 similar pipelines with shared
         weights, one for training and one for testing."""
 
         # Training network
-        # First we define placeholders for the input into the input-queue.
-        # This is not the direct input into the network, the enqueue-op has to be called
-        # to evaluate any data that is fed here.
-        # rgb channel
-        self.train_X = tf.placeholder(tf.float32, shape=[None, None, None,
-                                                         self.config['num_channels']])
+        train_x = train_data[self.config['modality']]
         # ground truth labels
-        self.train_Y = tf.placeholder(tf.float32, shape=[None, None, None,
-                                                         self.config['num_classes']])
-        # An input queue is defined to load the data for several batches in advance and
-        # keep the gpu as busy as we can.
-        # IMPORTANT: The size of this queue can grow big very easily with growing
-        # batchsize, therefore do not make the queue too long, otherwise we risk getting
-        # killed by the OS
-        q = tf.FIFOQueue(20, [tf.float32, tf.float32])
-        self.enqueue_op = q.enqueue([self.train_X, self.train_Y])
-        train_x, training_labels = q.dequeue()
-
-        # This operation has to be called to close the input queue and free the space it
-        # occupies in memory.
-        self.close_queue_op = q.close(cancel_pending_enqueues=True)
-
-        # The queue output does not have a defined shape, so we have to define it here to
-        # be compatible with tf.layers.
-        train_x.set_shape([None, None, None, self.config['num_channels']])
+        train_y = tf.to_float(train_data['labels'])
 
         adapnet_layers = adapnet(train_x, self.prefix, self.config['num_units'],
                                  self.config['num_classes'], is_training=True,
@@ -224,17 +203,13 @@ class Adapnet(BaseModel):
         with tf.variable_scope('softmax_loss'):
             prob = log_softmax(adapnet_layers['score'], self.config['num_classes'],
                                name='prob')
-            self.loss = tf.div(tf.reduce_sum(cross_entropy(training_labels, prob)),
-                               tf.reduce_sum(training_labels))
+            self.loss = tf.div(tf.reduce_sum(cross_entropy(prob, train_y)),
+                               tf.reduce_sum(train_y))
 
         # Network for testing / evaluation
-        # As before, we define placeholders for the input. These here now can be fed
-        # directly, e.g. with a feed_dict created by _evaluation_food
         # rgb channel
-        self.test_X = tf.placeholder(tf.float32, shape=[None, None, None,
-                                                        self.config['num_channels']])
-
-        adapnet_layers = adapnet(self.test_X, self.prefix, self.config['num_units'],
+        test_x = test_data[self.config['modality']]
+        adapnet_layers = adapnet(test_x, self.prefix, self.config['num_units'],
                                  self.config['num_classes'], is_training=False,
                                  reuse=True)
         self.prob = softmax(adapnet_layers['score'], self.config['num_classes'],
@@ -246,13 +221,3 @@ class Adapnet(BaseModel):
         for name in variable_names:
             var = next(v for v in tf.global_variables() if v.name == name)
             tf.summary.histogram(name, var)
-
-    def _enqueue_batch(self, batch, sess):
-        with self.graph.as_default():
-            feed_dict = {self.train_X: batch[self.config['modality']],
-                         self.train_Y: batch['labels']}
-            sess.run(self.enqueue_op, feed_dict=feed_dict)
-
-    def _evaluation_food(self, data):
-        feed_dict = {self.test_X: data[self.config['modality']]}
-        return feed_dict
