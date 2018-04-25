@@ -74,8 +74,8 @@ class ExperimentData:
         return Series(value, index=step)
 
     def get_weights(self):
-        filename = (artifact['name'] for artifact in self.record['artifacts']
-                    if 'weights' in artifact['name']).next()
+        filename = next(artifact['name'] for artifact in self.record['artifacts']
+                        if 'weights' in artifact['name'])
         return self.get_artifact(filename)
 
     def dump(self, path):

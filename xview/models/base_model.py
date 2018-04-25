@@ -210,11 +210,24 @@ class BaseModel(object):
                 - <array of shape [num_images, width, height]> else
         """
         with self.graph.as_default():
-            iterator = tf.data.Dataset.from_tensor_slices(data)\
-                .batch(self.config['batchsize']).make_one_shot_iterator()
+            # initialize the data dependent on the type
+            if isinstance(data, tf.data.Dataset):
+                iterator = data.batch(self.config['batchsize']).make_one_shot_iterator()
+            else:
+                iterator = tf.data.Dataset.from_tensor_slices(data)\
+                    .batch(self.config['batchsize']).make_one_shot_iterator()
             handle = self.sess.run(iterator.string_handle())
             output = self.prob if (output_prob and self.prob) else self.prediction
-            return self.sess.run(output, feed_dict={self.testing_handle: handle})
+
+            # collect all the batches in this list
+            ret = []
+            while True:
+                try:
+                    ret.append(self.sess.run(output,
+                                             feed_dict={self.testing_handle: handle}))
+                except tf.errors.OutOfRangeError:
+                    break
+            return np.concatenate(ret)
 
     def score(self, data, max_iterations=None):
         """Measure the performance of the model with respect to the given data.

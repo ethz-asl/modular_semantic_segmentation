@@ -7,7 +7,7 @@ from .synthia_rand import SynthiaRand
 from .mixed_data import MixedData
 
 
-def get_dataset(name, config):
+def get_dataset(name, **config):
     if name == 'synthia':
         return Synthia(**config)
     elif name == 'raw_synthia':
