@@ -151,7 +151,7 @@ class Cityscapes(DataBaseclass):
                                                 random_state=4)
 
         # Intitialize Baseclass
-        DataBaseclass.__init__(self, trainset, measureset, testset, 14, {
+        DataBaseclass.__init__(self, trainset, measureset, testset, 12, {
             'rgb': (None, None, 3), 'depth': (None, None, 1), 'labels': (None, None)},
             labelinfo)
 
