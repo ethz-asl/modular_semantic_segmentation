@@ -1,10 +1,7 @@
 import tensorflow as tf
 import numpy as np
-import threading
 from os import path
 from abc import ABCMeta, abstractmethod
-from time import sleep
-from types import GeneratorType
 from copy import deepcopy
 from tqdm import tqdm
 
