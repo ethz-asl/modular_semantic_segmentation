@@ -89,9 +89,9 @@ def import_weights_into_network(net, starting_weights):
         # description is an experiment id
         training_experiment = ExperimentData(experiment_description)
         # If no specific file specified, take first found
-        filename = (artifact['name']
-                    for artifact in training_experiment.get_record()['artifacts']
-                    if 'weights' in artifact['name']).next()
+        filename = next(artifact['name']
+                        for artifact in training_experiment.get_record()['artifacts']
+                        if 'weights' in artifact['name'])
         net.import_weights(training_experiment.get_artifact(filename),
                            translate_prefix=prefix)
 
