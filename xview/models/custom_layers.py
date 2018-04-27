@@ -227,11 +227,11 @@ def log_softmax(inputs, num_classes, name=None):
         array = np.ones(ndims)
         array[-1] = num_classes
 
-        m = tf.reduce_max(inputs, reduction_indices=[ndims-1], keep_dims=True)
+        m = tf.reduce_max(inputs, reduction_indices=[ndims-1], keepdims=True)
         multiples = tf.convert_to_tensor(array, dtype=tf.int32)
         d = tf.subtract(inputs, tf.tile(m, multiples))
         e = tf.exp(d)
-        s = tf.reduce_sum(e, reduction_indices=[ndims-1], keep_dims=True)
+        s = tf.reduce_sum(e, reduction_indices=[ndims-1], keepdims=True)
         return tf.subtract(d, tf.log(tf.tile(s, multiples)))
 
 
@@ -244,8 +244,8 @@ def softmax(inputs, num_classes, name=None):
         array = np.ones(ndims)
         array[-1] = num_classes
 
-        m = tf.reduce_max(inputs, reduction_indices=[ndims-1], keep_dims=True)
+        m = tf.reduce_max(inputs, reduction_indices=[ndims-1], keepdims=True)
         multiples = tf.convert_to_tensor(array, dtype=tf.int32)
         e = tf.exp(tf.subtract(inputs, tf.tile(m, multiples)))
-        s = tf.reduce_sum(e, reduction_indices=[ndims-1], keep_dims=True)
+        s = tf.reduce_sum(e, reduction_indices=[ndims-1], keepdims=True)
         return tf.div(e, tf.tile(s, multiples))
