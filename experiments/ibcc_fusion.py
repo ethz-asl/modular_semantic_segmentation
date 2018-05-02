@@ -16,7 +16,7 @@ ex.observers.append(get_mongo_observer())
 
 
 @ex.automain
-def collect_data(net_config, dataset, starting_weights, _run):
+def collect_data(net_config, dataset, starting_weights, save_to, _run):
     data = get_dataset(**dataset)
     model = get_model(net_config['expert_model'])
 
@@ -28,12 +28,15 @@ def collect_data(net_config, dataset, starting_weights, _run):
         with model(data_description=data.get_data_description(),
                    **model_config) as net:
             import_weights_into_network(net, starting_weights[model_config['prefix']])
-            predictions[expert] = net.predict(data.get_measureset())
+            predictions['measure_%s' % expert] = net.predict(data.get_measureset())
+            predictions['test_%s' % expert] = net.predict(data.get_testset())
 
     # add also gt labels
-    predictions['gt'] = data.get_measureset(tf_dataset=False)['labels']
+    predictions['measure_gt'] = data.get_measureset(tf_dataset=False)['labels']
+    predictions['test_gt'] = data.get_testset(tf_dataset=False)['labels']
 
-    outpath = '/cluster/work/riner/users/blumh/measurements/%s' % _run['_id']
+    # outpath = path.join(save_to, _run._id)
+    outpath = save_to
     if not path.exists(outpath):
         mkdir(outpath)
-    np.savez_compressed(path.join(outpath, 'predictions.npz'), *predictions)
+    np.savez_compressed(path.join(outpath, 'predictions.npz'), **predictions)

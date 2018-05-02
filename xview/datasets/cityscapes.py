@@ -8,6 +8,7 @@ from xview.settings import DATA_BASEPATH
 from .data_baseclass import DataBaseclass
 from .augmentation import augmentate
 from copy import deepcopy
+from tqdm import tqdm
 
 
 CITYSCAPES_BASEPATH = path.join(DATA_BASEPATH, 'cityscapes')
@@ -139,10 +140,10 @@ class Cityscapes(DataBaseclass):
             tar.close()
             self.base_path = localtmp
             trainset = [{'image': self._load_data(i['image_name'], i['image_path'])}
-                        for i in get_filenames('train', cities=cities)]
+                        for i in tqdm(get_filenames('train', cities=cities))]
             testset = [{'image': self._load_data(i['image_name'], i['image_path'])}
-                       for i in get_filenames('val', cities=['munster', 'frankfurt',
-                                                             'lindau'])]
+                       for i in tqdm(get_filenames('val', cities=['munster', 'frankfurt',
+                                                                  'lindau']))]
         else:
             trainset = get_filenames('train', cities=cities)
             testset = get_filenames('val', cities=['munster', 'frankfurt', 'lindau'])
