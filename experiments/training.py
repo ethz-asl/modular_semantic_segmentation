@@ -1,6 +1,7 @@
 from sacred import Experiment
 from sacred.utils import apply_backspaces_and_linefeeds
 from experiments.utils import get_mongo_observer, load_data
+from xview.datasets import get_dataset
 from experiments.evaluation import evaluate, import_weights_into_network
 from xview.models import get_model
 from xview.settings import EXP_OUT
@@ -44,9 +45,9 @@ ex.captured_out_filter = apply_backspaces_and_linefeeds
 ex.observers.append(get_mongo_observer())
 
 
-def train_network(net, output_dir, data_config, num_iterations, starting_weights,
+def train_network(net, output_dir, data, num_iterations, starting_weights,
                   experiment, additional_eval_data={}):
-    """\
+    """
     Train a network on a given dataset.
 
     Args:
@@ -61,16 +62,13 @@ def train_network(net, output_dir, data_config, num_iterations, starting_weights
         experiment: The current sacred experiment.
     """
 
-    # get validation set
-    data = load_data(data_config)
-    validation_set = data.get_validation_data(num_items=16)
-
     # Train the given network
     if starting_weights:
         import_weights_into_network(net, starting_weights)
 
     try:
-        net.fit(data, num_iterations, validation_data=validation_set,
+        net.fit(data.get_trainset(), num_iterations,
+                validation_data=data.get_validation_data(),
                 additional_eval_data=additional_eval_data, output=False)
         timeout = False
     except KeyboardInterrupt:
@@ -86,20 +84,23 @@ def train_network(net, output_dir, data_config, num_iterations, starting_weights
 
 
 @ex.capture
-def train_and_evaluate(net, output_dir, data_config, num_iterations,
-                       starting_weights, _run):
+def train_and_evaluate(net, output_dir, data, num_iterations, starting_weights, _run):
     """Train and evaluate a given network."""
-    train_network(net, output_dir, data_config, num_iterations, starting_weights, ex)
-    measurements, _ = evaluate(net, data_config)
+    train_network(net, output_dir, data, num_iterations, starting_weights, ex)
+    measurements, _ = evaluate(net, data)
     _run.info['measurements'] = measurements
 
 
 @ex.automain
-def main(modelname, net_config, _run):
+def main(modelname, data_config, net_config, _run):
     # Set up the directories for diagnostics
     output_dir = create_directories(_run._id, ex)
+    
+    # load the data
+    data = get_dataset(**data_config)
 
     # create the network
     model = get_model(modelname)
-    with model(output_dir=output_dir, **net_config) as net:
+    with model(data_description=data.get_data_description(), output_dir=output_dir,
+               **net_config) as net:
         train_and_evaluate(net, output_dir)
