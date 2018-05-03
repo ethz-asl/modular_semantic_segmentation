@@ -123,6 +123,7 @@ def deconv2d(inputs,
 
 def conv2d(inputs, filters, kernel_size, batch_normalization=False, training=False,
            **kwargs):
+    """tf.layers.conv2d with batchnorm."""
     if batch_normalization:
         # Apply batch_normalization after convolution and activation only afterwards
         activation = kwargs.get('activation', None)
@@ -235,17 +236,3 @@ def log_softmax(inputs, num_classes, name=None):
         return tf.subtract(d, tf.log(tf.tile(s, multiples)))
 
 
-def softmax(inputs, num_classes, name=None):
-    """Softmax as defined in DA-RNN code. Not sure why they do not use the standard
-    softmax."""
-    with tf.name_scope(name, default_name='softmax', values=[inputs]):
-        input_shape = inputs.get_shape()
-        ndims = input_shape.ndims
-        array = np.ones(ndims)
-        array[-1] = num_classes
-
-        m = tf.reduce_max(inputs, reduction_indices=[ndims-1], keepdims=True)
-        multiples = tf.convert_to_tensor(array, dtype=tf.int32)
-        e = tf.exp(tf.subtract(inputs, tf.tile(m, multiples)))
-        s = tf.reduce_sum(e, reduction_indices=[ndims-1], keepdims=True)
-        return tf.div(e, tf.tile(s, multiples))
