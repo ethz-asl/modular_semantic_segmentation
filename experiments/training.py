@@ -54,8 +54,7 @@ def train_network(net, output_dir, data, num_iterations, starting_weights,
         net: An instance of a `base_model` class.
         output_dir: A directory path. This function will add all files foudn at this path
             as artifacts to the experiment.
-        data_config: A config-dict for data containing all initializer arguments and the
-            dataset-name at key 'dataset'.
+        data: A dataset in one of the formats accepted by xview.models.base_model
         num_iterations: The numbe rof training iterations
         starting_weights: Desriptor for weight sto load into network. If not false or
             empty, will load weights as described in `evaluation.py`.
@@ -68,8 +67,8 @@ def train_network(net, output_dir, data, num_iterations, starting_weights,
 
     try:
         net.fit(data.get_trainset(), num_iterations,
-                validation_data=data.get_validation_data(),
-                additional_eval_data=additional_eval_data, output=False)
+                validation_dataset=data.get_validation_set(),
+                additional_eval_datasets=additional_eval_data, output=False)
         timeout = False
     except KeyboardInterrupt:
         print('WARNING: Got Keyboard Interrupt, will save weights and close')
@@ -92,15 +91,17 @@ def train_and_evaluate(net, output_dir, data, num_iterations, starting_weights, 
 
 
 @ex.automain
-def main(modelname, data_config, net_config, _run):
+def main(modelname, dataset, net_config, _run):
     # Set up the directories for diagnostics
     output_dir = create_directories(_run._id, ex)
-    
-    # load the data
-    data = get_dataset(**data_config)
+
+    # load the dataset class, but don't instantiate it
+    data = get_dataset(dataset['name'])
 
     # create the network
     model = get_model(modelname)
     with model(data_description=data.get_data_description(), output_dir=output_dir,
                **net_config) as net:
-        train_and_evaluate(net, output_dir)
+        # now we can load the dataset inside the scope of the network graph
+        data = data(**dataset)
+        train_and_evaluate(net, output_dir, data)

@@ -11,18 +11,44 @@ class DataBaseclass(DataWrapper):
     """A basic, abstract class for splitting data into batches, compliant with DataWrapper
     interface."""
 
-    def __init__(self, trainset, measureset, testset, num_classes, data_description,
-                 labelinfo, info=False, single_test_batches=False):
+    def __init__(self, trainset, measureset, testset, labelinfo, num_classes=None,
+                 info=False):
         self.trainset, self.validation_set = train_test_split(
             trainset, test_size=15, random_state=317243896)
         self.measureset = measureset
         self.testset = testset
-        self.num_classes = num_classes
-        self.data_description = data_description
-        self.modalities = list(data_description.keys())
+        if num_classes is None:
+            self.num_classes = self._num_default_classes
+        else:
+            self.num_classes = num_classes
+        self.modalities = list(self._data_shape_description.keys())
         self.labelinfo = labelinfo
         self.print_info = info
         shuffle(self.trainset)
+
+    @classmethod
+    def get_data_description(cls, num_classes=None):
+        """Produces a descriptor of the data the given class produces.
+
+        For implementation reasons, this has to be a class method and cannot have
+        access to object configurations (weird tensorflow errors if the dataclass
+        is initialized before the model).
+
+        Returns a tuple of 3 properties:
+        - dict of modalities and their data types
+        - dict of modalities and their data shapes
+        - number of classes
+
+        If you will later modify the number of classes, please specify a manipulated
+        number of classes as an optional argument.
+        """
+        data_shape_description = cls._data_shape_description
+        modalities = list(data_shape_description.keys())
+        if num_classes is None:
+            num_classes = cls._num_default_classes
+        return ({'labels': tf.int32, **{m: tf.float32 for m in modalities
+                                        if not m == 'labels'}},
+                data_shape_description, num_classes)
 
     def _get_data(self, **kwargs):
         """Returns data for one item in trainset or testset. kwargs is the unfolded dict
@@ -92,8 +118,4 @@ class DataBaseclass(DataWrapper):
                            for i in range(max(self.labelinfo.keys()) + 1)]).astype(int)
         return np.array(lookup[labels[:, :]]).astype('uint8')
 
-    def get_data_description(self):
-        return ({'labels': tf.int32, **{m: tf.float32 for m in self.modalities
-                                        if not m == 'labels'}},
-                self.data_description,
-                self.num_classes)
+    

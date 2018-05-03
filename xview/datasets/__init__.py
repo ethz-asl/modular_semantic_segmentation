@@ -7,20 +7,20 @@ from .synthia_rand import SynthiaRand
 from .mixed_data import MixedData
 
 
-def get_dataset(name, **config):
+def get_dataset(name):
     if name == 'synthia':
-        return Synthia(**config)
+        return Synthia
     elif name == 'raw_synthia':
-        return SynthiaRaw(**config)
+        return SynthiaRaw
     elif name == 'synthia_cityscapes':
-        return SynthiaCityscapes(**config)
+        return SynthiaCityscapes
     elif name == 'freiburg_forest':
-        return FreiburgForest(**config)
+        return FreiburgForest
     elif name == 'cityscapes':
-        return Cityscapes(**config)
+        return Cityscapes
     elif name == 'synthiarand':
-        return SynthiaRand(**config)
+        return SynthiaRand
     if name == 'mixeddata':
-        return MixedData(**config)
+        return MixedData
     else:
         raise UserWarning('ERROR: Dataset {} not found'.format(name))

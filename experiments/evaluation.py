@@ -8,34 +8,25 @@ from sys import stdout
 from copy import deepcopy
 from os import path
 
-from .utils import ExperimentData, get_mongo_observer, load_data
+from .utils import ExperimentData, get_mongo_observer
 
 
-def evaluate(net, data_config, print_results=True):
+def evaluate(net, data, print_results=True):
     """
     Evaluate the given network against the specified data and print the result.
 
     Args:
         net: An instance of a `base_model` class.
-        data_config: A config-dict for data containing all initializer arguments and the
-            dataset-name at key 'dataset'.
+        data: A dataset
         print_results: If False, do not print measurements
     Returns:
         dict of measurements as produced by net.score, confusion matrix
     """
     # Load the dataset, we expect config to include the arguments
-    data = load_data(data_config)
-    # 'use_trainset' defaults to False if not set
-    if data_config.get('use_trainset', False):
-        print('INFO: Evaluating against trainset')
-        batches = data.get_train_data(batch_size=1, training_format=False)
-    else:
-        batches = data.get_test_data(batch_size=1)
-
-    measures, confusion_matrix = net.score(batches)
+    measures, confusion_matrix = net.score(data.get_testset())
 
     if print_results:
-        print('Evaluated network on {}:'.format(data_config['dataset']))
+        print('Evaluated network on %s:' % type(data).__name__)
         print('total accuracy {:.3f} mean F1 {:.3f} IoU {:.3f}'.format(
             measures['total_accuracy'], measures['mean_F1'], measures['mean_IoU']))
         for label in data.labelinfo:

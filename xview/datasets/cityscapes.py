@@ -20,6 +20,10 @@ CITIES = ['aachen', 'bremen', 'darmstadt', 'erfurt', 'hanover', 'krefeld', 'stra
 
 class Cityscapes(DataBaseclass):
 
+    _data_shape_description = {
+            'rgb': (None, None, 3), 'depth': (None, None, 1), 'labels': (None, None)}
+    _num_default_classes = 12
+
     def __init__(self, base_path=CITYSCAPES_BASEPATH, batchsize=1, in_memory=False,
                  cities=CITIES, **data_config):
 
@@ -152,9 +156,7 @@ class Cityscapes(DataBaseclass):
                                                 random_state=4)
 
         # Intitialize Baseclass
-        DataBaseclass.__init__(self, trainset, measureset, testset, 12, {
-            'rgb': (None, None, 3), 'depth': (None, None, 1), 'labels': (None, None)},
-            labelinfo)
+        DataBaseclass.__init__(self, trainset, measureset, testset, labelinfo)
 
     def _load_data(self, image_name, image_path):
         rgb_filename, depth_filename, labels_filename = (
