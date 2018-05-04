@@ -5,6 +5,7 @@ from .freiburg_forest import FreiburgForest
 from .cityscapes import Cityscapes
 from .synthia_rand import SynthiaRand
 from .mixed_data import MixedData
+from .pascalvoc import PascalVOC
 
 
 def get_dataset(name):
@@ -20,6 +21,8 @@ def get_dataset(name):
         return Cityscapes
     elif name == 'synthiarand':
         return SynthiaRand
+    elif name == 'pascalvoc':
+        return PascalVOC
     if name == 'mixeddata':
         return MixedData
     else:
