@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow.python.layers.layers import dropout
 
 from .base_model import BaseModel
-from .custom_layers import conv2d, deconv2d, log_softmax, softmax, adap_conv
+from .custom_layers import conv2d, deconv2d, log_softmax, adap_conv
 from .utils import cross_entropy
 from .vgg16 import progressive_vgg16
 from .simple_fcn import encoder, decoder

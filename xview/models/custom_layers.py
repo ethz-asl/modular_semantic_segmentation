@@ -236,3 +236,9 @@ def log_softmax(inputs, num_classes, name=None):
         return tf.subtract(d, tf.log(tf.tile(s, multiples)))
 
 
+def entropy(x, axis=-1):
+    with tf.name_scope('entropy'):
+        entropy = -tf.reduce_sum(x*tf.log(tf.clip_by_value(x, 1e-10, 1.0)), axis=axis) \
+                / tf.log(tf.to_float(tf.shape(x)[axis]))
+    return entropy
+

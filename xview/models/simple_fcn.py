@@ -9,7 +9,7 @@ from .vgg16 import vgg16
 
 
 def encoder(inputs, prefix, num_units, dropout_rate, trainable=True,
-            is_training=False, reuse=True):
+            is_training=False, reuse=True, dropout_layers=[]):
     """
     VGG16 image encoder with fusion of conv4_3 and conv5_3 features.
 
@@ -23,6 +23,8 @@ def encoder(inputs, prefix, num_units, dropout_rate, trainable=True,
             (batch) or testing (continuous) mode.
         reuse (bool): If true, reuse existing variables of same name
             (attention with prefix). Will raise error if it cannot find such variables.
+        dropout_layers: a list of layers after which to apply dropout. Accepted possible
+            values are 'pool3' and 'pool4'
     Returns:
         dict of (intermediate) layer outputs
     """
@@ -35,31 +37,47 @@ def encoder(inputs, prefix, num_units, dropout_rate, trainable=True,
     l = vgg16(inputs, prefix, params)
 
     # dropout after pool3
-    l['pool3_drop'] = dropout(l['pool3'], rate=dropout_rate, training=is_training,
-                              name='{}_dropout'.format(prefix))
+    last_layer = l['pool3']
+    if 'pool3' in dropout_layers:
+        l['pool3_drop'] = dropout(l['pool3'], rate=dropout_rate, training=True,
+                                  name='%s_pool3_dropout' % prefix)
+        last_layer = l['pool3_drop']
+
     # now we have to overwrite the following layers:
     params['reuse'] = True
-    l['conv4_1'] = conv2d(l['pool3'], 512, [3, 3], name='{}_conv4_1'.format(prefix),
+    l['conv4_1'] = conv2d(last_layer, 512, [3, 3], name='%s_conv4_1' % prefix, **params)
+    l['conv4_2'] = conv2d(l['conv4_1'], 512, [3, 3], name='%s_conv4_2' % prefix,
                           **params)
-    l['conv4_2'] = conv2d(l['conv4_1'], 512, [3, 3], name='{}_conv4_2'.format(prefix),
+    l['conv4_3'] = conv2d(l['conv4_2'], 512, [3, 3], name='%s_conv4_3' % prefix,
                           **params)
-    l['conv4_3'] = conv2d(l['conv4_2'], 512, [3, 3], name='{}_conv4_3'.format(prefix),
+    l['pool4'] = max_pooling2d(l['conv4_3'], [2, 2], [2, 2], name='%s_pool4' % prefix)
+    # dropout after pool4
+    last_layer = l['pool4']
+    if 'pool3' in dropout_layers:
+        l['pool4_drop'] = dropout(l['pool4'], rate=dropout_rate, training=True,
+                                  name='%S_pool4_dropout' % prefix)
+        last_layer = l['pool4_drop']
+    l['conv5_1'] = conv2d(last_layer, 512, [3, 3], name='%s_conv5_1' % prefix, **params)
+    l['conv5_2'] = conv2d(l['conv5_1'], 512, [3, 3], name='%s_conv5_2' % prefix,
                           **params)
-    l['pool4'] = max_pooling2d(l['conv4_3'], [2, 2], [2, 2],
-                               name='{}_pool4'.format(prefix))
-    l['conv5_1'] = conv2d(l['pool4'], 512, [3, 3],
-                          name='{}_conv5_1'.format(prefix), **params)
-    l['conv5_2'] = conv2d(l['conv5_1'], 512, [3, 3], name='{}_conv5_2'.format(prefix),
-                          **params)
-    l['conv5_3'] = conv2d(l['conv5_2'], 512, [3, 3], name='{}_conv5_3'.format(prefix),
+    l['conv5_3'] = conv2d(l['conv5_2'], 512, [3, 3], name='%s_conv5_3' % prefix,
                           **params)
     params['reuse'] = reuse
 
     # Use 1x1 convolutions on conv4_3 and conv5_3 to define features.
-    score_conv4 = conv2d(l['conv4_3'], num_units, [1, 1],
-                         name='{}_score_conv4'.format(prefix), **params)
-    score_conv5 = conv2d(l['conv5_3'], num_units, [1, 1],
-                         name='{}_score_conv5'.format(prefix), **params)
+    # first, maybe apply dropout at these layers?
+    conv4_3 = l['conv4_3']
+    if 'conv4_3' in dropout_layers:
+        conv4_3 = dropout(conv4_3, rate=dropout_rate, training=True,
+                          name='%s_conv4_3_dropout' % prefix)
+    score_conv4 = conv2d(conv4_3, num_units, [1, 1], name='%s_score_conv4' % prefix,
+                         **params)
+    conv5_3 = l['conv5_3']
+    if 'conv5_3' in dropout_layers:
+        conv5_3 = dropout(conv5_3, rate=dropout_rate, training=True,
+                          name='%s_conv5_3_dropout' % prefix)
+    score_conv5 = conv2d(conv5_3, num_units, [1, 1], name='%s_score_conv5' % prefix,
+                         **params)
     # The deconvolution is always set static.
     params['trainable'] = False
     upscore_conv5 = deconv2d(score_conv5, num_units, [4, 4], strides=[2, 2],
@@ -73,7 +91,7 @@ def encoder(inputs, prefix, num_units, dropout_rate, trainable=True,
 
 
 def decoder(features, prefix, num_units, num_classes, trainable=True, is_training=False,
-            reuse=True):
+            reuse=True, dropout_rate=None):
     """
     FCN feature decoder.
 
@@ -90,6 +108,7 @@ def decoder(features, prefix, num_units, num_classes, trainable=True, is_trainin
             (batch) or testing (continuous) mode.
         reuse (bool): If true, reuse existing variables of same name
             (attention with prefix). Will raise error if it cannot find such variables.
+        dropout_rate: If set, apply dropout on the decoder input with the given rate
     Returns:
         dict of (intermediate) layer outputs
     """
@@ -99,6 +118,10 @@ def decoder(features, prefix, num_units, num_classes, trainable=True, is_trainin
     # Upscore layers are never trainable
     upscore_params = deepcopy(params)
     upscore_params['trainable'] = False
+
+    if dropout_rate is not None:
+        features = dropout(features, rate=dropout_rate, training=True,
+                           name='%s_features_dropout' % prefix)
 
     # Upsample the fused features to the output classification size
     features = deconv2d(features, num_units, [16, 16], strides=[8, 8],
