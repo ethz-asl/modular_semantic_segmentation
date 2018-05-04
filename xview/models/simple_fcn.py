@@ -31,7 +31,7 @@ def encoder(inputs, prefix, num_units, dropout_rate, trainable=True,
     # These parameters are shared between many/all layers and therefore defined here
     # for convenience.
     params = {'activation': tf.nn.relu, 'padding': 'same', 'reuse': reuse,
-              'batch_normalization': False, 'training': is_training,
+              'batch_normalization': True, 'training': is_training,
               'trainable': trainable}
 
     l = vgg16(inputs, prefix, params)
@@ -114,7 +114,7 @@ def decoder(features, prefix, num_units, num_classes, trainable=True, is_trainin
     """
     params = {
         'activation': tf.nn.relu, 'padding': 'same', 'reuse': reuse,
-        'batch_normalization': False, 'training': is_training, 'trainable': trainable}
+        'batch_normalization': True, 'training': is_training, 'trainable': trainable}
     # Upscore layers are never trainable
     upscore_params = deepcopy(params)
     upscore_params['trainable'] = False
@@ -177,6 +177,7 @@ class SimpleFCN(BaseModel):
         # The loss is given by the cross-entropy with the ground-truth
         self.loss = tf.div(tf.reduce_sum(cross_entropy(prob, train_y)),
                            tf.reduce_sum(train_y))
+        self.train_y = train_y
 
         # Network for testing / evaluation
         test_x = test_data[self.modality]

@@ -57,7 +57,8 @@ class BaseModel(object):
         with self.graph.as_default():
             # inference data coming packed as tf.data.dataset, therefore we create
             # a feedable dataset iterator
-            self.training_handle = tf.placeholder(tf.string, shape=[])
+            self.training_handle = tf.placeholder(tf.string, shape=[],
+                                                  name='training_placeholder')
             iterator = tf.data.Iterator.from_string_handle(
                 self.training_handle, *self.data_description)
             training_batch = iterator.get_next()
@@ -192,14 +193,14 @@ class BaseModel(object):
                                   feed_dict={self.training_handle: train_handle})
             print('INFO: Training finished.')
 
-    def predict(self, data, output_prob=False):
+    def predict(self, data, output_attr=None):
         """Perform semantic segmentation on the input data.
 
         Args:
             data: a dictionary {'rgb': <array of shape [num_images, width, height]>
                                 'depth': <array of shape [num_images, width, height]>}
-            output_prob: a boolean indicting if classe probabilities should be outputted
-                instead of the label of the most likely class
+            output_attr: a string indicting if a different object property thans
+                self.prediction should be returned
         Returns:
             per-pixel classification of the input image in form:
                 - <array of shape [num_images, width, height, num_classes]>
@@ -214,7 +215,11 @@ class BaseModel(object):
                 iterator = tf.data.Dataset.from_tensor_slices(data)\
                     .batch(self.config['batchsize']).make_one_shot_iterator()
             handle = self.sess.run(iterator.string_handle())
-            output = self.prob if (output_prob and self.prob) else self.prediction
+
+            if output_attr is not None and hasattr(self, output_attr):
+                output = getattr(self, output_attr)
+            else:
+                output = self.prediction
 
             # collect all the batches in this list
             ret = []
