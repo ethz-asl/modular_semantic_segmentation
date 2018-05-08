@@ -6,6 +6,39 @@ from copy import deepcopy
 from tqdm import tqdm
 
 
+def transform_inputdata(data_arg_idx=1):
+    """Take data of different types: tf.data.Dataset, tf.data.Iterator, numpy array
+    and exchange it against a string-handle of an initialized tf.data.Iterator,
+    which can then directly be fed into the network
+    """
+    def _transform_inputdata(f):
+        def wrapper(*args):
+            # first argument is the model instance
+            model = args[0]
+            # now get the data argument
+            data = args[data_arg_idx]
+
+            with model.graph.as_default():
+                # initialize the data dependent on the type
+                if isinstance(data, tf.data.Dataset):
+                    iterator = data.batch(model.config['batchsize'])\
+                        .make_one_shot_iterator()
+                elif isinstance(data, tf.data.Iterator):
+                    iterator = data
+                    model.sess.run(iterator.initializer)
+                else:
+                    iterator = tf.data.Dataset.from_tensor_slices(data)\
+                        .batch(model.config['batchsize']).make_one_shot_iterator()
+                handle = model.sess.run(iterator.string_handle())
+
+            # now exchange the data arg with the iterator
+            args = list(args)
+            args[data_arg_idx] = handle
+            return f(*args)
+        return wrapper
+    return _transform_inputdata
+
+
 class BaseModel(object):
     """Structure for network models. Handels basic training and IO operations.
 
@@ -63,11 +96,12 @@ class BaseModel(object):
                 self.training_handle, *self.data_description)
             training_batch = iterator.get_next()
 
-            self.testing_handle = tf.placeholder(tf.string, shape=[])
+            self.testing_handle = tf.placeholder(tf.string, shape=[],
+                                                 name='testing_placeholder')
             iterator = tf.data.Iterator.from_string_handle(
                 self.testing_handle, *self.testdata_description)
             test_batch = iterator.get_next()
-            evaluation_labels = test_batch['labels']
+            self.evaluation_labels = test_batch['labels']
 
             self._build_graph(training_batch, test_batch)
 
@@ -88,10 +122,21 @@ class BaseModel(object):
                     raise AttributeError("Model class required attribute prediction")
 
             # To evaluate accuracy atc, we have to define some structures here
-            self.confusion_matrix = tf.confusion_matrix(
-                labels=tf.reshape(evaluation_labels, [-1]),
+            # convert labels that are nan to a higher than existing class
+            # apparently, nan labels are mapped to something <0, therefore we find them
+            # with tf.less
+            confmat_labels = tf.where(
+                tf.less(self.evaluation_labels, 0),
+                self.config['num_classes'] * tf.ones_like(self.evaluation_labels),
+                self.evaluation_labels)
+            confusion_matrix = tf.confusion_matrix(
+                labels=tf.reshape(confmat_labels, [-1]),
                 predictions=tf.reshape(self.prediction, [-1]),
-                num_classes=self.config['num_classes'])
+                num_classes=self.config['num_classes'] + 1)
+            # now get rid of the last row and last column
+            self.confusion_matrix = tf.slice(
+                confusion_matrix, [0, 0],
+                [self.config['num_classes'], self.config['num_classes']])
 
             if self.supports_training:
                 self.global_step = tf.Variable(0, trainable=False, name='global_step')
@@ -135,7 +180,7 @@ class BaseModel(object):
             tf.summary.scalar('loss', self.loss)
             merged_summary = tf.summary.merge_all()
             if self.output_dir is not None:
-                train_writer = tf.summary.FileWriter(self.output_dir)
+                train_writer = tf.summary.FileWriter(self.output_dir, self.graph)
 
             # initialize datasets
             def _onehot_mapper(blob):
@@ -193,6 +238,7 @@ class BaseModel(object):
                                   feed_dict={self.training_handle: train_handle})
             print('INFO: Training finished.')
 
+    @transform_inputdata()
     def predict(self, data, output_attr=None):
         """Perform semantic segmentation on the input data.
 
@@ -208,14 +254,6 @@ class BaseModel(object):
                 - <array of shape [num_images, width, height]> else
         """
         with self.graph.as_default():
-            # initialize the data dependent on the type
-            if isinstance(data, tf.data.Dataset):
-                iterator = data.batch(self.config['batchsize']).make_one_shot_iterator()
-            else:
-                iterator = tf.data.Dataset.from_tensor_slices(data)\
-                    .batch(self.config['batchsize']).make_one_shot_iterator()
-            handle = self.sess.run(iterator.string_handle())
-
             if output_attr is not None and hasattr(self, output_attr):
                 output = getattr(self, output_attr)
             else:
@@ -226,11 +264,12 @@ class BaseModel(object):
             while True:
                 try:
                     ret.append(self.sess.run(output,
-                                             feed_dict={self.testing_handle: handle}))
+                                             feed_dict={self.testing_handle: data}))
                 except tf.errors.OutOfRangeError:
                     break
             return np.concatenate(ret)
 
+    @transform_inputdata()
     def score(self, data, max_iterations=None):
         """Measure the performance of the model with respect to the given data.
 
@@ -241,25 +280,15 @@ class BaseModel(object):
             dictionary of some measures, total confusion matrix
         """
         with self.graph.as_default():
-            # initialize the data dependent on the type
-            if isinstance(data, tf.data.Dataset):
-                iterator = data.batch(self.config['batchsize']).make_one_shot_iterator()
-            elif isinstance(data, tf.data.Iterator):
-                iterator = data
-                self.sess.run(iterator.initializer)
-            else:
-                iterator = tf.data.Dataset.from_tensor_slices(data)\
-                    .batch(self.config['batchsize']).make_one_shot_iterator()
-            handle = self.sess.run(iterator.string_handle())
-
             # run through batches of the data and collect all in this confusion matrix
             confusion_matrix = np.zeros((self.config['num_classes'],
                                          self.config['num_classes']))
             while True:
                 try:
                     confusion_matrix += self.sess.run(
-                        self.confusion_matrix, feed_dict={self.testing_handle: handle})
+                        self.confusion_matrix, feed_dict={self.testing_handle: data})
                 except tf.errors.OutOfRangeError:
+                    print("dataset finished")
                     break
 
         with np.errstate(divide='ignore', invalid='ignore'):
