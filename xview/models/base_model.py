@@ -180,7 +180,7 @@ class BaseModel(object):
             tf.summary.scalar('loss', self.loss)
             merged_summary = tf.summary.merge_all()
             if self.output_dir is not None:
-                train_writer = tf.summary.FileWriter(self.output_dir, self.graph)
+                train_writer = tf.summary.FileWriter(self.output_dir)
 
             # initialize datasets
             def _onehot_mapper(blob):
