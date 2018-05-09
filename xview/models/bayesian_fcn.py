@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from .base_model import BaseModel
+from .uncertainty_model import UncertaintyModel
 from .utils import cross_entropy
 from .simple_fcn import encoder, decoder
 from .custom_layers import entropy, log_softmax
@@ -21,7 +21,7 @@ def sampling_uncertainty(inputs, pipeline, num_samples, num_classes, **kwargs):
     # we produce a first sample to get to know the output shape and initialize the
     # tensor of samples
     #samples = tf.expand_dims(pipeline(inputs, **kwargs)['prob'], axis=0)
-    
+
     out_shape = tf.concat([tf.shape(inputs)[:-1],
                            tf.convert_to_tensor([num_classes])], axis=0)
     samples = tf.zeros(tf.concat([tf.convert_to_tensor([0]), out_shape], axis=0))
@@ -57,7 +57,7 @@ def sampling_uncertainty(inputs, pipeline, num_samples, num_classes, **kwargs):
     return mean, uncertainties
 
 
-class BayesianFCN(BaseModel):
+class BayesianFCN(UncertaintyModel):
     """FCN version of BayesianFCN [http://arxiv.org/abs/1511.02680]
 
     Args:
@@ -76,8 +76,8 @@ class BayesianFCN(BaseModel):
         self.prefix = prefix
         self.modality = modality
 
-        BaseModel.__init__(self, 'SimpleFCN', data_description, output_dir=output_dir,
-                           dropout_layers=dropout_layers, **config)
+        UncertaintyModel.__init__(self, data_description, output_dir=output_dir,
+                                  dropout_layers=dropout_layers, **config)
 
     def _build_graph(self, train_data, test_data):
         """Builds the whole network. Network is split into 2 similar pipelines with shared
@@ -105,8 +105,7 @@ class BayesianFCN(BaseModel):
 
                 score = sample_pipeline(train_x, is_training=True)['score']
                 log_prob = log_softmax(score, self.config['num_classes'])
-                self.loss = tf.div(tf.reduce_sum(cross_entropy(log_prob, train_y)),
-                                   tf.reduce_sum(train_y))
+                self.loss = cross_entropy(log_prob, train_y)
 
             # testing
             with tf.name_scope('testing'):
