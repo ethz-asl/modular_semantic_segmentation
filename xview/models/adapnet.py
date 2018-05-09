@@ -185,7 +185,7 @@ class Adapnet(BaseModel):
         else:
             self.prefix = prefix
 
-        BaseModel.__init__(self, 'Adapnet', data_description, output_dir=output_dir,
+        BaseModel.__init__(self, data_description, output_dir=output_dir,
                            **standard_config)
 
     def _build_graph(self, train_data, test_data):

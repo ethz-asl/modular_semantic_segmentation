@@ -40,8 +40,14 @@ def define_scope(function, scope=None, *args, **kwargs):
     return decorator
 
 
-def cross_entropy(predictions, labels):
+def cross_entropy(log_predictions, labels):
     """Tensorflow calculation of cross-entropy between prediction probabilities and
     labels."""
-    return -tf.reduce_sum(labels * predictions, len(labels.shape) - 1,
-                          name='cross_entropy')
+    #cond = tf.reduce_sum(labels, axis=3) == 1
+    #return tf.reduce_sum(tf.where(cond, labels * predictions, tf.zeros_like(labels))) /\
+    #    (1e-3 + tf.reduce_sum(tf.to_float(cond)))
+    with tf.name_scope('cross_entropy'):
+        pixel_cross_entropy = -tf.reduce_sum(labels * log_predictions, axis=-1)
+        # now mean over all the labelled pixels in the batch
+        return tf.div(tf.reduce_sum(pixel_cross_entropy),
+                      1e-20 + tf.reduce_sum(labels))

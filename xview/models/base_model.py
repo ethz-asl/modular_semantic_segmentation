@@ -54,8 +54,8 @@ class BaseModel(object):
     __metaclass__ = ABCMeta
     required_attributes = [["loss"], ["prediction"]]
 
-    def __init__(self, name, data_description, output_dir=None, supports_training=True,
-                 batchsize=1, **config):
+    def __init__(self, data_description, name=None, output_dir=None, 
+                 supports_training=True, batchsize=1, **config):
         """Set configuration and build the model.
 
         Requires method _build_model to build the tensorflow graph.
@@ -65,7 +65,10 @@ class BaseModel(object):
             output_dir: If specified, diagnostics will be saved here.
             config as key-value arguments: model-specific configurations
         """
-        self.name = name
+        if name is None:
+            self.name = type(self).__name__
+        else:
+            self.name = name
         self.output_dir = output_dir
         self.supports_training = supports_training
         self.config = config
@@ -189,6 +192,7 @@ class BaseModel(object):
                 return blob
 
             train_iterator = dataset.map(_onehot_mapper, 10)\
+                .repeat()\
                 .batch(self.config['batchsize'])\
                 .make_one_shot_iterator()
             train_handle = self.sess.run(train_iterator.string_handle())
@@ -201,7 +205,7 @@ class BaseModel(object):
                     .make_initializable_iterator()
 
             print('INFO: Start training')
-            for i in tqdm(range(iterations), disable=output):
+            for i in tqdm(range(iterations), disable=output, ascii=True):
                 # Every validation_interval, we run the summary and validation values
                 if i % validation_interval == 0 and validation_dataset is not None:
                     _, summary = self.sess.run(
@@ -288,7 +292,6 @@ class BaseModel(object):
                     confusion_matrix += self.sess.run(
                         self.confusion_matrix, feed_dict={self.testing_handle: data})
                 except tf.errors.OutOfRangeError:
-                    print("dataset finished")
                     break
 
         with np.errstate(divide='ignore', invalid='ignore'):

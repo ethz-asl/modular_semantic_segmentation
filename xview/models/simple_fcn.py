@@ -154,7 +154,7 @@ class SimpleFCN(BaseModel):
             'train_encoder': True
         }
         standard_config.update(config)
-        BaseModel.__init__(self, 'SimpleFCN', data_description, output_dir=output_dir,
+        BaseModel.__init__(self, data_description, output_dir=output_dir,
                            **standard_config)
 
     def _build_graph(self, train_data, test_data):
@@ -175,8 +175,7 @@ class SimpleFCN(BaseModel):
                                      is_training=True)
             prob = tf.nn.log_softmax(decoder_layers['score'], name='prob')
             # The loss is given by the cross-entropy with the ground-truth
-            self.loss = tf.div(tf.reduce_sum(cross_entropy(prob, train_y)),
-                               tf.reduce_sum(train_y))
+            self.loss = cross_entropy(prob, train_y)
             self.train_y = train_y
 
         # Network for testing / evaluation

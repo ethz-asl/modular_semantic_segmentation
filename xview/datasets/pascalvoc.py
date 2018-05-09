@@ -43,7 +43,7 @@ class PascalVOC(DataBaseclass):
 
         self.base_path = base_path
 
-        labelinfo = {
+        self.labelinfo = {
             0: {'name': 'background', 'color': [0, 0, 0]},
             1: {'name': 'aeroplane', 'color': [128, 0, 0]},
             2: {'name': 'bicycle', 'color': [0, 128, 0]},
@@ -97,7 +97,7 @@ class PascalVOC(DataBaseclass):
                                                 random_state=4)
 
         # Intitialize Baseclass
-        DataBaseclass.__init__(self, trainset, measureset, testset, labelinfo)
+        DataBaseclass.__init__(self, trainset, measureset, testset, self.labelinfo)
 
     def _load_data(self, image_name):
         blob = {}
