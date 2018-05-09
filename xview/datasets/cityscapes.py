@@ -144,10 +144,11 @@ class Cityscapes(DataBaseclass):
             tar.close()
             self.base_path = localtmp
             trainset = [{'image': self._load_data(i['image_name'], i['image_path'])}
-                        for i in tqdm(get_filenames('train', cities=cities))]
+                        for i in tqdm(get_filenames('train', cities=cities), ascii=True)]
             testset = [{'image': self._load_data(i['image_name'], i['image_path'])}
                        for i in tqdm(get_filenames('val', cities=['munster', 'frankfurt',
-                                                                  'lindau']))]
+                                                                  'lindau']),
+                                     ascii=True)]
         else:
             trainset = get_filenames('train', cities=cities)
             testset = get_filenames('val', cities=['munster', 'frankfurt', 'lindau'])

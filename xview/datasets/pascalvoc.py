@@ -85,10 +85,10 @@ class PascalVOC(DataBaseclass):
             tar.extractall(path=localtmp)
             tar.close()
             self.base_path = localtmp
-            trainset = [{'image': self._load_data(i['image_name'], i['image_path'])}
-                        for i in tqdm(get_filenames('train'))]
-            testset = [{'image': self._load_data(i['image_name'], i['image_path'])}
-                       for i in tqdm(get_filenames('val'))]
+            trainset = [{'image': self._load_data(i['image_name'])}
+                        for i in tqdm(get_filenames('train'), ascii=True)]
+            testset = [{'image': self._load_data(i['image_name'])}
+                       for i in tqdm(get_filenames('val'), ascii=True)]
         else:
             trainset = get_filenames('train')
             testset = get_filenames('val')
