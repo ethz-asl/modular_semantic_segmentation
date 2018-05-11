@@ -202,9 +202,7 @@ class Cityscapes(DataBaseclass):
 
         if training_format:
             blob = augmentate(blob, **self.config['augmentation'])
-            # transformation into one-hot-format
-            blob['labels'] = np.array(np.arange(len(self.labelinfo), dtype=np.int) ==
-                                      blob['labels'][:, :, None]).astype(int)
+
         return blob
 
     def get_ego_vehicle_mask(self, image_name, image_path):

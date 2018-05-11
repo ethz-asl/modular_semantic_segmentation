@@ -73,10 +73,10 @@ class DataBaseclass(DataWrapper):
             batch[mod] = np.stack(batch[mod])
         return batch
 
-    def _get_tf_dataset(self, setlist):
+    def _get_tf_dataset(self, setlist, training_format=False):
         def data_generator():
             for item in setlist:
-                data = self._get_data(training_format=False, **item)
+                data = self._get_data(training_format=training_format, **item)
                 for m in self.modalities:
                     data[m] = crop_multiple(data[m])
                 yield data
@@ -84,12 +84,12 @@ class DataBaseclass(DataWrapper):
         return tf.data.Dataset.from_generator(data_generator,
                                               *self.get_data_description()[:2])
 
-    def get_trainset(self, tf_dataset=True, training_format=False):
+    def get_trainset(self, tf_dataset=True, training_format=True):
         """Return trainingset. By default as tf.data.dataset, otherwise as numpy array.
         """
         if not tf_dataset:
             return self._get_batch(self.trainset, training_format=training_format)
-        return self._get_tf_dataset(self.trainset)
+        return self._get_tf_dataset(self.trainset, training_format=training_format)
 
     def get_testset(self, tf_dataset=True):
         """Return testset. By default as tf.data.dataset, otherwise as numpy array."""
