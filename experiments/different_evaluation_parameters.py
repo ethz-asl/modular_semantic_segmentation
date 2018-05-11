@@ -26,28 +26,52 @@ def parameter_combinations(search_parameters, net_config):
     return configs_to_test
 
 
+def grid_search(evaluation, search_parameters, net_config):
+    """Performs grid-search on the search-parameters.
+
+    Args:
+        evaluation: takes a set of parameters as input and returns a nested dict
+            of measurements for this grid point
+        search_parameters: dict of lists for parameters and their values that will be
+            tested in all combinations
+        net_config:
+            standard parameters that are added to the search parameters
+    Returns:
+        a dict with keys from search_parameters and the evaluation results,
+        where values of parameters and evaluation are sorted in lists for the
+        different gridpoints
+    """
+    # get different configurations that will be tested
+    configs_to_test = parameter_combinations(search_parameters, net_config)
+
+    # collect results in a list
+    results = {}
+    for test_parameters in configs_to_test:
+        # result is a dict of parameters and measurements
+        for key in test_parameters:
+            results.setdefault(key, []).append(test_parameters[key])
+        result = evaluation(test_parameters)
+
+        # traverse the nested dict of result and append the values to results
+        def append_deep_value(add_to, val):
+            for key, inner_val in val.items():
+                if isinstance(inner_val, dict):
+                    append_deep_value(add_to.get(key, {}), inner_val)
+                else:
+                    add_to.setdefault(key, []).append(inner_val)
+        append_deep_value(results, result)
+    return results
+
+
 @ex.automain
 def main(starting_weights, modelname, net_config, evaluation_data, search_parameters,
          _run):
     model = get_model(modelname)
 
-    # Get different configs we will test
-    configs_to_test = parameter_combinations(search_parameters, net_config)
-
-    results = []
-    for test_parameters in configs_to_test:
-        with model(**test_parameters) as net:
+    def evaluation(parameters):
+        with model(**parameters) as net:
             import_weights_into_network(net, starting_weights)
             measurements, _ = evaluate(net, evaluation_data)
+        return measurements
 
-        # put results and parameters all in one dict
-        result = {}
-        result.update(test_parameters)
-        result.update(measurements)
-        results.append(result)
-
-    # Results is not a list of dictionaries where all keys match. For convenience (e.g.
-    # to import the measurements into a pandas DataFrame, we convert it into a dict of
-    # lists), see:
-    # [https://stackoverflow.com/questions/5558418/list-of-dicts-to-from-dict-of-lists]
-    _run.info['results'] = dict(zip(results[0], zip(*[r.values() for r in results])))
+    _run.info['results'] = grid_search(evaluation, search_parameters, net_config)
