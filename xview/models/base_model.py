@@ -17,7 +17,6 @@ def transform_inputdata(data_arg_idx=1):
             model = args[0]
             # now get the data argument
             data = args[data_arg_idx]
-
             with model.graph.as_default():
                 # initialize the data dependent on the type
                 if isinstance(data, tf.data.Dataset):
@@ -30,7 +29,6 @@ def transform_inputdata(data_arg_idx=1):
                     iterator = tf.data.Dataset.from_tensor_slices(data)\
                         .batch(model.config['batchsize']).make_one_shot_iterator()
                 handle = model.sess.run(iterator.string_handle())
-
             # now exchange the data arg with the iterator
             args = list(args)
             args[data_arg_idx] = handle

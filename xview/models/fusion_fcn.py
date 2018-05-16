@@ -4,7 +4,8 @@ from copy import deepcopy
 from .custom_layers import conv2d, deconv2d, log_softmax
 from .utils import cross_entropy
 from .base_model import BaseModel
-from .simple_fcn import vgg16, decoder
+from .simple_fcn import decoder
+from .vgg16 import vgg16
 
 
 def fusion_fcn(inputs, prefixes, num_units, num_classes, trainable=True,

@@ -2,7 +2,7 @@ import tensorflow as tf
 
 from .uncertainty_model import UncertaintyModel
 from .utils import cross_entropy
-from .simple_fcn import encoder, decoder
+from .simple_fcn import fcn
 from .custom_layers import entropy, log_softmax
 
 
@@ -83,16 +83,10 @@ class BayesianFCN(UncertaintyModel):
         """Builds the whole network. Network is split into 2 similar pipelines with shared
         weights, one for training and one for testing."""
         def sample_pipeline(inputs, is_training=False, reuse=tf.AUTO_REUSE):
-            layers = encoder(
-                inputs, self.prefix, self.config['num_units'],
-                self.config['dropout_rate'], is_training=is_training, reuse=reuse,
-                dropout_layers=self.config['dropout_layers'])
-            layers.update(decoder(
-                layers['fused'], self.prefix, self.config['num_units'],
-                self.config['num_classes'], is_training=is_training, reuse=reuse,
-                dropout_rate=(self.config['dropout_rate']
-                              if 'features' in self.config['dropout_layers']
-                              else None)))
+            layers = fcn(inputs, self.prefix, self.config['num_units'],
+                         self.config['num_classes'], is_training=is_training,
+                         dropout_rate=self.config['dropout_rate'],
+                         reuse=reuse, dropout_layers=self.config['dropout_layers'])
             layers['prob'] = tf.nn.softmax(layers['score'])
             return layers
 
@@ -102,7 +96,6 @@ class BayesianFCN(UncertaintyModel):
                 train_x = train_data[self.modality]
                 # ground truth labels
                 train_y = tf.to_float(train_data['labels'])
-
                 score = sample_pipeline(train_x, is_training=True)['score']
                 log_prob = log_softmax(score, self.config['num_classes'])
                 self.loss = cross_entropy(log_prob, train_y)

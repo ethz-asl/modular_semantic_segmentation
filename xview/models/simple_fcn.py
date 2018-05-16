@@ -5,10 +5,9 @@ from copy import deepcopy
 from .base_model import BaseModel
 from .custom_layers import conv2d, deconv2d
 from .utils import cross_entropy
-from .vgg16 import vgg16
 
 
-def encoder(inputs, prefix, num_units, dropout_rate, trainable=True,
+def encoder(inputs, prefix, num_units, dropout_rate, trainable=True, batchnorm=True,
             is_training=False, reuse=tf.AUTO_REUSE, dropout_layers=[]):
     """
     VGG16 image encoder with fusion of conv4_3 and conv5_3 features.
@@ -31,7 +30,7 @@ def encoder(inputs, prefix, num_units, dropout_rate, trainable=True,
     # These parameters are shared between many/all layers and therefore defined here
     # for convenience.
     params = {'activation': tf.nn.relu, 'padding': 'same', 'reuse': reuse,
-              'batch_normalization': True, 'training': is_training,
+              'batch_normalization': batchnorm, 'training': is_training,
               'trainable': trainable}
 
     with tf.variable_scope(prefix, reuse=reuse):
@@ -91,7 +90,7 @@ def encoder(inputs, prefix, num_units, dropout_rate, trainable=True,
 
 
 def decoder(features, prefix, num_units, num_classes, trainable=True, is_training=False,
-            reuse=tf.AUTO_REUSE, dropout_rate=None):
+            reuse=tf.AUTO_REUSE, dropout_rate=None, batchnorm=True):
     """
     FCN feature decoder.
 
@@ -114,7 +113,8 @@ def decoder(features, prefix, num_units, num_classes, trainable=True, is_trainin
     """
     params = {
         'activation': tf.nn.relu, 'padding': 'same', 'reuse': reuse,
-        'batch_normalization': True, 'training': is_training, 'trainable': trainable}
+        'batch_normalization': batchnorm, 'training': is_training,
+        'trainable': trainable}
     # Upscore layers are never trainable
     upscore_params = deepcopy(params)
     upscore_params['trainable'] = False
@@ -131,6 +131,19 @@ def decoder(features, prefix, num_units, num_classes, trainable=True, is_trainin
         params['activation'] = None
         score = conv2d(features, num_classes, [1, 1], name='score', **params)
     return {'upscore': features, 'score': score}
+
+
+def fcn(inputs, prefix, num_units, num_classes, trainable=True, is_training=False,
+        reuse=tf.AUTO_REUSE, dropout_rate=0, dropout_layers=[], batchnorm=True):
+    layers = encoder(inputs, prefix, num_units, dropout_rate, is_training=is_training,
+                     trainable=trainable, batchnorm=batchnorm,
+                     dropout_layers=dropout_layers)
+    layers.update(decoder(layers['fused'], prefix, num_units, num_classes,
+                          is_training=is_training, batchnorm=batchnorm,
+                          dropout_rate=(dropout_rate
+                                        if 'features' in dropout_layers
+                                        else None)))
+    return layers
 
 
 class SimpleFCN(BaseModel):
@@ -151,7 +164,8 @@ class SimpleFCN(BaseModel):
         self.modality = modality
 
         standard_config = {
-            'train_encoder': True
+            'train_encoder': True,
+            'dropout_rate': 0
         }
         standard_config.update(config)
         BaseModel.__init__(self, data_description, output_dir=output_dir,
@@ -166,14 +180,10 @@ class SimpleFCN(BaseModel):
             train_x = train_data[self.modality]
             # ground truth labels
             train_y = tf.to_float(train_data['labels'])
-
-            encoder_layers = encoder(train_x, self.prefix, self.config['num_units'],
-                                     self.config['dropout_rate'], is_training=True,
-                                     trainable=self.config.get('train_encoder', True))
-            decoder_layers = decoder(encoder_layers['fused'], self.prefix,
-                                     self.config['num_units'], self.config['num_classes'],
-                                     is_training=True)
-            prob = tf.nn.log_softmax(decoder_layers['score'], name='prob')
+            layers = fcn(train_x, self.prefix, self.config['num_units'],
+                         self.config['num_classes'], is_training=True,
+                         batchnorm=self.config['batch_normalization'])
+            prob = tf.nn.log_softmax(layers['score'], name='prob')
             # The loss is given by the cross-entropy with the ground-truth
             self.loss = cross_entropy(prob, train_y)
             self.train_y = train_y
@@ -181,12 +191,10 @@ class SimpleFCN(BaseModel):
         # Network for testing / evaluation
         with tf.name_scope('testing'):
             test_x = test_data[self.modality]
-            encoder_layers = encoder(test_x, self.prefix, self.config['num_units'],
-                                     tf.constant(0.0), is_training=False)
-            decoder_layers = decoder(encoder_layers['fused'], self.prefix,
-                                     self.config['num_units'], self.config['num_classes'],
-                                     is_training=False)
-            label = tf.nn.softmax(decoder_layers['score'], name='prob_normalized')
-            self.prediction = tf.argmax(label, 3, name='label_2d')
+            layers = fcn(test_x, self.prefix, self.config['num_units'],
+                         self.config['num_classes'], is_training=False,
+                         batchnorm=self.config['batch_normalization'])
+            prob = tf.nn.softmax(layers['score'], name='prob_normalized')
+            self.prediction = tf.argmax(prob, 3, name='label_2d')
 
         # Add summaries for some weights
