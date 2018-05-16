@@ -236,6 +236,18 @@ def log_softmax(inputs, num_classes, name=None):
         return tf.subtract(d, tf.log(tf.tile(s, multiples)))
 
 
+def softmax(inputs, temperature=1, name=None):
+    """Softmax as defined in DA-RNN code. Not sure why they do not use the standard
+    softmax."""
+    with tf.name_scope(name, default_name='softmax', values=[inputs]):
+        # apply temperature scaling
+        scaled = inputs / temperature
+        m = tf.reduce_max(scaled, axis=-1, keepdims=True)
+        e = tf.exp(scaled - m)
+        s = tf.reduce_sum(e, axis=-1, keepdims=True)
+        return tf.div(e, s)
+
+
 def entropy(x, axis=-1):
     with tf.name_scope('entropy'):
         entropy = -tf.reduce_sum(x*tf.log(tf.clip_by_value(x, 1e-10, 1.0)), axis=axis) \
