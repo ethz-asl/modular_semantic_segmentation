@@ -133,8 +133,21 @@ def crop_around_center(image, width, height):
     return image[y1:y2, x1:x2]
 
 
+def flip_labels(labels, c1, c2):
+    """
+    Randomly either map c1 onto c2 or the other way.
+    """
+    for i in range(labels.shape[0]):
+        if np.random.rand() < 0.5:
+            labels[i][labels[i] == c1] = c2
+        else:
+            labels[i][labels[i] == c2] = c1
+    return labels
+
+
 def augmentate(blob, scale=False, crop=False, hflip=False, vflip=False, gamma=False,
-               contrast=False, brightness=False, rotate=False, shear=False):
+               contrast=False, brightness=False, rotate=False, shear=False,
+               label_flip=False, label_merge=False):
     """Perform data-augmentations on all modalities of an image blob.
 
     Args:
@@ -147,6 +160,8 @@ def augmentate(blob, scale=False, crop=False, hflip=False, vflip=False, gamma=Fa
         hflip (bool): horizontally flip the image
         gamma (list of 2 values or False): apply gamma correction/noise with a random
             factor from the given interval
+        label_flip (list of 2 class idx): randomly map one class onto the other
+        label_merge (list of 2 class idx): map the second class onto the first
     Returns:
         augemted image blob
     """
@@ -217,6 +232,12 @@ def augmentate(blob, scale=False, crop=False, hflip=False, vflip=False, gamma=Fa
         lut = np.array([((i / 255.0) ** (1/k)) * 255
                         for i in np.arange(0, 256)]).astype("uint8")
         blob['rgb'] = lut[blob['rgb']]
+
+    if label_flip:
+        blob['labels'] = flip_labels(blob['labels'], *label_flip)
+
+    if label_merge:
+        blob['labels'][blob['labels'] == label_merge[1]] = label_merge[0]
 
     return blob
 
