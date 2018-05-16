@@ -11,10 +11,14 @@ class DataBaseclass(DataWrapper):
     """A basic, abstract class for splitting data into batches, compliant with DataWrapper
     interface."""
 
-    def __init__(self, trainset, measureset, testset, labelinfo, num_classes=None,
-                 info=False):
-        self.trainset, self.validation_set = train_test_split(
-            trainset, test_size=15, random_state=317243896)
+    def __init__(self, trainset, measureset, testset, labelinfo,
+                 validation_set=None, num_classes=None, info=False):
+        if validation_set is None:
+            self.trainset, self.validation_set = train_test_split(
+                trainset, test_size=15, random_state=317243896)
+        else:
+            self.trainset = trainset
+            self.validation_set = validation_set
         self.measureset = measureset
         self.testset = testset
         if num_classes is None:
