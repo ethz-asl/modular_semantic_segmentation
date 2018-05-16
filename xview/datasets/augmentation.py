@@ -4,6 +4,7 @@ import numpy as np
 import random
 from imgaug import augmenters as ia
 
+
 def rotate_image(image, angle):
     """
     Rotates an OpenCV 2 / NumPy image about it's centre by the given angle
@@ -72,6 +73,7 @@ def rotate_image(image, angle):
 
     return result
 
+
 def largest_rotated_rect(w, h, angle):
     """
     Given a rectangle of size wxh that has been rotated by 'angle' (in
@@ -107,6 +109,7 @@ def largest_rotated_rect(w, h, angle):
         bb_h - 2 * y
     )
 
+
 def crop_around_center(image, width, height):
     """
     Given a NumPy / OpenCV 2 image, crops it to the given width and height,
@@ -128,6 +131,7 @@ def crop_around_center(image, width, height):
     y2 = int(image_center[1] + height * 0.5)
 
     return image[y1:y2, x1:x2]
+
 
 def augmentate(blob, scale=False, crop=False, hflip=False, vflip=False, gamma=False,
                contrast=False, brightness=False, rotate=False, shear=False):
@@ -215,6 +219,7 @@ def augmentate(blob, scale=False, crop=False, hflip=False, vflip=False, gamma=Fa
         blob['rgb'] = lut[blob['rgb']]
 
     return blob
+
 
 def crop_multiple(data, multiple_of=16):
     """Force the array dimension to be multiple of the given factor.
