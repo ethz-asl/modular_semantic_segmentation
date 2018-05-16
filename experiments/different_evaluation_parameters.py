@@ -56,7 +56,7 @@ def grid_search(evaluation, search_parameters, net_config):
         def append_deep_value(add_to, val):
             for key, inner_val in val.items():
                 if isinstance(inner_val, dict):
-                    append_deep_value(add_to.get(key, {}), inner_val)
+                    append_deep_value(add_to.setdefault(key, {}), inner_val)
                 else:
                     add_to.setdefault(key, []).append(inner_val)
         append_deep_value(results, result)
