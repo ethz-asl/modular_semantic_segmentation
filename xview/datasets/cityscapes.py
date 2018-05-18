@@ -60,6 +60,7 @@ class Cityscapes(DataBaseclass):
                 'labels': 'gtFine_labelIds',
                 'depth': 'disparity'
         }
+        self.in_memory = in_memory
 
         original_labelinfo = {
                 0: {'name': 'unlabeled', 'mapping': 'void'},
@@ -129,13 +130,13 @@ class Cityscapes(DataBaseclass):
 
                 search_path = path.join(base_dir, city)
                 filenames.extend(
-                    [{'image_name': '_'.join(path.splitext(n)[0].split('_')[:3]),
-                      'image_path': path.join(fileset, city)}
+                    [{'image_path': path.join(
+                        fileset, city, '_'.join(path.splitext(n)[0].split('_')[:3]))}
                      for n in listdir(search_path)])
             return filenames
 
-        if in_memory:
-            print('INFO loading dataset into memory')
+        if self.in_memory:
+            print('INFO loading dataset into machine')
             # first load the tarfile into a closer memory location, then load all the
             # images
             tar = tarfile.open(path.join(base_path, 'cityscapes.tar.gz'))
@@ -143,15 +144,15 @@ class Cityscapes(DataBaseclass):
             tar.extractall(path=localtmp)
             tar.close()
             self.base_path = localtmp
-            trainset = [{'image': self._load_data(i['image_name'], i['image_path'])}
-                        for i in tqdm(get_filenames('train', cities=cities), ascii=True)]
-            testset = [{'image': self._load_data(i['image_name'], i['image_path'])}
-                       for i in tqdm(get_filenames('val', cities=['munster', 'frankfurt',
-                                                                  'lindau']),
-                                     ascii=True)]
-        else:
-            trainset = get_filenames('train', cities=cities)
-            testset = get_filenames('val', cities=['munster', 'frankfurt', 'lindau'])
+            self.images = {}
+            #trainset = [{'image': self._load_data(i['image_name'], i['image_path'])}
+            #            for i in tqdm(get_filenames('train', cities=cities), ascii=True)]
+            #testset = [{'image': self._load_data(i['image_name'], i['image_path'])}
+            #           for i in tqdm(get_filenames('val', cities=['munster', 'frankfurt',
+            #                                                      'lindau']),
+            #                         ascii=True)]
+        trainset = get_filenames('train', cities=cities)
+        testset = get_filenames('val', cities=['munster', 'frankfurt', 'lindau'])
 
         trainset, measureset = train_test_split(trainset, test_size=0.05,
                                                 random_state=4)
@@ -159,12 +160,11 @@ class Cityscapes(DataBaseclass):
         # Intitialize Baseclass
         DataBaseclass.__init__(self, trainset, measureset, testset, labelinfo)
 
-    def _load_data(self, image_name, image_path):
+    def _load_data(self, image_path):
         rgb_filename, depth_filename, labels_filename = (
             path.join(self.base_path,
                       self.modality_paths[m],
-                      image_path,
-                      '{}_{}.png'.format(image_name,
+                      '{}_{}.png'.format(image_path,
                                          self.modality_suffixes[m]))
             for m in ['rgb', 'depth', 'labels']
         )
@@ -186,19 +186,17 @@ class Cityscapes(DataBaseclass):
         blob['depth'] = np.expand_dims(blob['depth'], 3)
         return blob
 
-    def _get_data(self, image_name=False, image_path=False, image=False,
-                  training_format=False):
+    def _get_data(self, image_path, training_format=False):
         """Returns data for one given image number from the specified sequence."""
-        if not image_name and not image:
-            # one of the two has to be set
-            assert False
-
-        if image:
+        if self.in_memory:
+            if image_path not in self.images:
+                self.images[image_path] = self._load_data(image_path)
+            image = self.images[image_path]
             blob = {}
             for m in image:
                 blob[m] = image[m].copy()
         else:
-            blob = self._load_data(image_name, image_path)
+            blob = self._load_data(image_path)
 
         if training_format:
             blob = augmentate(blob, **self.config['augmentation'])
