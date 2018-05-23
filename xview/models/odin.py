@@ -40,10 +40,10 @@ class ODIN(UncertaintyModel):
             layers = fcn(test_x, self.prefix, self.config['num_units'],
                          self.config['num_classes'], is_training=False,
                          batchnorm=self.config['batch_normalization'])
-            prob = softmax(layers['score'],
-                           temperature=self.config['temperature_scaling'])
-            self.prediction = tf.argmax(prob, 3, name='label_2d')
-            self.entropy = entropy(prob)
-            self.max_prob = 1 - tf.reduce_max(prob, 3, keepdims=True)
+            self.prob = softmax(layers['score'],
+                                temperature=self.config['temperature_scaling'])
+            self.prediction = tf.argmax(self.prob, 3, name='label_2d')
+            self.entropy = entropy(self.prob)
+            self.max_prob = 1 - tf.reduce_max(self.prob, 3, keepdims=True)
 
         # Add summaries for some weights
