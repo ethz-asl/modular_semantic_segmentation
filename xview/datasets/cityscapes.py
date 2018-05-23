@@ -136,7 +136,7 @@ class Cityscapes(DataBaseclass):
             return filenames
 
         if self.in_memory:
-            print('INFO loading dataset into machine')
+            print('INFO loading dataset into machine ... ', end='')
             # first load the tarfile into a closer memory location, then load all the
             # images
             tar = tarfile.open(path.join(base_path, 'cityscapes.tar.gz'))
@@ -145,15 +145,9 @@ class Cityscapes(DataBaseclass):
             tar.close()
             self.base_path = localtmp
             self.images = {}
-            #trainset = [{'image': self._load_data(i['image_name'], i['image_path'])}
-            #            for i in tqdm(get_filenames('train', cities=cities), ascii=True)]
-            #testset = [{'image': self._load_data(i['image_name'], i['image_path'])}
-            #           for i in tqdm(get_filenames('val', cities=['munster', 'frankfurt',
-            #                                                      'lindau']),
-            #                         ascii=True)]
+            print('DONE')
         trainset = get_filenames('train', cities=cities)
         testset = get_filenames('val', cities=['munster', 'frankfurt', 'lindau'])
-
         trainset, measureset = train_test_split(trainset, test_size=0.05,
                                                 random_state=4)
 
