@@ -12,7 +12,7 @@ def transform_inputdata(data_arg_idx=1):
     which can then directly be fed into the network
     """
     def _transform_inputdata(f):
-        def wrapper(*args):
+        def wrapper(*args, **kwargs):
             # first argument is the model instance
             model = args[0]
             # now get the data argument
@@ -32,9 +32,19 @@ def transform_inputdata(data_arg_idx=1):
             # now exchange the data arg with the iterator
             args = list(args)
             args[data_arg_idx] = handle
-            return f(*args)
+            return f(*args, **kwargs)
         return wrapper
     return _transform_inputdata
+
+
+def with_graph(f):
+    """Call a function with self.graph.as_default() context."""
+    def wrapper(*args, **kwargs):
+        # the first argument is always the model instance
+        model = args[0]
+        with model.graph.as_default():
+            return f(*args, **kwargs)
+    return wrapper
 
 
 class BaseModel(object):
@@ -52,7 +62,7 @@ class BaseModel(object):
     __metaclass__ = ABCMeta
     required_attributes = [["loss"], ["prediction"]]
 
-    def __init__(self, data_description, name=None, output_dir=None, 
+    def __init__(self, data_description, name=None, output_dir=None,
                  supports_training=True, batchsize=1, **config):
         """Set configuration and build the model.
 

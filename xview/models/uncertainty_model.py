@@ -1,7 +1,8 @@
 import tensorflow as tf
 import numpy as np
 from sklearn.metrics import auc
-from .base_model import BaseModel, transform_inputdata
+from .base_model import BaseModel, transform_inputdata, with_graph
+from .dirichletEstimation import findDirichletPriors
 
 
 class UncertaintyModel(BaseModel):
@@ -105,3 +106,100 @@ class UncertaintyModel(BaseModel):
             auroc = auc(fpr, tpr, reorder=True)
 
             return fpr, tpr, auroc, thresholds
+
+    @transform_inputdata()
+    def nll_score(self, data):
+        with self.graph.as_default():
+            per_class_nll = np.zeros(self.config['num_classes'])
+            class_count = np.zeros(self.config['num_classes'])
+            while True:
+                try:
+                    gt, prob, pred = self.sess.run(
+                        [self.evaluation_labels, self.prob, self.prediction],
+                        feed_dict={self.testing_handle: data})
+                    log_prob = np.log(prob)
+                    for c in range(self.config['num_classes']):
+                        nll = log_prob[np.logical_and(gt == pred, gt == c)].sum()
+                        nll += (1 - log_prob[np.logical_and(gt == c, gt != pred)]).sum()
+                        per_class_nll[c] += nll
+                        class_count[c] += np.sum(gt == c)
+                except tf.errors.OutOfRangeError:
+                    break
+            return per_class_nll / class_count, class_count
+
+    @transform_inputdata()
+    def value_distribution(self, data, uncertainty_attr, num_bins=20):
+        with self.graph.as_default():
+            uncertainty_attr = getattr(self, uncertainty_attr)
+
+            values = [[[] for _ in range(self.config['num_classes'])]
+                      for _ in range(self.config['num_classes'])]
+            while True:
+                try:
+                    gt, pred, uncertainty = self.sess.run(
+                        [self.evaluation_labels, self.prediction, uncertainty_attr],
+                        feed_dict={self.testing_handle: data})
+                    for t in range(self.config['num_classes']):
+                        for c in range(self.config['num_classes']):
+                            values[t][c].append(
+                                uncertainty[np.logical_and(gt == t, pred == c)])
+                except tf.errors.OutOfRangeError:
+                    break
+            values = [[np.concatenate(cell) for cell in row] for row in values]
+        return [[{'bins': np.histogram(cell, bins=num_bins), 'mean': cell.mean(),
+                  'var': cell.var()} for cell in row] for row in values]
+
+    @transform_inputdata()
+    def prob_distribution(self, data):
+        nc = self.config['num_classes']
+        with self.graph.as_default():
+            sufficient_statistics = [[np.zeros(nc) for _ in range(nc)]
+                                     for _ in range(nc)]
+            class_counts = [[0 for _ in range(nc)] for _ in range(nc)]
+            first = True
+            while True:
+                try:
+                    gt, pred, prob = self.sess.run(
+                        [self.evaluation_labels, self.prediction, self.prob],
+                        feed_dict={self.testing_handle: data})
+
+                    for t in range(nc):
+                        for c in range(nc):
+                            if first:
+                                print(np.log(prob[np.logical_and(gt == t, pred == c)]).shape)
+                                first = False
+                            ss = np.log(prob[np.logical_and(gt == t, pred == c)]).sum(0)
+                            sufficient_statistics[t][c] += ss
+                            class_counts[t][c] += np.logical_and(gt == t, pred == c).sum()
+                except tf.errors.OutOfRangeError:
+                    break
+            # take the mean over the sufficient statistics
+            sufficient_statistics = [[sufficient_statistics[t][c] / class_counts[t][c]
+                                      for c in range(nc)] for t in range(nc)]
+            print(sufficient_statistics[0][0].shape)
+            dirichlets = [[findDirichletPriors(sufficient_statistics[t][c], np.ones(nc))
+                           for c in range(nc)] for t in range(nc)]
+        return dirichlets
+
+    @transform_inputdata()
+    @with_graph
+    def mean_diff(self, data, prior, condition=lambda t, c: True):
+        diff = 0
+        n = 0
+        while True:
+            try:
+                gt, pred, prob = self.sess.run(
+                    [self.evaluation_labels, self.prediction, self.prob],
+                    feed_dict={self.testing_handle: data})
+
+                cond = condition(gt, pred)
+                diff += np.sum(np.where(cond,
+                                        np.sum(np.abs(prob - prior), axis=-1),
+                                        np.zeros_like(pred)))
+                n += np.sum(np.where(cond,
+                                     np.ones_like(pred),
+                                     np.zeros_like(pred)))
+            except tf.errors.OutOfRangeError:
+                break
+
+        return diff / n
