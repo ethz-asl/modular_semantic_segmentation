@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 from os import path
+from sys import stdout
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy
 from tqdm import tqdm
@@ -175,6 +176,7 @@ class BaseModel(object):
         """Set up the whole network here."""
         raise NotImplementedError
 
+    @with_graph
     def fit(self, dataset, iterations, output=True, validation_dataset=None,
             validation_interval=100, additional_eval_datasets={}):
         """Train the model for given number of iterations.
@@ -186,71 +188,73 @@ class BaseModel(object):
         if not self.supports_training:
             raise UserWarning("ERROR: Model %s does not support training" % self.name)
 
-        with self.graph.as_default():
-            # Merge all summary creation into one op. Add summary for loss.
-            tf.summary.scalar('loss', self.loss)
-            merged_summary = tf.summary.merge_all()
-            if self.output_dir is not None:
-                train_writer = tf.summary.FileWriter(self.output_dir)
+        # Merge all summary creation into one op. Add summary for loss.
+        tf.summary.scalar('loss', self.loss)
+        merged_summary = tf.summary.merge_all()
+        if self.output_dir is not None:
+            train_writer = tf.summary.FileWriter(self.output_dir)
 
-            # initialize datasets
-            def _onehot_mapper(blob):
-                blob['labels'] = tf.one_hot(blob['labels'], self.config['num_classes'],
-                                            dtype=tf.int32)
-                return blob
+        # initialize datasets
+        def _onehot_mapper(blob):
+            blob['labels'] = tf.one_hot(blob['labels'], self.config['num_classes'],
+                                        dtype=tf.int32)
+            return blob
 
-            train_iterator = dataset.map(_onehot_mapper, 10)\
-                .repeat()\
-                .batch(self.config['batchsize'])\
-                .make_one_shot_iterator()
-            train_handle = self.sess.run(train_iterator.string_handle())
+        train_iterator = dataset.map(_onehot_mapper, 10)\
+            .repeat()\
+            .batch(self.config['batchsize'])\
+            .make_one_shot_iterator()
+        train_handle = self.sess.run(train_iterator.string_handle())
 
-            if validation_dataset is None:
-                validation_iterator = dataset.take(10).batch(self.config['batchsize'])\
-                    .make_initializable_iterator()
+        if validation_dataset is None:
+            validation_iterator = dataset.take(10).batch(self.config['batchsize'])\
+                .make_initializable_iterator()
+        else:
+            validation_iterator = validation_dataset.batch(self.config['batchsize'])\
+                .make_initializable_iterator()
+
+        print('INFO: Start training')
+        # make sure this is getting printed out before the status bar
+        stdout.flush()
+        for i in tqdm(range(iterations), disable=output, ascii=True):
+            # Every validation_interval, we run the summary and validation values
+            if i % validation_interval == 0 and validation_dataset is not None:
+                _, summary = self.sess.run(
+                    (self.trainer, merged_summary),
+                    feed_dict={self.training_handle: train_handle})
+                score, _ = self.score(validation_iterator)
+                accuracy = tf.Summary(
+                    value=[tf.Summary.Value(tag='accuracy',
+                                            simple_value=score['total_accuracy'])])
+                iou = tf.Summary(
+                    value=[tf.Summary.Value(tag='IoU',
+                                            simple_value=score['mean_IoU'])])
+
+                if output:
+                    print("{:4d}: accuracy {:.2f}, IoU {:.2f}".format(
+                        i, score['total_accuracy'], score['mean_IoU']))
+                if self.output_dir is not None:
+                    train_writer.add_summary(accuracy, i)
+                    train_writer.add_summary(iou, i)
+                    train_writer.add_summary(summary, i)
+
+                # Add additional summaries if specified
+                for key, additional_dataset in additional_eval_datasets.items():
+                    val = self.score(additional_dataset)[0]['mean_IoU']
+                    summary = tf.Summary(value=[tf.Summary.Value(tag=key,
+                                                                 simple_value=val)])
+                    train_writer.add_summary(summary, i)
+
+                if 'abort_at_iou' in self.config:
+                    if score['mean_IoU'] > self.config['abort_at_iou']:
+                        break
             else:
-                validation_iterator = validation_dataset.batch(self.config['batchsize'])\
-                    .make_initializable_iterator()
-
-            print('INFO: Start training')
-            for i in tqdm(range(iterations), disable=output, ascii=True):
-                # Every validation_interval, we run the summary and validation values
-                if i % validation_interval == 0 and validation_dataset is not None:
-                    _, summary = self.sess.run(
-                        (self.trainer, merged_summary),
-                        feed_dict={self.training_handle: train_handle})
-                    score, _ = self.score(validation_iterator)
-                    accuracy = tf.Summary(
-                        value=[tf.Summary.Value(tag='accuracy',
-                                                simple_value=score['total_accuracy'])])
-                    iou = tf.Summary(
-                        value=[tf.Summary.Value(tag='IoU',
-                                                simple_value=score['mean_IoU'])])
-
-                    if output:
-                        print("{:4d}: accuracy {:.2f}, IoU {:.2f}".format(
-                            i, score['total_accuracy'], score['mean_IoU']))
-                    if self.output_dir is not None:
-                        train_writer.add_summary(accuracy, i)
-                        train_writer.add_summary(iou, i)
-                        train_writer.add_summary(summary, i)
-
-                    # Add additional summaries if specified
-                    for key, additional_dataset in additional_eval_datasets.items():
-                        val = self.score(additional_dataset)[0]['mean_IoU']
-                        summary = tf.Summary(value=[tf.Summary.Value(tag=key,
-                                                                     simple_value=val)])
-                        train_writer.add_summary(summary, i)
-
-                    if 'abort_at_iou' in self.config:
-                        if score['mean_IoU'] > self.config['abort_at_iou']:
-                            break
-                else:
-                    self.sess.run(self.trainer,
-                                  feed_dict={self.training_handle: train_handle})
-            print('INFO: Training finished.')
+                self.sess.run(self.trainer,
+                              feed_dict={self.training_handle: train_handle})
+        print('INFO: Training finished.')
 
     @transform_inputdata()
+    @with_graph
     def predict(self, data, output_attr=None):
         """Perform semantic segmentation on the input data.
 
@@ -265,21 +269,20 @@ class BaseModel(object):
                   if output_prob is specified and true
                 - <array of shape [num_images, width, height]> else
         """
-        with self.graph.as_default():
-            if output_attr is not None and hasattr(self, output_attr):
-                output = getattr(self, output_attr)
-            else:
-                output = self.prediction
+        if output_attr is not None and hasattr(self, output_attr):
+            output = getattr(self, output_attr)
+        else:
+            output = self.prediction
 
-            # collect all the batches in this list
-            ret = []
-            while True:
-                try:
-                    ret.append(self.sess.run(output,
-                                             feed_dict={self.testing_handle: data}))
-                except tf.errors.OutOfRangeError:
-                    break
-            return np.concatenate(ret)
+        # collect all the batches in this list
+        ret = []
+        while True:
+            try:
+                ret.append(self.sess.run(output,
+                                         feed_dict={self.testing_handle: data}))
+            except tf.errors.OutOfRangeError:
+                break
+        return np.concatenate(ret)
 
     @transform_inputdata()
     def score(self, data, max_iterations=None):
@@ -382,6 +385,7 @@ class BaseModel(object):
             print('INFO: Weights saved to {}'.format(output_path))
             return output_path
 
+    @with_graph
     def import_weights(self, filepath, translate_prefix=False, chill_mode=False,
                        warnings=True):
         """Import weights given by a numpy file. Variables are assigned to arrays which's
@@ -394,44 +398,43 @@ class BaseModel(object):
             chill_mode: If True, ignores variables that do not match in shape and leaves
                 them unassigned
         """
-        with self.graph.as_default():
-            initializers = []
-            weights = np.load(filepath, mmap_mode='w+')
-            import_prefix = weights.keys()[0].split('/')[0].split('_')[0]
+        initializers = []
+        weights = np.load(filepath, mmap_mode='w+')
+        import_prefix = weights.keys()[0].split('/')[0].split('_')[0]
 
-            def translate_name(name):
-                """May translate the prefix of the name according to settings."""
-                if not translate_prefix:
-                    return name
-                if not name.startswith(translate_prefix):
-                    return name
-                splitted = name.split('/')
-                further_splitted = splitted[0].split('_')
-                # dirty fix for forest
-                if further_splitted[0] == 'forest':
-                    return name
-                # exchange prefix
-                further_splitted[0] = import_prefix
-                splitted[0] = '_'.join(further_splitted)
-                return '/'.join(splitted)
+        def translate_name(name):
+            """May translate the prefix of the name according to settings."""
+            if not translate_prefix:
+                return name
+            if not name.startswith(translate_prefix):
+                return name
+            splitted = name.split('/')
+            further_splitted = splitted[0].split('_')
+            # dirty fix for forest
+            if further_splitted[0] == 'forest':
+                return name
+            # exchange prefix
+            further_splitted[0] = import_prefix
+            splitted[0] = '_'.join(further_splitted)
+            return '/'.join(splitted)
 
-            for variable in tf.global_variables():
-                name = translate_name(variable.op.name)
-                # Optimizers like Adagrad have their own variables, do not load these
-                if 'grad' in name or 'Adam' in name or 'RMS' in name:
-                    continue
-                if name not in weights:
+        for variable in tf.global_variables():
+            name = translate_name(variable.op.name)
+            # Optimizers like Adagrad have their own variables, do not load these
+            if 'grad' in name or 'Adam' in name or 'RMS' in name:
+                continue
+            if name not in weights:
+                if warnings:
+                    print('WARNING: {} not found in saved weights'.format(name))
+            else:
+                if not variable.shape == weights[name].shape:
                     if warnings:
-                        print('WARNING: {} not found in saved weights'.format(name))
-                else:
-                    if not variable.shape == weights[name].shape:
-                        if warnings:
-                            print('WARNING: wrong shape found for {}, but ignored in '
-                                  'chill mode'.format(name))
-                            print('stored shape: ', weights[name].shape,
-                                  'expected shape: ', variable.shape)
-                        if chill_mode:
-                            initializers.append(variable.assign(weights[name]))
-                    else:
+                        print('WARNING: wrong shape found for {}, but ignored in '
+                              'chill mode'.format(name))
+                        print('stored shape: ', weights[name].shape,
+                              'expected shape: ', variable.shape)
+                    if chill_mode:
                         initializers.append(variable.assign(weights[name]))
-            self.sess.run(initializers)
+                else:
+                    initializers.append(variable.assign(weights[name]))
+        self.sess.run(initializers)
