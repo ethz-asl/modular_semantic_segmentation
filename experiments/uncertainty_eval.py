@@ -3,8 +3,11 @@ from sacred import Experiment
 from sacred.utils import apply_backspaces_and_linefeeds
 from xview.models import get_model
 from xview.datasets import get_dataset
-from sys import stdout
+from sys import stdout, exit
 import numpy as np
+import threading
+import _thread
+import os
 
 from .utils import get_mongo_observer
 from .evaluation import import_weights_into_network
@@ -45,7 +48,6 @@ def measure_metrics(net, data, metrics, _run, label_flip=None):
         _run.info['measurements']['distribution_miscalibration'] = net.mean_diff(
             data, prior, condition=lambda t, c: np.logical_or(c == label_flip[0],
                                                               c == label_flip[1]))
-
 
 ex = Experiment()
 # reduce output of progress bars
@@ -89,7 +91,8 @@ def train_ambiguous(modelname, net_config, dataset, starting_weights, method,
     elif method == 'new_class':
         # randomly label a given class as a new, nonexisting class
         data_description[2] = num_classes + 1
-        old_class = np.random.choice(list(range(num_classes)))
+        #old_class = np.random.choice(list(range(num_classes)))
+        old_class = 7
         dataset.setdefault('augmentation', {})['label_flip'] = (old_class, num_classes,
                                                                 np.random.rand())
     elif method == 'merge':
@@ -105,6 +108,8 @@ def train_ambiguous(modelname, net_config, dataset, starting_weights, method,
         train_network(net, output_dir, data, num_iterations, starting_weights, ex)
         measure_metrics(net, data.get_testset(), uncertainty_metrics, _run,
                         label_flip=dataset['augmentation'].get('label_flip', None))
+        net.close()
+    print(threading.enumerate())
 
 
 @ex.command
@@ -120,7 +125,7 @@ def measure(modelname, net_config, dataset, starting_weights, uncertainty_metric
         measure_metrics(net, data.get_testset(), uncertainty_metrics, _run)
 
 
-@ex.automain
+@ex.main
 def uncertainty_benchmark(modelname, net_config, dataset, starting_weights, benchmark,
                           uncertainty_metrics, _run):
     model = get_model(modelname)
@@ -132,3 +137,10 @@ def uncertainty_benchmark(modelname, net_config, dataset, starting_weights, benc
             measurements = evaluate_uncertainty(net, data.get_testset(), metric,
                                                 benchmark=benchmark)
             _run.info.setdefault('measurements', {})[metric] = measurements
+
+
+if __name__ == '__main__':
+    ex.run_commandline()
+    # for some reason we have processes running in the background that won't stop
+    # this is the only way to kill them
+    os._exit(os.EX_OK)

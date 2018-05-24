@@ -5,10 +5,6 @@ from xview.models import get_model
 from copy import deepcopy
 
 
-ex = Experiment()
-ex.observers.append(get_mongo_observer())
-
-
 def parameter_combinations(search_parameters, net_config):
     # We want to tets all the different combinations of the search_parameters, therefore,
     # we create a list of the different network configurations.
@@ -61,6 +57,10 @@ def grid_search(evaluation, search_parameters, net_config):
                     add_to.setdefault(key, []).append(inner_val)
         append_deep_value(results, result)
     return results
+
+
+ex = Experiment()
+ex.observers.append(get_mongo_observer())
 
 
 @ex.automain

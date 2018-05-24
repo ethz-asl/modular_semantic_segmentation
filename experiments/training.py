@@ -6,6 +6,7 @@ from experiments.evaluation import evaluate, import_weights_into_network
 from xview.models import get_model
 from xview.settings import EXP_OUT
 import os
+import sys
 import shutil
 
 
@@ -39,12 +40,6 @@ def create_directories(run_id, experiment):
     return output_dir
 
 
-ex = Experiment()
-# reduce output of progress bars
-ex.captured_out_filter = apply_backspaces_and_linefeeds
-ex.observers.append(get_mongo_observer())
-
-
 def train_network(net, output_dir, data, num_iterations, starting_weights,
                   experiment, additional_eval_data={}):
     """
@@ -69,10 +64,8 @@ def train_network(net, output_dir, data, num_iterations, starting_weights,
         net.fit(data.get_trainset(), num_iterations,
                 validation_dataset=data.get_validation_set(),
                 additional_eval_datasets=additional_eval_data, output=False)
-        timeout = False
     except KeyboardInterrupt:
         print('WARNING: Got Keyboard Interrupt, will save weights and close')
-        timeout = True
 
     # Store the weights into the standard output directory
     net.export_weights()
@@ -80,6 +73,12 @@ def train_network(net, output_dir, data, num_iterations, starting_weights,
     # To end the experiment, we collect all produced output files and store them.
     for filename in os.listdir(output_dir):
         experiment.add_artifact(os.path.join(output_dir, filename))
+
+
+ex = Experiment()
+# reduce output of progress bars
+ex.captured_out_filter = apply_backspaces_and_linefeeds
+ex.observers.append(get_mongo_observer())
 
 
 @ex.capture
@@ -90,7 +89,7 @@ def train_and_evaluate(net, output_dir, data, num_iterations, starting_weights, 
     _run.info['measurements'] = measurements
 
 
-@ex.automain
+@ex.main
 def main(modelname, dataset, net_config, _run):
     # Set up the directories for diagnostics
     output_dir = create_directories(_run._id, ex)
@@ -105,3 +104,10 @@ def main(modelname, dataset, net_config, _run):
         # now we can load the dataset inside the scope of the network graph
         data = data(**dataset)
         train_and_evaluate(net, output_dir, data)
+
+
+if __name__ == '__main__':
+    ex.run_commandline()
+    # for some reason we have processes running in the background that won't stop
+    # this is the only way to kill them
+    os._exit(os.EX_OK)

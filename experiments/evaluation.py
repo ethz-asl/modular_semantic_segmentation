@@ -6,7 +6,7 @@ from xview.models import get_model
 from xview.settings import DATA_BASEPATH
 from sys import stdout
 from copy import deepcopy
-from os import path
+import os
 
 from .utils import ExperimentData, get_mongo_observer
 
@@ -70,11 +70,11 @@ def import_weights_into_network(net, starting_weights):
     """
     def import_weights_from_description(experiment_description, prefix=False):
         if experiment_description == 'paul_adapnet':
-            net.import_weights(path.join(DATA_BASEPATH, 'Adapnet_weights_160000.npz'),
+            net.import_weights(os.path.join(DATA_BASEPATH, 'Adapnet_weights_160000.npz'),
                                chill_mode=True, translate_prefix=prefix)
             return
         if experiment_description == 'imagenet_adapnet':
-            net.import_weights(path.join(DATA_BASEPATH, 'resnet50_imagenet.npz'),
+            net.import_weights(os.path.join(DATA_BASEPATH, 'resnet50_imagenet.npz'),
                                chill_mode=True, translate_prefix=prefix)
             return
         # description is an experiment id
@@ -139,7 +139,7 @@ def all_synthia(modelname, net_config, evaluation_data, starting_weights, _run):
         _run.info['measurements'] = measurements
 
 
-@ex.automain
+@ex.main
 def main(modelname, net_config, evaluation_data, starting_weights, _run):
     """Load weigths from training experiments and evaluate network against specified
     data."""
@@ -149,3 +149,10 @@ def main(modelname, net_config, evaluation_data, starting_weights, _run):
         measurements, confusion_matrix = evaluate(net, evaluation_data)
         _run.info['measurements'] = measurements
         _run.info['confusion_matrix'] = confusion_matrix
+
+
+if __name__ == '__main__':
+    ex.run_commandline()
+    # for some reason we have processes running in the background that won't stop
+    # this is the only way to kill them
+    os._exit(os.EX_OK)
