@@ -251,6 +251,7 @@ class BaseModel(object):
             else:
                 self.sess.run(self.trainer,
                               feed_dict={self.training_handle: train_handle})
+        train_writer.close()
         print('INFO: Training finished.')
 
     @transform_inputdata()
