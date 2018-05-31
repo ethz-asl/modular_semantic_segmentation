@@ -166,7 +166,7 @@ class UncertaintyModel(BaseModel):
         nc = self.config['num_classes']
         sufficient_statistics = [[np.zeros(nc) for _ in range(nc)] for _ in range(nc)]
         class_counts = [[0 for _ in range(nc)] for _ in range(nc)]
-        first = True
+        prob_sum = [[np.zeros(nc) for _ in range(nc)] for _ in range(nc)]
         while True:
             try:
                 gt, pred, prob = self.sess.run(
@@ -174,21 +174,24 @@ class UncertaintyModel(BaseModel):
                     feed_dict={self.testing_handle: data})
                 for t in range(nc):
                     for c in range(nc):
-                        if first:
-                            print(np.log(prob[np.logical_and(gt == t, pred == c)]).shape)
-                            first = False
                         ss = np.log(prob[np.logical_and(gt == t, pred == c)]).sum(0)
                         sufficient_statistics[t][c] += ss
                         class_counts[t][c] += np.logical_and(gt == t, pred == c).sum()
+                        prob_sum[t][c] += prob[np.logical_and(gt == t, pred == c)].sum(0)
             except tf.errors.OutOfRangeError:
                 break
         # take the mean over the sufficient statistics
         sufficient_statistics = [[sufficient_statistics[t][c] / class_counts[t][c]
                                   for c in range(nc)] for t in range(nc)]
-        print(sufficient_statistics[0][0].shape)
-        dirichlets = [[findDirichletPriors(sufficient_statistics[t][c], np.ones(nc))
-                       for c in range(nc)] for t in range(nc)]
-        return dirichlets
+        try:
+            dirichlets = [[findDirichletPriors(sufficient_statistics[t][c], np.ones(nc))
+                           for c in range(nc)] for t in range(nc)]
+        except OverflowError:
+            dirichlets = [[np.array([np.nan for _ in range(nc)])
+                           for c in range(nc)] for t in range(nc)]
+        mean_prob = [[prob_sum[t][c] / class_counts[t][c]
+                      for c in range(nc)] for t in range(nc)]
+        return dirichlets, mean_prob
 
     @transform_inputdata()
     @with_graph
