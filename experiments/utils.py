@@ -86,3 +86,8 @@ class ExperimentData:
         for artifact in self.record['artifacts']:
             archive.writestr(artifact['name'], self.fs.get(artifact['file_id']).read())
         archive.writestr('record.json', dumps(self.get_record()))
+
+    def update_record(self, changes):
+        """Apply changes to the record."""
+        self.record.update(changes)
+        self.db.runs.replace_one({'_id': self.record['_id']}, self.record)
