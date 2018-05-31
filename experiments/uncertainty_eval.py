@@ -1,15 +1,15 @@
 """Evaluation of trained uncertainty models."""
 from sacred import Experiment
 from sacred.utils import apply_backspaces_and_linefeeds
+from sacred.observers.mongo import force_bson_encodeable
 from xview.models import get_model
 from xview.datasets import get_dataset
-from sys import stdout, exit
+from sys import stdout
 import numpy as np
 import threading
-import _thread
 import os
 
-from .utils import get_mongo_observer
+from .utils import get_mongo_observer, ExperimentData
 from .evaluation import import_weights_into_network
 from .different_evaluation_parameters import grid_search
 from .training import create_directories, train_network
@@ -32,27 +32,60 @@ def evaluate_uncertainty(net, data, metric, benchmark='misclassification',
     return {'TPR': tpr, 'FPR': fpr, 'AUROC': auroc, 'thresholds': thresholds}
 
 
-def measure_metrics(net, data, metrics, _run, label_flip=None):
+def measure_metrics(net, data, metrics, label_flip=None):
     nll, class_count = net.nll_score(data)
-    _run.info['measurements'] = {'nll': nll, 'class_counts': class_count}
+    ret = {'nll': nll, 'class_counts': class_count}
     for metric in metrics:
-        _run.info.setdefault('measurements', {})[metric] = net.value_distribution(data,
-                                                                                  metric)
-    _run.info['measurements']['dirichlet_priors'] = net.prob_distribution(data)
+        ret[metric] = net.value_distribution(data, metric)
     if label_flip:
         # measure the difference to the distribution we would expect based on the
         # label_flip augmentation during the training
         prior = np.zeros(net.config['num_classes'])
         prior[label_flip[0]] = 1 - label_flip[2]
         prior[label_flip[1]] = label_flip[2]
-        _run.info['measurements']['distribution_miscalibration'] = net.mean_diff(
+        ret['distribution_miscalibration'] = net.mean_diff(
             data, prior, condition=lambda t, c: np.logical_or(c == label_flip[0],
                                                               c == label_flip[1]))
+    dirichlet, mean = net.prob_distribution(data)
+    ret['dirichlet_priors'] = dirichlet
+    ret['mean_output'] = mean
+    return ret
+
 
 ex = Experiment()
 # reduce output of progress bars
 ex.captured_out_filter = apply_backspaces_and_linefeeds
 ex.observers.append(get_mongo_observer())
+
+
+@ex.command
+def evaluate_temperature_scaling(experiments, temperatures):
+    for exp_id in experiments:
+        exp = ExperimentData(exp_id)
+        dataset = exp.get_record()['info']['dataset']
+        data = get_dataset(dataset['name'])
+        data_description = list(data.get_data_description())
+        if exp.get_record()['config']['method'] == 'new_class':
+            data_description[2] += 1
+        model = get_model(exp.get_record()['config']['modelname'])
+
+        # get the label_flip specs
+        label_flip = None
+        if 'label_flip' in dataset['augmentation']:
+            label_flip = dataset['augmentation']['label_flip']
+
+        def evaluation(parameters):
+            with model(data_description=data_description, **parameters) as net:
+                import_weights_into_network(net, exp_id)
+                return measure_metrics(net, data(**dataset).get_testset(),
+                                       exp.get_record()['config']['uncertainty_metrics'],
+                                       label_flip=label_flip)
+
+        result = grid_search(evaluation, {'temperature_scaling': temperatures},
+                             exp.get_record()['config']['net_config'])
+        info = exp.get_record()['info']
+        info['temperature_grid_search'] = force_bson_encodeable(result)
+        exp.update_record({'info': info})
 
 
 @ex.command
@@ -106,8 +139,9 @@ def train_ambiguous(modelname, net_config, dataset, starting_weights, method,
                **net_config) as net:
         data = data(**dataset)
         train_network(net, output_dir, data, num_iterations, starting_weights, ex)
-        measure_metrics(net, data.get_testset(), uncertainty_metrics, _run,
-                        label_flip=dataset['augmentation'].get('label_flip', None))
+        _run.info['measurements'] = measure_metrics(
+            net, data.get_testset(), uncertainty_metrics,
+            label_flip=dataset['augmentation'].get('label_flip', None))
         net.close()
     print(threading.enumerate())
 
@@ -122,7 +156,8 @@ def measure(modelname, net_config, dataset, starting_weights, uncertainty_metric
     with model(data_description=data_description, **net_config) as net:
         data = data(**dataset)
         import_weights_into_network(net, starting_weights)
-        measure_metrics(net, data.get_testset(), uncertainty_metrics, _run)
+        _run.info['measurements'] = measure_metrics(net, data.get_testset(),
+                                                    uncertainty_metrics)
 
 
 @ex.main
