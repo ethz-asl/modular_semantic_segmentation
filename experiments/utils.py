@@ -8,6 +8,7 @@ from xview.settings import EXPERIMENT_DB_HOST, EXPERIMENT_DB_USER, EXPERIMENT_DB
 from xview.datasets import get_dataset
 from bson.json_util import dumps
 import zipfile
+from numpy import array, nan, inf
 
 
 def load_data(data_config):
@@ -26,6 +27,22 @@ def get_mongo_observer():
                                 db_name=EXPERIMENT_DB_NAME)
 
 
+def reverse_convert_datatypes(data):
+    if isinstance(data, dict):
+        if 'values' in data and len(data) == 1:
+            return reverse_convert_datatypes(data['values'])
+        if 'py/tuple' in data and len(data) == 1:
+            return reverse_convert_datatypes(data['py/tuple'])
+        for key in data:
+            data[key] = reverse_convert_datatypes(data[key])
+        return data
+    elif isinstance(data, list):
+        return [reverse_convert_datatypes(item) for item in data]
+    elif isinstance(data, str) and data[0] == '[':
+        return eval(data)
+    return data
+
+
 class ExperimentData:
     """Loads experimental data from experiments database."""
 
@@ -40,7 +57,7 @@ class ExperimentData:
 
     def get_record(self):
         """Get sacred record for experiment."""
-        return self.record
+        return reverse_convert_datatypes(self.record)
 
     def get_artifact(self, name):
         """Return the produced outputfile with given name as file-like object."""
