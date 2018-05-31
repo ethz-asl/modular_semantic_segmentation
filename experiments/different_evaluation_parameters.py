@@ -65,7 +65,7 @@ ex = Experiment()
 ex.observers.append(get_mongo_observer())
 
 
-@ex.automain
+@ex.main
 def main(starting_weights, modelname, net_config, evaluation_data, search_parameters,
          _run):
     model = get_model(modelname)
@@ -77,3 +77,10 @@ def main(starting_weights, modelname, net_config, evaluation_data, search_parame
         return measurements
 
     _run.info['results'] = grid_search(evaluation, search_parameters, net_config)
+
+
+if __name__ == '__main__':
+    ex.run_commandline()
+    # for some reason we have processes running in the background that won't stop
+    # this is the only way to kill them
+    os._exit(os.EX_OK)
