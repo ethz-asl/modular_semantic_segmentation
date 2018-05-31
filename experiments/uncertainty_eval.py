@@ -115,6 +115,11 @@ def train_ambiguous(modelname, net_config, dataset, starting_weights, method,
     data = get_dataset(dataset['name'])
     data_description = list(data.get_data_description())
     num_classes = data_description[2]
+
+    args = False
+    if isinstance(method, list):
+        args = method[1:]
+        method = method[0]
     # augmentate the class labels
     if method == 'flip_classes':
         # randomly map two classes onto each other to make them ambiguos
@@ -124,8 +129,11 @@ def train_ambiguous(modelname, net_config, dataset, starting_weights, method,
     elif method == 'new_class':
         # randomly label a given class as a new, nonexisting class
         data_description[2] = num_classes + 1
-        #old_class = np.random.choice(list(range(num_classes)))
-        old_class = 7
+        if args:
+            old_class = args[0]
+            print(args)
+        else:
+            old_class = np.random.choice(list(range(num_classes)))
         dataset.setdefault('augmentation', {})['label_flip'] = (old_class, num_classes,
                                                                 np.random.rand())
     elif method == 'merge':
