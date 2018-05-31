@@ -144,7 +144,7 @@ def findDirichletPriors(ss, initAlphas, max_iter=1000, delta=1e-2):
     #print(count, "Loss: ", currentLoss, ", Priors: ", priors, ", Gradient Size: ", gradientSize, gradient)
 
     if (gradientSize < gradientToleranceSq):
-      print("Converged with small gradient")
+      #print("Converged with small gradient")
       return priors
 
     trialStep = predictStepUsingHessian(gradient, priors, ss, delta)
@@ -174,13 +174,13 @@ def findDirichletPriors(ss, initAlphas, max_iter=1000, delta=1e-2):
       loss = testTrialPriors(trialPriors, ss, delta)
 
     if (learnRate < learnRateTolerance):
-      print("Converged with small learn rate")
+      #print("Converged with small learn rate")
       return priors
 
     currentLoss = loss
     priors = trialPriors
 
-  print("Reached max iterations")
+  #print("Reached max iterations")
   return priors
 
 def findDirichletPriorsFromMultinomials(multinomials, initAlphas):
