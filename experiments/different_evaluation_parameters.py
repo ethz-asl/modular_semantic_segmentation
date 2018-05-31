@@ -3,6 +3,8 @@ from experiments.utils import get_mongo_observer
 from experiments.evaluation import evaluate, import_weights_into_network
 from xview.models import get_model
 from copy import deepcopy
+import os
+from tqdm import tqdm
 
 
 def parameter_combinations(search_parameters, net_config):
@@ -42,7 +44,7 @@ def grid_search(evaluation, search_parameters, net_config):
 
     # collect results in a list
     results = {}
-    for test_parameters in configs_to_test:
+    for test_parameters in tqdm(configs_to_test, ascii=True):
         # result is a dict of parameters and measurements
         for key in test_parameters:
             results.setdefault(key, []).append(test_parameters[key])
