@@ -94,7 +94,8 @@ def block_b(inputs, filters_1, filters_2, filters_3, dilation1, dilation2, is_tr
     return activation(tf.add(stage_3, shortcut))
 
 
-def adapnet(inputs, prefix, num_units, num_classes, is_training=False, reuse=True):
+def adapnet(inputs, prefix, num_units, num_classes, is_training=False,
+            reuse=tf.AUTO_REUSE):
     """
     Adapnet Architecture, as proposed in
     http://ais.informatik.uni-freiburg.de/publications/papers/valada17icra.pdf

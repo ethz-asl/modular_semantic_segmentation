@@ -8,7 +8,6 @@ from xview.settings import DATA_BASEPATH
 from .data_baseclass import DataBaseclass
 from .augmentation import augmentate
 from copy import deepcopy
-from tqdm import tqdm
 
 
 CITYSCAPES_BASEPATH = path.join(DATA_BASEPATH, 'cityscapes')
