@@ -137,11 +137,10 @@ def flip_labels(labels, c1, c2, prob=0.5):
     """
     Randomly either map c1 onto c2 or the other way.
     """
-    for i in range(labels.shape[0]):
-        if np.random.rand() < prob:
-            labels[i][labels[i] == c1] = c2
-        else:
-            labels[i][labels[i] == c2] = c1
+    if np.random.rand() < prob:
+        labels[labels == c1] = c2
+    else:
+        labels[labels == c2] = c1
     return labels
 
 
