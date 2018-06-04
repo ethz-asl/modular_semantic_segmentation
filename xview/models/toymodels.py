@@ -3,13 +3,16 @@ import tensorflow as tf
 from .custom_layers import conv2d
 
 
-def min_dense(inputs, num_units, num_classes, reuse=tf.AUTO_REUSE):
+def min_dense(inputs, num_units, num_classes, num_hidden_layers=1, reuse=tf.AUTO_REUSE):
     params = {'activation': tf.nn.relu, 'reuse': reuse}
 
     l = {}
-    l['hidden1'] = tf.layers.dense(inputs, num_units, **params)
-    l['hidden2'] = tf.layers.dense(l['hidden1'], num_units, **params)
-    l['score'] = tf.layers.dense(l['hidden2'], num_classes, **params)
+    last_layer = inputs
+    for n in range(1, num_hidden_layers + 1):
+        l['hidden%i' % n] = tf.layers.dense(last_layer, num_units, name='hidden%i' % n,
+                                            **params)
+        last_layer = l['hidden%i' % n]
+    l['score'] = tf.layers.dense(l['hidden1'], num_classes, name='score', **params)
     return l
 
 
