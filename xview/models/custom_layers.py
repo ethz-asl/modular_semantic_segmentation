@@ -249,6 +249,7 @@ def softmax(inputs, temperature=1, name=None):
 
 
 def entropy(x, axis=-1):
+    """Normed entropy"""
     with tf.name_scope('entropy'):
         entropy = -tf.reduce_sum(x*tf.log(tf.clip_by_value(x, 1e-10, 1.0)), axis=axis) \
                 / tf.log(tf.to_float(tf.shape(x)[axis]))
