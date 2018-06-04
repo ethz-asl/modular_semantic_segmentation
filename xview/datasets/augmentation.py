@@ -250,7 +250,11 @@ def crop_multiple(data, multiple_of=16):
     Returns:
         cropped array
     """
-    h, w = data.shape[0], data.shape[1]
+    try:
+        h, w = data.shape[0], data.shape[1]
+    except AttributeError:
+        # the data is not in image format, I cannot crop
+        return data
     h_c, w_c = [d - (d % multiple_of) for d in [h, w]]
     if h_c != h or w_c != w:
         return data[:h_c, :w_c, ...]
