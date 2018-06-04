@@ -61,16 +61,16 @@ class ODIN(UncertaintyModel):
                 layers = adapnet(test_x, self.prefix, self.config['num_units'],
                                  self.config['num_classes'], is_training=False)
             elif self.config['expert_model'] == 'min_dense':
-                layers = min_dense(train_x, self.config['num_units'],
+                layers = min_dense(test_x, self.config['num_units'],
                                    self.config['num_classes'])
             elif self.config['expert_model'] == 'min_cnn':
-                layers = min_cnn(train_x, self.config['num_units'],
+                layers = min_cnn(test_x, self.config['num_units'],
                                  self.config['num_classes'], is_training=True,
                                  batchnorm=self.config['batch_normalization'])
             else:
                 raise UserWarning('expert model not found')
             self.prob = softmax(layers['score'],
                                 temperature=self.config['temperature_scaling'])
-            self.prediction = tf.argmax(self.prob, 3, name='label_2d')
+            self.prediction = tf.argmax(self.prob, -1, name='label_2d')
             self.entropy = entropy(self.prob)
-            self.max_prob = 1 - tf.reduce_max(self.prob, 3, keepdims=True)
+            self.max_prob = 1 - tf.reduce_max(self.prob, -1, keepdims=True)
