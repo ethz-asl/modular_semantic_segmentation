@@ -7,6 +7,7 @@ from .synthia_rand import SynthiaRand
 from .mixed_data import MixedData
 from .pascalvoc import PascalVOC
 from .not_cityscapes import AddRandomObjects
+from .toydata import ToyData
 
 
 def get_dataset(name):
@@ -26,6 +27,8 @@ def get_dataset(name):
         return PascalVOC
     elif name == 'add_random_obj':
         return AddRandomObjects
+    elif name == 'toy':
+        return ToyData
     if name == 'mixeddata':
         return MixedData
     else:
