@@ -74,7 +74,8 @@ class DataBaseclass(DataWrapper):
         # Now translate lists of arrays into arrays with first dimension the batch index
         # for each modality.
         for mod in self.modalities:
-            batch[mod] = np.stack(batch[mod])
+            batch[mod] = np.stack(batch[mod]).astype('int32' if mod == 'labels'
+                                                     else 'float32')
         return batch
 
     def _get_tf_dataset(self, setlist, training_format=False):
@@ -120,4 +121,4 @@ class DataBaseclass(DataWrapper):
         # To efficiently map class label to color, we create a lookup table
         lookup = np.array([self.labelinfo[i]['color']
                            for i in range(max(self.labelinfo.keys()) + 1)]).astype(int)
-        return np.array(lookup[labels[:, :]]).astype('uint8')
+        return np.array(lookup[labels[:]]).astype('uint8')
