@@ -210,8 +210,13 @@ class BaseModel(object):
             validation_iterator = dataset.take(10).batch(self.config['batchsize'])\
                 .make_initializable_iterator()
         else:
-            validation_iterator = validation_dataset.batch(self.config['batchsize'])\
-                .make_initializable_iterator()
+            if isinstance(validation_dataset, tf.data.Dataset):
+                validation_iterator = validation_dataset.batch(self.config['batchsize'])\
+                    .make_initializable_iterator()
+            else:
+                validation_iterator = tf.data.Dataset.from_tensor_slices(
+                    validation_dataset).batch(self.config['batchsize']) \
+                    .make_initializable_iterator()
 
         print('INFO: Start training')
         # make sure this is getting printed out before the status bar
