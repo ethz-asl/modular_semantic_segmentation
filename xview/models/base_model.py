@@ -64,7 +64,7 @@ class BaseModel(object):
     required_attributes = [["loss"], ["prediction"]]
 
     def __init__(self, data_description, name=None, output_dir=None,
-                 supports_training=True, batchsize=1, **config):
+                 custom_training=False, batchsize=1, **config):
         """Set configuration and build the model.
 
         Requires method _build_model to build the tensorflow graph.
@@ -79,7 +79,7 @@ class BaseModel(object):
         else:
             self.name = name
         self.output_dir = output_dir
-        self.supports_training = supports_training
+        self.custom_training = custom_training
         self.config = config
         self.config['batchsize'] = batchsize
         self.config['num_classes'] = data_description[2]
@@ -120,7 +120,7 @@ class BaseModel(object):
             # For any child class, we require the attributes specified in the docstring
             # and defined in self.required_attributes. After self._build_graph(), we can
             # check for their existance.
-            if self.supports_training:
+            if not self.custom_training:
                 missing_attrs = ["'%s'" % attrs for attrs in self.required_attributes
                                  if True not in [hasattr(self, attr) for attr in attrs]]
                 if missing_attrs:
@@ -150,7 +150,7 @@ class BaseModel(object):
                 confusion_matrix, [0, 0],
                 [self.config['num_classes'], self.config['num_classes']])
 
-            if self.supports_training:
+            if not self.custom_training:
                 self.global_step = tf.Variable(0, trainable=False, name='global_step')
                 update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
                 with tf.control_dependencies(update_ops):
@@ -185,7 +185,7 @@ class BaseModel(object):
             dataset: tf.data.Dataset
             iterations: The number of training iterations
         """
-        if not self.supports_training:
+        if not self.trainer:
             raise UserWarning("ERROR: Model %s does not support training" % self.name)
 
         # Merge all summary creation into one op. Add summary for loss.
