@@ -33,6 +33,8 @@ def reverse_convert_datatypes(data):
             return reverse_convert_datatypes(data['values'])
         if 'py/tuple' in data and len(data) == 1:
             return reverse_convert_datatypes(data['py/tuple'])
+        if 'py/object' in data and data['py/object'] == 'numpy.ndarray':
+            return array(data['values'])
         for key in data:
             data[key] = reverse_convert_datatypes(data[key])
         return data
