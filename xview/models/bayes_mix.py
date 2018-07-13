@@ -1,5 +1,7 @@
 import tensorflow as tf
 import numpy as np
+from itertools import product
+
 from experiments.utils import ExperimentData
 
 from .base_model import BaseModel
@@ -54,6 +56,60 @@ def bayes_fusion(classifications, confusion_matrices, class_prior='data'):
     return (tf.reduce_sum(tf.stack(log_likelihoods, axis=0), axis=0) + tf.log(prior),
             log_likelihoods,
             conditionals)
+
+
+def bayes_decision_matrix(confusion_matrices, class_prior='data'):
+    """
+    Bayesian fusion for any combination of the expert's classification, as a simple lookup
+    table.
+
+    Args:
+        confusion_matrices: list of numpoy arrays for every expert, order will be
+            reflected in the dimensions of the lookup table
+        class_prior: either a string in ['data', 'uniform'] or a flaot between 0 and 1
+            - 'data': prior is taken from the total class occurance probability in one
+              of the confusion matrices
+            - 'uniform': unform prior is assigned to all classes
+            - float x: weighted sum x * uniform prior + (1-x) * data prior
+    Returns:
+        a matrix of dimension <num_classes, ..., num classes>, where every matrix element
+            is the corresponding fused classification.
+    """
+    num_classes = confusion_matrices[0].shape[0]
+    num_experts = len(confusion_matrices)
+
+    # all possible combinations of expert classifications
+    expert_classifications = np.array(list(product(*(range(num_classes)
+                                                     for _ in range(num_experts)))))
+    log_likelihoods = np.zeros((expert_classifications.shape[0], num_experts,
+                                num_classes))
+    for i_expert in range(num_experts):
+        # compute p(expert output | ground truth class x)
+        confusion_matrix = confusion_matrices[i_expert]
+        conditional = np.nan_to_num(confusion_matrix / confusion_matrix.sum(0))
+
+        # likelihood is conditional at the row of the output class
+        log_likelihoods[:, i_expert, :] = np.log(
+            1e-20 + conditional[expert_classifications[:, i_expert]])
+
+    uniform_prior = 1.0 / 14
+    data_prior = confusion_matrix.sum(0) / confusion_matrix.sum()
+    if class_prior == 'uniform':
+        # set a uniform prior for all classes
+        prior = uniform_prior
+    elif class_prior == 'data':
+        prior = data_prior
+    else:
+        # The class_prior parameter is now considered a weight for the mixture
+        # between both priors.
+        weight = float(class_prior)
+        prior = weight * uniform_prior + (1 - weight) * data_prior
+        prior = prior / prior.sum()
+
+    # fused classification = argmax(sum of all log_likelihoods and log_prior)
+    fused_classifications = np.argmax(log_likelihoods.sum(1) + np.log(prior), axis=1)
+    # now reshape into requested format
+    return fused_classifications.reshape([num_classes for _ in range(num_experts)])
 
 
 class BayesMix(BaseModel):
