@@ -13,10 +13,6 @@ def variance_fusion(probs, variances):
     certainties = tf.stack([1 / (1e-20 + variance) for variance in variances], axis=0)
     probs = tf.stack(probs, axis=0)
 
-    print('variance', variances[0].shape)
-    print('certainties', certainties.shape)
-    print('probs', probs.shape)
-
     return tf.reduce_sum(certainties * probs, axis=0) / \
         tf.reduce_sum(certainties, axis=0)
 
