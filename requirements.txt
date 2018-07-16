@@ -12,3 +12,4 @@ pandas
 scikit-learn
 tifffile
 imgaug
+tqdm
