@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 import time
 import os
+from sys import stdout
 from sacred import Experiment
 from sacred.utils import apply_backspaces_and_linefeeds
 
@@ -41,7 +42,8 @@ def time_fusion_fcn(net_config, repetitions):
         end = time.time()
         times.append(end - start)
 
-    print('Mean Time {:.2f}s, Std {:.2f}s'.format(np.mean(times), np.std(times)))
+    print('Mean Time {:.5f}s, Std {:.5f}s'.format(np.mean(times), np.std(times)))
+    stdout.flush()
 
 
 @ex.command
@@ -78,7 +80,8 @@ def time_bayes_fcn(net_config, fusion_experiment, repetitions):
         end = time.time()
         times.append(end - start)
 
-    print('Mean Time {:.2f}s, Std {:.2f}s'.format(np.mean(times), np.std(times)))
+    print('Mean Time {:.5f}s, Std {:.5f}s'.format(np.mean(times), np.std(times)))
+    stdout.flush()
 
 
 @ex.command
@@ -126,7 +129,8 @@ def time_dirichlet_fcn(net_config, fusion_experiment, repetitions):
         end = time.time()
         times.append(end - start)
 
-    print('Mean Time {:.2f}s, Std {:.2f}s'.format(np.mean(times), np.std(times)))
+    print('Mean Time {:.5f}s, Std {:.5f}s'.format(np.mean(times), np.std(times)))
+    stdout.flush()
 
 
 @ex.command
@@ -181,7 +185,8 @@ def time_variance_fcn(net_config, fusion_experiment, repetitions):
         end = time.time()
         times.append(end - start)
 
-    print('Mean Time {:.2f}s, Std {:.2f}s'.format(np.mean(times), np.std(times)))
+    print('Mean Time {:.5f}s, Std {:.5f}s'.format(np.mean(times), np.std(times)))
+    stdout.flush()
 
 
 @ex.command
@@ -210,7 +215,8 @@ def time_average_fcn(net_config, repetitions):
         end = time.time()
         times.append(end - start)
 
-    print('Mean Time {:.2f}s, Std {:.2f}s'.format(np.mean(times), np.std(times)))
+    print('Mean Time {:.5f}s, Std {:.5f}s'.format(np.mean(times), np.std(times)))
+    stdout.flush()
 
 
 @ex.command
@@ -233,7 +239,8 @@ def time_rgb_fcn(net_config, repetitions):
         end = time.time()
         times.append(end - start)
 
-    print('Mean Time {:.2f}s, Std {:.2f}s'.format(np.mean(times), np.std(times)))
+    print('Mean Time {:.5f}s, Std {:.5f}s'.format(np.mean(times), np.std(times)))
+    stdout.flush()
 
 
 @ex.command
@@ -256,7 +263,8 @@ def time_depth_fcn(net_config, repetitions):
         end = time.time()
         times.append(end - start)
 
-    print('Mean Time {:.2f}s, Std {:.2f}s'.format(np.mean(times), np.std(times)))
+    print('Mean Time {:.5f}s, Std {:.5f}s'.format(np.mean(times), np.std(times)))
+    stdout.flush()
 
 
 if __name__ == '__main__':
