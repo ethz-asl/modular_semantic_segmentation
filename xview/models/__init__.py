@@ -1,7 +1,6 @@
 from .simple_fcn import SimpleFCN
 from .bayes_mix import BayesMix
 from .dirichlet_mix import DirichletMix
-from .progressive_fcn import ProgressiveFCN
 from .uncertainty_dirichlet_mix import UncertaintyMix
 from .average_mix import AverageFusion
 from .variance_mix import VarianceMix
@@ -24,8 +23,6 @@ def get_model(name):
         return AverageFusion
     elif name == 'variance_mix':
         return VarianceMix
-    elif name == 'progressive_fcn':
-        return ProgressiveFCN
     elif name == 'adapnet':
         return Adapnet
     else:
