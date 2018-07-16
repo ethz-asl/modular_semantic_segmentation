@@ -4,7 +4,7 @@ from experiments.utils import get_mongo_observer
 from experiments.evaluation import import_weights_into_network
 from experiments.utils import ExperimentData
 from xview.datasets import get_dataset
-from xview.models import get_model, BayesMix, AverageMix
+from xview.models import get_model, BayesMix, AverageFusion
 from copy import deepcopy
 from sys import stdout
 from sklearn.model_selection import train_test_split
@@ -99,7 +99,7 @@ def average(net_config, evaluation_data, starting_weights, _run):
     data, _, _ = split_test_data(evaluation_data)
 
     # now evaluate average mix
-    with AverageMix(**net_config) as net:
+    with AverageFusion(**net_config) as net:
         import_weights_into_network(net, starting_weights)
         measurements, confusion_matrix = net.score(data.get_test_data())
         _run.info['measurements'] = measurements
