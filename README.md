@@ -1,16 +1,21 @@
-#Installation
+# Installation
 
-Requires python 2.7, python3 is not tested
+Requires python 3
 
     make install
 
 Preferably call this from a virtualenvironment to avoid conflicts with system-wide python packets
 
-Tests can be triggered with `make test`. Make sure you install the test-requirements before.
+# Usage
 
-#Usage
+## Reproducing Results
 
-##Models
+Reported Experiments can be reproduced in the following way:
+```
+    python -m experiments.rerun with experiment_id=<insert here>
+```
+
+## Models
 Models are implemented following the sklearn interface, while context handling is necessary due to tensorflow semantics:
 
     from xview.models.simple_fcn import SimpleFCN as FCN
@@ -38,7 +43,7 @@ The package is devided into 3 parts:
     - `xview/data`: implementation of data interfaces
     - `experiments`: scripts that implement different functionalities for experiment, following the [sacred](https://github.com/IDSIA/sacred) framework.
 
-##Models
+## Models
 Any implementation of a model should inherit from `base_model.py`, which implement basic sklean interfaces such as `.fit()`, `.score()`, `.predict()` etc. aswell as training procedures and graph building.
 
 Model implementation should be split up into a method that defines a series of tensorflow-ops mapping input to output and a class inheriting from `base_model.py` that handles all the functionality around this such as data piping etc.
@@ -47,5 +52,5 @@ See `xview/models/simple_fcn.py` for an example.
 
 Custom functions and ops used by many different models are collected in `custom_layers.py`.
 
-##Experiments
+## Experiments
 The `experiments/utils.py` contains basic functions to interact with the sacred storage service, i.e. to load data from previous experiments and to store data from the current experiment.
