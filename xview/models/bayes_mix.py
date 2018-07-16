@@ -4,7 +4,7 @@ from itertools import product
 
 from experiments.utils import ExperimentData
 
-from .base_model import BaseModel
+from .basic_fusion_model import FusionModel
 from xview.models.adapnet import adapnet
 from xview.models.simple_fcn import encoder, decoder
 
@@ -61,7 +61,7 @@ def bayes_fusion(classifications, confusion_matrices, class_prior='data'):
 def bayes_decision_matrix(confusion_matrices, class_prior='data'):
     """
     Bayesian fusion for any combination of the expert's classification, as a simple lookup
-    table.
+    table. Can improve inference time.
 
     Args:
         confusion_matrices: list of numpoy arrays for every expert, order will be
@@ -112,7 +112,7 @@ def bayes_decision_matrix(confusion_matrices, class_prior='data'):
     return fused_classifications.reshape([num_classes for _ in range(num_experts)])
 
 
-class BayesMix(BaseModel):
+class BayesFusion(FusionModel):
     """Mixture of CNN experts following the 'bayes mix' method.
 
     Args:
@@ -146,66 +146,16 @@ class BayesMix(BaseModel):
                     ExperimentData(exp_id).get_record()['info']['confusion_matrix']
                     ['values']).astype('float32').T
 
-        BaseModel.__init__(self, 'BayesMixture', output_dir=output_dir,
-                           supports_training=False, **standard_config)
+        FusionModel.__init__(self, 'BayesFusion', output_dir=output_dir,
+                             **standard_config)
 
-    def _build_graph(self):
-        """Builds the whole network. Network is split into 2 similar pipelines with shared
-        weights, one for training and one for testing."""
-
-        # Network for testing / evaluation
-        # As before, we define placeholders for the input. These here now can be fed
-        # directly, e.g. with a feed_dict created by _evaluation_food
-        self.test_placeholders = {}
-        for modality, channels in self.config['num_channels'].items():
-            self.test_placeholders[modality] = tf.placeholder(
-                tf.float32, shape=[None, None, None, channels])
-
-        def test_pipeline(inputs, prefix):
-            if self.config['expert_model'] == 'adapnet':
-                # Now we get the network output of the Adapnet expert.
-                outputs = adapnet(inputs, prefix, self.config['num_units'],
-                                  self.config['num_classes'], reuse=False)
-            elif self.config['expert_model'] == 'fcn':
-                outputs = encoder(inputs, prefix, self.config['num_units'], 0.0,
-                                  trainable=False, reuse=False)
-                outputs.update(decoder(outputs['fused'], prefix,
-                                       self.config['num_units'],
-                                       self.config['num_classes'], trainable=False,
-                                       reuse=False))
-            else:
-                raise UserWarning('ERROR: Expert Model {} not found'
-                                  .format(self.config['expert_model']))
-            prob = tf.nn.softmax(outputs['score'])
-            return prob
-
-        probs = {modality: test_pipeline(self.test_placeholders[modality],
-                                         self.config['prefixes'][modality])
-                 for modality in self.modalities}
-
-        fused_score, likelihoods, conditionals = bayes_fusion([tf.argmax(prob, 3) for prob in probs.values()],
-                                   [self.confusion_matrices[x]
-                                    for x in self.modalities],
-                                   self.config['class_prior'])
-        label = tf.argmax(fused_score, 3, name='label_2d')
-        self.prediction = label
+    def _fusion(self, expert_outputs):
+        fused_score, likelihoods, conditionals = bayes_fusion(
+            [expert_outputs[m]['classification'] for m in self.modalities],
+            [self.confusion_matrices[m] for m in self.modalities],
+            self.config['class_prior'])
+        # expose some diagnostics
         self.likelihoods = likelihoods
         self.conditionals = conditionals
-        self.probs = probs
-
-    def _enqueue_batch(self, batch, sess):
-        # This model does not support training
-        pass
-
-    def _evaluation_food(self, data):
-        feed_dict = {self.test_placeholders[modality]: data[modality]
-                     for modality in self.modalities}
-        return feed_dict
-
-    def get_insight(self, data):
-        with self.graph.as_default():
-            probs, likelihoods, conditionals, prediciton = \
-                self.sess.run([self.probs.values(), self.likelihoods,
-                               self.conditionals, self.prediction],
-                              feed_dict=self._evaluation_food(data))
-        return probs, likelihoods, conditionals, prediciton
+        self.probs = {m: expert_outputs[m]['prob'] for m in self.modalities}
+        return tf.argmax(fused_score, 3, name='label_2d')
