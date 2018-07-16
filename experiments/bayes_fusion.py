@@ -25,7 +25,7 @@ def split_test_data(data_config):
     dataset_params['augmentation'] = {
         key: False for key in ['crop', 'scale', 'vflip', 'hflip', 'gamma', 'rotate',
                                'shear', 'contrast', 'brightness']}
-    data = get_dataset(data_config['dataset'], dataset_params)
+    data = get_dataset(data_config['dataset'])(**dataset_params)
 
     measure_set, test_set = train_test_split(data.testset, test_size=.5, random_state=1)
 
