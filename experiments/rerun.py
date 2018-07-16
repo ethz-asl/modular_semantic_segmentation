@@ -7,6 +7,10 @@ import sys
 from experiments.utils import ExperimentData
 import experiments.bayes_fusion as bayes_fusion
 import experiments.timing as timing
+import experiments.training as training
+import experiments.evaluation as evaluation
+import experiments.different_evaluation_parameters as different_evaluation_parameters
+import experiments.dirichlet_fusion as dirichlet_fusion
 
 
 # map modules against their filenames
@@ -14,6 +18,10 @@ import experiments.timing as timing
 module_mapper = {
     'bayes_fusion.py': bayes_fusion,
     'timing.py': timing,
+    'training.py': training,
+    'evaluation.py': evaluation,
+    'different_evaluation_parameters.py': different_evaluation_parameters,
+    'dirichlet_fusion.py': dirichlet_fusion,
 }
 
 ex = Experiment()
