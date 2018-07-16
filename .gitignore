@@ -1,0 +1,6 @@
+*.pyc
+xview/settings.py
+experiments/*.yaml
+lsf.*
+.cache
+.ipynb_checkpoints
