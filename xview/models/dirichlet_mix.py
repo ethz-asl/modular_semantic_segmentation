@@ -1,17 +1,14 @@
 import tensorflow as tf
 import numpy as np
 from experiments.utils import ExperimentData
-from types import GeneratorType
-import threading
 from copy import deepcopy
 
 from .dirichlet_fastfit import meanprecision_with_sufficient_statistic, \
                                fixedpoint_with_sufficient_statistic
 #from .dirichletEstimation import findDirichletPriors
 from .dirichletDifferentiation import findDirichletPriors
-from .base_model import BaseModel
-from xview.models.adapnet import adapnet
-from xview.models.simple_fcn import encoder, decoder
+from .base_model import BaseModel, with_graph, transform_inputdata
+from .basic_fusion_model import test_pipeline
 
 
 def dirichlet_fusion(probs, conditionals, prior):
@@ -78,10 +75,10 @@ class DirichletMix(BaseModel):
             print('WARNING: Could not yet import measurements, you need to fit this '
                   'model first.')
 
-        BaseModel.__init__(self, 'MixFCN', output_dir=output_dir,
-                           supports_training=False, **config)
+        BaseModel.__init__(self, 'DirichletFusion', output_dir=output_dir,
+                           custom_training=True, **config)
 
-    def _build_graph(self):
+    def _build_graph(self, train_data, test_data):
         """Builds the whole network. Network is split into 2 similar pipelines with shared
         weights, one for training and one for testing."""
 
@@ -95,37 +92,14 @@ class DirichletMix(BaseModel):
             self.test_placeholders[modality] = tf.placeholder(
                 tf.float32, shape=[None, None, None, channels])
 
-        def test_pipeline(inputs, modality, reuse=False):
-            prefix = self.config['prefixes'][modality]
-
-            if self.config['expert_model'] == 'adapnet':
-                # Now we get the network output of the Adapnet expert.
-                outputs = adapnet(inputs, prefix, self.config['num_units'],
-                                  self.config['num_classes'], reuse=reuse)
-            elif self.config['expert_model'] == 'fcn':
-                outputs = encoder(inputs, prefix, self.config['num_units'],
-                                  0.0, trainable=False, reuse=reuse)
-                outputs.update(decoder(outputs['fused'], prefix,
-                                       self.config['num_units'],
-                                       self.config['num_classes'], trainable=False,
-                                       reuse=reuse))
-            else:
-                raise UserWarning('ERROR: Expert Model {} not found'
-                                  .format(self.config['expert_model']))
-            prob = tf.nn.softmax(outputs['score'])
-            return prob
-
         # The following part can only be build if measurements are already present.
         if hasattr(self, 'dirichlet_params'):
 
-            probs = {}
-            for modality in self.modalities:
-                probs[modality] = test_pipeline(self.test_placeholders[modality],
-                                                modality)
+            probs = {modality: test_pipeline(test_data[modality], modality)['prob']
+                     for modality in self.modalities}
             self.probs = {modality: probs[modality] /
                           tf.reduce_sum(probs[modality], axis=3, keep_dims=True)
                           for modality in self.modalities}
-
 
             # Create all the Dirichlet distributions conditional on ground-truth class
             dirichlets = {modality: {} for modality in self.modalities}
@@ -162,14 +136,10 @@ class DirichletMix(BaseModel):
 
             self.dirichlets = dirichlets
 
-            # debugging stuff
-
-            # compute p(expert output | groudn truth class x)
         else:
-
             # Build a training pipeline for measuring the differnet classifiers
             def train_pipeline(inputs, modality, labels):
-                prob = test_pipeline(inputs, modality)
+                prob = test_pipeline(inputs, modality)['prob']
 
                 stacked_labels = tf.stack([labels for _ in range(num_classes)], axis=3)
 
@@ -182,37 +152,7 @@ class DirichletMix(BaseModel):
                                      for stat in sufficient_statistics], axis=0)
                 return combined
 
-            self.train_placeholders = {}
-            for modality, channels in self.config['num_channels'].items():
-                self.train_placeholders[modality] = tf.placeholder(
-                    tf.float32, shape=[None, None, None, channels])
-            self.train_Y = tf.placeholder(tf.float32, shape=[None, None, None])
-            # An input queue is defined to load the data for several batches in advance and
-            # keep the gpu as busy as we can.
-            # IMPORTANT: The size of this queue can grow big very easily with growing
-            # batchsize, therefore do not make the queue too long, otherwise we risk getting
-            # killed by the OS
-            q = tf.FIFOQueue(2, [tf.float32 for _ in range(len(self.modalities) + 1)])
-            queue = [self.train_Y]
-            for modality in self.modalities:
-                queue.append(self.train_placeholders[modality])
-            self.enqueue_op = q.enqueue(queue)
-            minibatches = q.dequeue()
-            training_labels = minibatches[0]
-            train_data = {self.modalities[i]: minibatches[i+1]
-                          for i in range(len(self.modalities))}
-            # The queue output does not have a defined shape, so we have to define it here to
-            # be compatible with tf.layers.
-            for modality in self.modalities:
-                train_data[modality].set_shape([None, None, None,
-                                                self.config['num_channels'][modality]])
-
-            # This operation has to be called to close the input queue and free the space it
-            # occupies in memory.
-            self.close_queue_op = q.close(cancel_pending_enqueues=True)
-            self.queue_is_empty_op = tf.equal(q.size(), 0)
-            # To support tensorflow 1.2, we have to set this flag manually.
-            self.queue_is_closed = False
+            training_labels = train_data['labels']
 
             self.sufficient_statistics = {m: train_pipeline(train_data[m], m,
                                                             training_labels)
@@ -222,50 +162,45 @@ class DirichletMix(BaseModel):
                  for c in range(num_classes)])
 
             # For compliance with base_model, we have to define a prediction outcome.
-            # As we do not yet know how to do fusion, we simply take rgb.
+            # As we do not yet know how to do fusion, we simply set to 0
             self.prediction = 0
             self.fused_score = 0
 
         # To understand what"s going on under the hood, we expose a lot of intermediate
         # results for evaluation
 
+    @transform_inputdata()
+    @with_graph
     def _get_sufficient_statistic(self, data):
         """Generate a sufficient statistic of the given data to fit it later to a
         dirichlet model.
 
         Args:
-            data: the data to fit, in batch or generator format
+            data: the data to fit, np.array or generator or tf.dataset
         Returns:
-            rgb and depth statistics aswell as class-counts
+            statistics per modality aswell as class-counts
         """
         num_classes = self.config['num_classes']
 
-        with self.graph.as_default():
-            # store all measurements in these matrices
-            counts = {m: np.zeros((num_classes, num_classes))
-                      for m in self.modalities}
-            class_counts = np.zeros(num_classes).astype('int64')
+        # store all measurements in these matrices
+        counts = {m: np.zeros((num_classes, num_classes))
+                  for m in self.modalities}
+        class_counts = np.zeros(num_classes).astype('int64')
 
-            # Create a thread to load data.
-            coord = tf.train.Coordinator()
-            t = threading.Thread(target=self._load_and_enqueue,
-                                 args=(self.sess, data))
-            t.start()
-
-            queue_empty = False
-            while not (queue_empty and self.queue_is_closed):
-                ops = [self.class_counts]
-                for m in self.modalities:
-                    ops.append(self.sufficient_statistics[m])
-                new_counts = self.sess.run(ops)
+        # loop through the input data and create statistics
+        while True:
+            try:
+                ops = [self.class_counts,
+                       *[self.sufficient_statistics[m] for m in self.modalities]]
+                new_counts = self.sess.run(ops, feed_dict={self.training_handle: data})
                 class_counts += new_counts[0]
                 i = 1
                 for m in self.modalities:
                     counts[m] += new_counts[i]
                     i += 1
-                queue_empty = self.sess.run(self.queue_is_empty_op)
+            except tf.errors.OutOfRangeError:
+                break
 
-            coord.join([t])
         return counts, class_counts
 
     def _fit_sufficient_statistic(self, counts, class_counts):
@@ -324,7 +259,7 @@ class DirichletMix(BaseModel):
         """Measure the encoder outputs against the given groundtruth for the given data.
 
         Args:
-            data: As usual, an instance of DataWrapper
+            data: standard data format: dict of np.arrays or tf.dataset
         """
         modality_counts, class_counts = self._get_sufficient_statistic(data)
         print('INFO: Measurements of classifiers finished, now EM')
@@ -336,41 +271,7 @@ class DirichletMix(BaseModel):
         return_dict['class_counts'] = self.class_counts
         return return_dict
 
-    def _evaluation_food(self, data):
-        feed_dict = {self.test_placeholders[modality]: data[modality]
-                     for modality in self.modalities}
-        return feed_dict
-
-    def _enqueue_batch(self, batch, sess):
-        with self.graph.as_default():
-            feed_dict = {self.train_Y: batch['labels']}
-            for modality in self.modalities:
-                feed_dict[self.train_placeholders[modality]] = batch[modality]
-            sess.run(self.enqueue_op, feed_dict=feed_dict)
-
-    def _load_and_enqueue(self, sess, data):
-        """Internal handler method for the input data queue. Will run in a seperate
-        thread.
-
-        Overwritten from base_model because we only want to go once through the data.
-
-        Args:
-            sess: The current session, needs to be the same as in the main thread.
-            data: The data to load. See method predict for specifications.
-        """
-        with self.graph.as_default():
-            # We enqueue new data until it tells us to stop.
-            try:
-                if isinstance(data, GeneratorType):
-                    for batch in data:
-                        self._enqueue_batch(batch, sess)
-                else:
-                    self._enqueue_batch(data, sess)
-            except tf.errors.CancelledError:
-                print('INFO: Input queue is closed, cannot enqueue any more data.')
-            sess.run(self.close_queue_op)
-            self.queue_is_closed = True
-
+    @transform_inputdata()
     def prediction_difference(self, data):
         """Evaluate prediction of the different individual branches for the given data.
         """
@@ -380,8 +281,7 @@ class DirichletMix(BaseModel):
             for tensors in (self.rgb_branch, self.depth_branch):
                 for key in keys:
                     measures.append(tensors[key])
-            outputs = self.sess.run(measures,
-                                    feed_dict=self._evaluation_food(data))
+            outputs = self.sess.run(measures, feed_dict={self.testing_handle: data})
         ret = {}
         ret['fused_label'] = outputs[0]
         ret['fused_score'] = outputs[1]
@@ -391,14 +291,3 @@ class DirichletMix(BaseModel):
                 ret['{}_{}'.format(prefix, key)] = outputs[i]
                 i = i + 1
         return ret
-
-    def get_insight(self, data):
-        with self.graph.as_default():
-            probs = self.sess.run(self.probs.values(),
-                                  feed_dict=self._evaluation_food(data))
-            likelihoods = self.sess.run([
-                tf.stack([self.dirichlets.values()[i][c].log_prob(1e-20 + probs[i])
-                          for c in range(self.config['num_classes'])], axis=3)
-                for i in range(len(self.modalities))])
-
-        return probs, likelihoods
