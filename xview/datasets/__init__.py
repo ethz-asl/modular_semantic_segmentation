@@ -1,13 +1,9 @@
 from .synthia import Synthia
 from .raw_synthia import Synthia as SynthiaRaw
 from .synthia_cityscapes import SynthiaCityscapes
-from .freiburg_forest import FreiburgForest
 from .cityscapes import Cityscapes
 from .synthia_rand import SynthiaRand
 from .mixed_data import MixedData
-from .pascalvoc import PascalVOC
-from .not_cityscapes import AddRandomObjects
-from .toydata import ToyData
 
 
 def get_dataset(name):
@@ -17,18 +13,10 @@ def get_dataset(name):
         return SynthiaRaw
     elif name == 'synthia_cityscapes':
         return SynthiaCityscapes
-    elif name == 'freiburg_forest':
-        return FreiburgForest
     elif name == 'cityscapes':
         return Cityscapes
     elif name == 'synthiarand':
         return SynthiaRand
-    elif name == 'pascalvoc':
-        return PascalVOC
-    elif name == 'add_random_obj':
-        return AddRandomObjects
-    elif name == 'toy':
-        return ToyData
     if name == 'mixeddata':
         return MixedData
     else:

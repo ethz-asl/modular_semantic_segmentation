@@ -7,8 +7,6 @@ from .average_mix import AverageFusion
 from .variance_mix import VarianceMix
 from .adapnet import Adapnet
 from .fusion_fcn import FusionFCN
-from .bayesian_fcn import BayesianFCN
-from .odin import ODIN
 
 
 def get_model(name):
@@ -30,9 +28,5 @@ def get_model(name):
         return ProgressiveFCN
     elif name == 'adapnet':
         return Adapnet
-    elif name == 'bayesian_fcn':
-        return BayesianFCN
-    elif name == 'odin':
-        return ODIN
     else:
         raise UserWarning('ERROR: Model {} not found'.format(name))
