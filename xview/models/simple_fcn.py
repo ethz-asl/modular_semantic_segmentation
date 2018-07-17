@@ -16,7 +16,7 @@ def encoder(inputs, prefix, num_units, dropout_rate, trainable=True, batchnorm=T
         inputs: input tensor, in channel-last-format
         prefix: prefix of any variable name
         num_units: Number of feature units in the FCN.
-        batch_normalization (bool): Whether or not to perform batch normalization.
+        batchnorm (bool): Whether or not to perform batch normalization.
         trainable (bool): If False, variables are not trainable.
         is_training (bool): Indicator whether batch_normalization should be in training
             (batch) or testing (continuous) mode.
@@ -25,7 +25,7 @@ def encoder(inputs, prefix, num_units, dropout_rate, trainable=True, batchnorm=T
         dropout_layers: a list of layers after which to apply dropout. Accepted possible
             values are 'pool3' and 'pool4'
     Returns:
-        dict of (intermediate) layer outputs
+        Dict of (intermediate) layer outputs. The encoding has key 'fused'.
     """
     # These parameters are shared between many/all layers and therefore defined here
     # for convenience.
@@ -101,7 +101,7 @@ def decoder(features, prefix, num_units, num_classes, trainable=True, is_trainin
         num_classes: Number of output classes.
         dropout_rate: Dropout rate for dropout applied on input feature. Set to 0 to
             disable dropout.
-        batch_normalization (bool): Whether or not to perform batch normalization.
+        batchnorm (bool): Whether or not to perform batch normalization.
         trainable (bool): If False, variables are not trainable.
         is_training (bool): Indicator whether batch_normalization should be in training
             (batch) or testing (continuous) mode.
@@ -109,8 +109,11 @@ def decoder(features, prefix, num_units, num_classes, trainable=True, is_trainin
             (attention with prefix). Will raise error if it cannot find such variables.
         dropout_rate: If set, apply dropout on the decoder input with the given rate
     Returns:
-        dict of (intermediate) layer outputs
+        dict of (intermediate) layer outputs. The final per-class activations have key
+            'score'.
     """
+    # These parameters are shared between many/all layers and therefore defined here
+    # for convenience.
     params = {
         'activation': tf.nn.relu, 'padding': 'same', 'reuse': reuse,
         'batch_normalization': batchnorm, 'training': is_training,
@@ -135,6 +138,29 @@ def decoder(features, prefix, num_units, num_classes, trainable=True, is_trainin
 
 def fcn(inputs, prefix, num_units, num_classes, trainable=True, is_training=False,
         reuse=tf.AUTO_REUSE, dropout_rate=0, dropout_layers=[], batchnorm=True):
+    """
+    Fully Convolutional Network with a VGG16 encoder and fusion of features from the
+    4th and 5th pooling output before upconvolution. All upconvolutions are static
+    bilinear interpolations and not trainable. Architecture was developed in DA-RNN.
+
+    Args:
+        inputs: input tensor, in channel-last-format
+        prefix: prefix of any variable name
+        num_units: Number of feature units in the FCN.
+        num_classes: Number of output classes.
+        batchnorm (bool): Whether or not to perform batch normalization.
+        trainable (bool): If False, variables are not trainable.
+        is_training (bool): Indicator whether batch_normalization should be in training
+            (batch) or testing (continuous) mode.
+        reuse (bool): If true, reuse existing variables of same name
+            (attention with prefix). Will raise error if it cannot find such variables.
+        dropout_layers (list): Layers after which to apply dropout. Accepted possible
+            values are 'pool3', 'pool4' and 'fused'
+        dropout_rate (float): The dropout probability applied to the specified layers.
+    Returns:
+        Dict of all (intermediate) layer outputs. The final per-class activations have key
+            'score'.
+    """
     layers = encoder(inputs, prefix, num_units, dropout_rate, is_training=is_training,
                      trainable=trainable, batchnorm=batchnorm,
                      dropout_layers=dropout_layers)
@@ -147,16 +173,18 @@ def fcn(inputs, prefix, num_units, num_classes, trainable=True, is_training=Fals
 
 
 class SimpleFCN(BaseModel):
-    """FCN implementation following DA-RNN architecture and using tf.layers.
+    """Model Implementation of FCN.
 
     Args:
         output_dir: if set, will output diagnostics and weights here
         learning_rate: learning rate of the trainer
         modality: name of the data modality, which has to be a valid key for the input
             dataset batch
-        num_channels: channel-size of the input data (3 for RGB, 1 for Depth)
-
-        Other Args see encoder and decoder
+        train_encoder (bool): If False, will keep the weights of the encoder static, may
+            be useful for finetuning.
+        num_units (int): Number of feature units in the FCN.
+        prefix (string): prefix of any variable name
+        batch_normalization (bool): Whether or not to use batch normalization.
     """
 
     def __init__(self, prefix, data_description, modality, output_dir=None, **config):
@@ -196,5 +224,3 @@ class SimpleFCN(BaseModel):
                          batchnorm=self.config['batch_normalization'])
             prob = tf.nn.softmax(layers['score'], name='prob_normalized')
             self.prediction = tf.argmax(prob, 3, name='label_2d')
-
-        # Add summaries for some weights
