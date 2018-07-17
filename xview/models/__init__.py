@@ -1,9 +1,8 @@
 from .simple_fcn import SimpleFCN
-from .bayes_mix import BayesMix
-from .dirichlet_mix import DirichletMix
-from .uncertainty_dirichlet_mix import UncertaintyMix
+from .bayes_mix import BayesFusion
+from .dirichlet_mix import DirichletFusion
 from .average_mix import AverageFusion
-from .variance_mix import VarianceMix
+from .variance_mix import VarianceFusion
 from .adapnet import Adapnet
 from .fusion_fcn import FusionFCN
 
@@ -13,17 +12,15 @@ def get_model(name):
         return SimpleFCN
     elif name == 'fusion_fcn':
         return FusionFCN
-    elif name == 'bayes_mix':
-        return BayesMix
-    elif name == 'dirichlet_mix':
-        return DirichletMix
-    elif name == 'uncertainty_mix':
-        return UncertaintyMix
-    elif name == 'average_fusion':
+    elif name in ['bayes_mix', 'bayes_fusion']:
+        return BayesFusion
+    elif name in ['dirichlet_mix', 'dirichlet_fusion']:
+        return DirichletFusion
+    elif name in ['average_fusion', 'average_mix']:
         return AverageFusion
-    elif name == 'variance_mix':
-        return VarianceMix
+    elif name in ['variance_mix', 'variance_fusion']:
+        return VarianceFusion
     elif name == 'adapnet':
         return Adapnet
     else:
-        raise UserWarning('ERROR: Model {} not found'.format(name))
+        raise UserWarning('ERROR: Model %s not found' % name)
