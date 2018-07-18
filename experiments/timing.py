@@ -9,7 +9,7 @@ from sacred.utils import apply_backspaces_and_linefeeds
 from experiments.utils import get_mongo_observer, ExperimentData
 from xview.models.fusion_fcn import fusion_fcn
 from xview.models.simple_fcn import fcn
-from xview.models.bayes_mix import bayes_decision_matrix
+from xview.models.bayes_mix import bayes_decision_matrix, bayes_fusion
 from xview.models.dirichlet_mix import dirichlet_fusion
 from xview.models.variance_mix import variance_fusion
 
@@ -63,12 +63,56 @@ def time_bayes_fcn(net_config, fusion_experiment, repetitions):
     # transform into list
     confusion_matrices = [confusion_matrices['rgb'], confusion_matrices['depth']]
 
+    rgb_class = tf.argmax(tf.nn.softmax(rgb_score), 3)
+    depth_class = tf.argmax(tf.nn.softmax(depth_score), 3)
+    fused_class = tf.argmax(bayes_fusion([rgb_class, depth_class], confusion_matrices)[0],
+                            3)
+
+    sess = tf.Session()
+    sess.run(tf.global_variables_initializer())
+    sess.run(tf.local_variables_initializer())
+
+    times = []
+    for _ in range(repetitions):
+        start = time.time()
+        result = sess.run(fused_class)
+        end = time.time()
+        times.append(end - start)
+
+    print('Mean Time {:.5f}s, Std {:.5f}s'.format(np.mean(times), np.std(times)))
+    stdout.flush()
+
+
+@ex.command
+def time_bayes_lookup_fcn(net_config, fusion_experiment, repetitions):
+    # cityscapes size
+    rgb = tf.ones([1, 768, 384, 3])
+    depth = tf.ones([1, 768, 384, 1])
+
+    rgb_score = fcn(rgb, 'rgb', net_config['num_units'], net_config['num_classes'],
+                    trainable=False, batchnorm=False)['score']
+    depth_score = fcn(depth, 'depth', net_config['num_units'], net_config['num_classes'],
+                      trainable=False, batchnorm=False)['score']
+
+    # load confusion matrices
+    record = ExperimentData(fusion_experiment).get_record()
+    confusion_matrices = record['info']['confusion_matrices']
+    # transform into list
+    confusion_matrices = [confusion_matrices['rgb'], confusion_matrices['depth']]
+
     decision_matrix = tf.constant(bayes_decision_matrix(confusion_matrices))
 
     rgb_class = tf.argmax(tf.nn.softmax(rgb_score), 3)
     depth_class = tf.argmax(tf.nn.softmax(depth_score), 3)
-    fused_class = tf.gather_nd(decision_matrix,
-                               tf.stack([rgb_class, depth_class], axis=-1))
+    # fused_class = tf.gather_nd(decision_matrix,
+    #                            tf.stack([rgb_class, depth_class], axis=-1))
+    # gather_nd is too slow as it does not run on GPU, try this instead:
+    rgb_class = tf.to_int64(tf.one_hot(rgb_class, net_config['num_classes']))
+    depth_class = tf.to_int64(tf.one_hot(depth_class, net_config['num_classes']))
+    fused_class = tf.reduce_sum(
+        tf.multiply(decision_matrix, tf.multiply(tf.expand_dims(rgb_class, -1),
+                                                 tf.expand_dims(depth_class, -2))),
+        [-2, -1])
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
     sess.run(tf.local_variables_initializer())
