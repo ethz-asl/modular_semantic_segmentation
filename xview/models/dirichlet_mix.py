@@ -36,7 +36,7 @@ def dirichlet_fusion(probs, conditionals, prior):
     return fused_likelihood + tf.log(1e-20 + prior)
 
 
-class DirichletMix(BaseModel):
+class DirichletFusion(BaseModel):
     """Mixture of CNN experts following the 'dirichlet mix' method.
 
     Args:
