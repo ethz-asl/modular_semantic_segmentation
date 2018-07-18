@@ -3,8 +3,6 @@ from pandas import Series
 from pymongo import MongoClient
 from gridfs import GridFS
 from tensorflow.python.summary.summary_iterator import summary_iterator
-from xview.settings import EXPERIMENT_DB_HOST, EXPERIMENT_DB_USER, EXPERIMENT_DB_PWD,\
-    EXPERIMENT_DB_NAME
 import xview.settings as settings
 from xview.datasets import get_dataset
 from bson.json_util import dumps
@@ -83,9 +81,9 @@ class ExperimentData:
                 self.zipfile = path.join(settings.EXPERIMENT_STORAGE_FOLDER,
                                          '%s.zip' % exp_id)
                 archive = zipfile.ZipFile(self.zipfile)
-                record = json.loads(archive.read('run.json'))
-                record['info'] = json.loads(archive.read('info.json'))
-                record['config'] = json.loads(archive.read('config.json'))
+                record = json.loads(archive.read('run.json').decode('utf8'))
+                record['info'] = json.loads(archive.read('info.json').decode('utf8'))
+                record['config'] = json.loads(archive.read('config.json').decode('utf8'))
                 record['captured_out'] = archive.read('cout.txt')
                 archive.close()
                 self.artifacts = archive.namelist()
