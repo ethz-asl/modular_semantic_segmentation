@@ -1,6 +1,6 @@
 from sacred import Experiment
 from sacred.utils import apply_backspaces_and_linefeeds
-from experiments.utils import get_mongo_observer
+from experiments.utils import get_observer
 from experiments.evaluation import import_weights_into_network
 from experiments.different_evaluation_parameters import parameter_combinations
 from experiments.bayes_fusion import split_test_data
@@ -12,7 +12,7 @@ from sys import stdout
 ex = Experiment()
 # reduce output of progress bars
 ex.captured_out_filter = apply_backspaces_and_linefeeds
-ex.observers.append(get_mongo_observer())
+ex.observers.append(get_observer())
 
 
 @ex.command

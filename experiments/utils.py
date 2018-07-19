@@ -1,4 +1,4 @@
-from sacred.observers import MongoObserver
+from sacred.observers import MongoObserver, FileStorageObserver
 from pandas import Series
 from pymongo import MongoClient
 from gridfs import GridFS
@@ -21,11 +21,19 @@ def load_data(data_config):
     return get_dataset(data_config['dataset'], dataset_params)
 
 
-def get_mongo_observer():
-    return MongoObserver.create(url='mongodb://{user}:{pwd}@{host}/{db}'.format(
-                                    host=EXPERIMENT_DB_HOST, user=EXPERIMENT_DB_USER,
-                                    pwd=EXPERIMENT_DB_PWD, db=EXPERIMENT_DB_NAME),
-                                db_name=EXPERIMENT_DB_NAME)
+def get_observer():
+    if hasattr(settings, 'EXPERIMENT_DB_HOST') and settings.EXPERIMENT_DB_HOST:
+        return MongoObserver.create(url='mongodb://{user}:{pwd}@{host}/{db}'.format(
+                                        host=settings.EXPERIMENT_DB_HOST,
+                                        user=settings.EXPERIMENT_DB_USER,
+                                        pwd=settings.EXPERIMENT_DB_PWD,
+                                        db=settings.EXPERIMENT_DB_NAME),
+                                    db_name=settings.EXPERIMENT_DB_NAME)
+    elif hasattr(settings, 'EXPERIMENT_STORAGE_FOLDER') \
+            and settings.EXPERIMENT_STORAGE_FOLDER:
+        return FileStorageObserver.create(settings.EXPERIMENT_STORAGE_FOLDER)
+    else:
+        raise UserWarning("No observer settings found.")
 
 
 def reverse_convert_datatypes(data):
