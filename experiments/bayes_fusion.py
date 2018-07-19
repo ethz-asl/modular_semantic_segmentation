@@ -4,7 +4,7 @@ from experiments.utils import get_mongo_observer
 from experiments.evaluation import import_weights_into_network
 from experiments.utils import ExperimentData
 from xview.datasets import get_dataset
-from xview.models import get_model, BayesMix, AverageFusion
+from xview.models import get_model, BayesFusion, AverageFusion
 from copy import deepcopy
 from sys import stdout
 from sklearn.model_selection import train_test_split
@@ -51,7 +51,7 @@ def collect_data(fitting_experiment):
     likelihoods = []
     conditionals = []
     probs = []
-    with BayesMix(confusion_matrices=confusion_matrices, **net_config) as net:
+    with BayesFusion(confusion_matrices=confusion_matrices, **net_config) as net:
         import_weights_into_network(net, starting_weights)
         for batch in data.get_test_data():
             insight = net.get_insight(batch)
