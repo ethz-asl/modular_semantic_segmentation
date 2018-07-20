@@ -6,7 +6,7 @@ from sys import stdout
 from sacred import Experiment
 from sacred.utils import apply_backspaces_and_linefeeds
 
-from experiments.utils import get_mongo_observer, ExperimentData
+from experiments.utils import get_observer, ExperimentData
 from xview.models.fusion_fcn import fusion_fcn
 from xview.models.simple_fcn import fcn
 from xview.models.bayes_mix import bayes_decision_matrix, bayes_fusion
@@ -17,7 +17,7 @@ from xview.models.variance_mix import variance_fusion
 ex = Experiment()
 # reduce output of progress bars
 ex.captured_out_filter = apply_backspaces_and_linefeeds
-ex.observers.append(get_mongo_observer())
+ex.observers.append(get_observer())
 
 
 @ex.command

@@ -8,7 +8,7 @@ from sys import stdout
 from copy import deepcopy
 import os
 
-from .utils import ExperimentData, get_mongo_observer
+from .utils import ExperimentData, get_observer
 
 
 def evaluate(net, data, print_results=True):
@@ -99,7 +99,7 @@ def import_weights_into_network(net, starting_weights):
 ex = Experiment()
 # reduce output of progress bars
 ex.captured_out_filter = apply_backspaces_and_linefeeds
-ex.observers.append(get_mongo_observer())
+ex.observers.append(get_observer())
 
 
 @ex.command

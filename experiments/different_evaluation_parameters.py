@@ -1,5 +1,5 @@
 from sacred import Experiment
-from experiments.utils import get_mongo_observer
+from experiments.utils import get_observer
 from experiments.evaluation import evaluate, import_weights_into_network
 from xview.models import get_model
 from copy import deepcopy
@@ -62,7 +62,7 @@ def grid_search(evaluation, search_parameters, net_config):
 
 
 ex = Experiment()
-ex.observers.append(get_mongo_observer())
+ex.observers.append(get_observer())
 
 
 @ex.main

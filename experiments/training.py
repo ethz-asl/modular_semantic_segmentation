@@ -1,6 +1,6 @@
 from sacred import Experiment
 from sacred.utils import apply_backspaces_and_linefeeds
-from experiments.utils import get_mongo_observer, load_data
+from experiments.utils import get_observer, load_data
 from xview.datasets import get_dataset
 from experiments.evaluation import evaluate, import_weights_into_network
 from xview.models import get_model
@@ -78,7 +78,7 @@ def train_network(net, output_dir, data, num_iterations, starting_weights,
 ex = Experiment()
 # reduce output of progress bars
 ex.captured_out_filter = apply_backspaces_and_linefeeds
-ex.observers.append(get_mongo_observer())
+ex.observers.append(get_observer())
 
 
 @ex.capture

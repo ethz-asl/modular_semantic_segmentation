@@ -1,18 +1,18 @@
 from sacred import Experiment
 from sacred.utils import apply_backspaces_and_linefeeds
-from experiments.utils import get_mongo_observer
+from experiments.utils import get_observer
 from experiments.evaluation import import_weights_into_network
 from experiments.different_evaluation_parameters import parameter_combinations
 from experiments.bayes_fusion import split_test_data
 from sklearn.model_selection import train_test_split
-from xview.models import DirichletMix
+from xview.models import DirichletFusion
 from sys import stdout
 
 
 ex = Experiment()
 # reduce output of progress bars
 ex.captured_out_filter = apply_backspaces_and_linefeeds
-ex.observers.append(get_mongo_observer())
+ex.observers.append(get_observer())
 
 
 @ex.command
@@ -26,7 +26,7 @@ def test_parameters(net_config, evaluation_data, starting_weights, search_parame
     search_data, search_validation = train_test_split(data.measureset, test_size=.5,
                                                       random_state=1)
     # get sufficient statistic
-    with DirichletMix(**configs_to_test[0]) as net:
+    with DirichletFusion(**configs_to_test[0]) as net:
         import_weights_into_network(net, starting_weights)
         sufficient_statistic = net._get_sufficient_statistic(
             data.get_set_data(search_data))
@@ -34,7 +34,7 @@ def test_parameters(net_config, evaluation_data, starting_weights, search_parame
     # Not test all the parameters
     results = []
     for test_parameters in configs_to_test:
-        with DirichletMix(**test_parameters) as net:
+        with DirichletFusion(**test_parameters) as net:
             net._fit_sufficient_statistic(*sufficient_statistic)
             import_weights_into_network(net, starting_weights)
             measurements, _ = net.score(data.get_set_data(search_validation))
@@ -58,7 +58,7 @@ def fit_and_evaluate(net_config, evaluation_data, starting_weights, _run):
     data."""
     data, _, _ = split_test_data(evaluation_data)
 
-    with DirichletMix(**net_config) as net:
+    with DirichletFusion(**net_config) as net:
         import_weights_into_network(net, starting_weights)
 
         dirichlet_params = net.fit(data.get_measure_data())
