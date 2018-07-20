@@ -65,9 +65,9 @@ class ExperimentData:
         """
         if hasattr(settings, 'EXPERIMENT_DB_HOST') and settings.EXPERIMENT_DB_HOST:
             client = MongoClient('mongodb://{user}:{pwd}@{host}/{db}'.format(
-                                host=EXPERIMENT_DB_HOST, user=EXPERIMENT_DB_USER,
-                                pwd=EXPERIMENT_DB_PWD, db=EXPERIMENT_DB_NAME))
-            self.db = client[EXPERIMENT_DB_NAME]
+                host=settings.EXPERIMENT_DB_HOST, user=settings.EXPERIMENT_DB_USER,
+                pwd=settings.EXPERIMENT_DB_PWD, db=settings.EXPERIMENT_DB_NAME))
+            self.db = client[settings.EXPERIMENT_DB_NAME]
             self.fs = GridFS(self.db)
             self.record = self.db.runs.find_one({'_id': exp_id})
             self.artifacts = [artifact['name']
