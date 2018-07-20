@@ -3,8 +3,6 @@ from pandas import Series
 from pymongo import MongoClient
 from gridfs import GridFS
 from tensorflow.python.summary.summary_iterator import summary_iterator
-from xview.settings import EXPERIMENT_DB_HOST, EXPERIMENT_DB_USER, EXPERIMENT_DB_PWD,\
-    EXPERIMENT_DB_NAME
 import xview.settings as settings
 from xview.datasets import get_dataset
 from bson.json_util import dumps
