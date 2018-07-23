@@ -1,5 +1,28 @@
 Corresponding implementations for the IROS 2018 paper "Modular Sensor Fusion for Semantic Segmentation" by Hermann Blum, Abel Gawel, Roland Siegwart and Cesar Cadena.
 
+<table>
+  <tr>
+     <td>Fusion with Synthia RAND</td>
+     <td>Fusion wuth Cityscapes</td>
+  </tr>
+  <tr>
+    <td>
+       <img height="400px" src="https://github.com/ethz-asl/modular_semantic_segmentation/raw/publish/synthia.png">
+    </td>
+    <td>
+       <img height="400px" src="https://github.com/ethz-asl/modular_semantic_segmentation/raw/publish/cityscapes.png">
+    </td>
+  </tr>
+  <tr>
+      <td>
+          <a href="https://nbviewer.jupyter.org/github/ethz-asl/modular_semantic_segmentation/blob/publish/Synthia%20Rand%20Cityscapes%20Examples.ipynb">Reproduce Results</a>
+      </td>
+      <td>
+          <a href="https://nbviewer.jupyter.org/github/ethz-asl/modular_semantic_segmentation/blob/publish/Cityscapes.ipynb">Reproduce Results</a>
+      </td>
+  </tr>
+</table>
+
 # Installation
 
 Requires python 3
