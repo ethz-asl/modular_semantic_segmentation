@@ -96,11 +96,13 @@ class DataBaseclass(DataWrapper):
             return self._get_batch(self.trainset, training_format=training_format)
         return self._get_tf_dataset(self.trainset, training_format=training_format)
 
-    def get_testset(self, tf_dataset=True):
+    def get_testset(self, num_items=None, tf_dataset=True):
         """Return testset. By default as tf.data.dataset, otherwise as numpy array."""
+        if num_items is None:
+            num_items = len(self.testset)
         if not tf_dataset:
-            return self._get_batch(self.testset)
-        return self._get_tf_dataset(self.testset)
+            return self._get_batch(self.testset[:num_items])
+        return self._get_tf_dataset(self.testset[:num_items])
 
     def get_measureset(self, tf_dataset=True):
         """Return measureset. By default as tf.data.dataset, otherwise as numpy array."""
