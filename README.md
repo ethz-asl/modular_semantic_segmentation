@@ -13,7 +13,7 @@ Set up a new virtual environment: `virtualenv --python=python3 <virtualenv-name>
 
 3. Dependent on your hardware install tensorflow for CPU (`pip install tensorflow`) or GPU (`pip install tensorflow-gpu`).
 
-4. All following setup steps are shown in the jupyter notebook.
+4. All following setup steps are shown in the jupyter notebooks: [Synthia RAND](https://nbviewer.jupyter.org/github/ethz-asl/modular_semantic_segmentation/blob/publish/Synthia%20Rand%20Cityscapes%20Examples.ipynb#), [Cityscapes](https://nbviewer.jupyter.org/github/ethz-asl/modular_semantic_segmentation/blob/publish/Cityscapes.ipynb), [Inference Time](https://nbviewer.jupyter.org/github/ethz-asl/modular_semantic_segmentation/blob/publish/Inference%20Time.ipynb), [Experimental Details](https://nbviewer.jupyter.org/github/ethz-asl/modular_semantic_segmentation/blob/publish/Experimental%20Details.ipynb)
 
 # Usage
 
@@ -24,7 +24,7 @@ Reported Experiments can be reproduced in the following way:
 python -m experiments.rerun with experiment_id=<insert here> -u
 ```
 
-For all tables and examples in the paper, there are corresponging jupyter notebooks that show on which experiments they are based upon. You will find all the details behind the experiment using the notebook `Experimental Details`.
+For all tables and examples in the paper, there are corresponging jupyter notebooks that show on which experiments they are based upon. You will find all the details behind the experiment using the notebook [Experimental Details](https://nbviewer.jupyter.org/github/ethz-asl/modular_semantic_segmentation/blob/publish/Experimental%20Details.ipynb).
 
 # Library
 
