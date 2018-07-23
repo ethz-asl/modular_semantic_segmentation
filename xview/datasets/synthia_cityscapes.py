@@ -6,6 +6,7 @@ import cv2
 import shutil
 import json
 from sklearn.model_selection import train_test_split
+from copy import deepcopy
 
 from .data_baseclass import DataBaseclass
 from .augmentation import augmentate
@@ -31,9 +32,11 @@ LABELINFO = {
 
 
 class SynthiaCityscapes(DataBaseclass):
-    """Driver for SYNTHIA dataset (http://synthia-dataset.net/).
-    Preprocessing resizes images to 640x368 and performs a static 20% test-split for all
-    given sequences."""
+    """Driver for SYNTHIA dataset (http://synthia-dataset.net/)."""
+
+    _data_shape_description = {
+            'rgb': (None, None, 3), 'depth': (None, None, 1), 'labels': (None, None)}
+    _num_default_classes = 12
 
     def __init__(self, base_path=SYNTHIA_BASEPATH, force_preprocessing=False,
                  batchsize=1, resize=False, in_memory=False, **data_config):
@@ -68,7 +71,7 @@ class SynthiaCityscapes(DataBaseclass):
         # Every sequence got their own train/test split during preprocessing. According
         # to the loaded sequences, we now collect all files from all sequence-subsets
         # into one list.
-        if in_memory:
+        if in_memory and 'TMPDIR' in environ:
             print('INFO loading dataset into memory')
             # first load the tarfile into a closer memory location, then load all the
             # images
@@ -84,6 +87,10 @@ class SynthiaCityscapes(DataBaseclass):
                 testset = [{'image': self._load_data(filename)}
                            for filename in tqdm(split['testset'])]
         else:
+            if in_memory:
+                print('INFO Environment Variable TMPDIR not set, could not unpack data '
+                      'and load into memory\n'
+                      'Now trying to load every image seperately')
             with open(path.join(self.basepath, 'train_test_split.json'), 'r') as f:
                 split = json.load(f)
                 trainset = [{'image_name': filename} for filename in split['trainset']]
@@ -92,13 +99,12 @@ class SynthiaCityscapes(DataBaseclass):
         measureset, testset = train_test_split(testset, test_size=0.5, random_state=1)
 
         # Update labelinfo according to config
-        labelinfo = LABELINFO
+        labelinfo = deepcopy(LABELINFO)
         if self.config['labels']['lanemarkings']:
             labelinfo[12] = {'name': 'lanemarking', 'color': [0, 192, 0]}
 
         # Intitialize Baseclass
-        DataBaseclass.__init__(self, trainset, measureset, testset, batchsize,
-                               ['rgb', 'depth', 'labels'], LABELINFO)
+        DataBaseclass.__init__(self, trainset, measureset, testset, labelinfo)
 
     @property
     def one_hot_lookup(self):
