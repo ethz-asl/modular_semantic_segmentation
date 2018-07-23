@@ -1,3 +1,5 @@
+Corresponding implementations for the IROS 2018 paper "Modular Sensor Fusion for Semantic Segmentation" by Hermann Blum, Abel Gawel, Roland Siegwart and Cesar Cadena.
+
 # Installation
 
 Requires python 3
