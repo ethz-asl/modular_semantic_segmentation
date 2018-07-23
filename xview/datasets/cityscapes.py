@@ -134,7 +134,7 @@ class Cityscapes(DataBaseclass):
                      for n in listdir(search_path)])
             return filenames
 
-        if self.in_memory:
+        if self.in_memory and 'TMPDIR' in environ:
             print('INFO loading dataset into machine ... ', end='')
             # first load the tarfile into a closer memory location, then load all the
             # images
@@ -145,6 +145,10 @@ class Cityscapes(DataBaseclass):
             self.base_path = localtmp
             self.images = {}
             print('DONE')
+        elif self.in_memory:
+            print('INFO Environment Variable TMPDIR not set, could not unpack data '
+                  'and load into memory\n'
+                  'Now trying to load every image seperately')
         trainset = get_filenames('train', cities=cities)
         testset = get_filenames('val', cities=['munster', 'frankfurt', 'lindau'])
         trainset, measureset = train_test_split(trainset, test_size=0.05,
@@ -181,7 +185,7 @@ class Cityscapes(DataBaseclass):
 
     def _get_data(self, image_path, training_format=False):
         """Returns data for one given image number from the specified sequence."""
-        if self.in_memory:
+        if self.in_memory and 'TMPDIR' in environ:
             if image_path not in self.images:
                 self.images[image_path] = self._load_data(image_path)
             image = self.images[image_path]
