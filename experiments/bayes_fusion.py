@@ -133,7 +133,7 @@ def fit_and_evaluate(net_config, evaluation_data, starting_weights, _run):
             import_weights_into_network(net, starting_weights[model_config['prefix']])
             m, conf_mat = net.score(data.get_measureset())
             confusion_matrices[expert] = conf_mat
-            print('Evaluated network {} on {} train data:'.format(
+            print('Evaluated network {} on {} measurement set:'.format(
                 expert, evaluation_data['dataset']))
             print("INFO now getting test results")
             m, _ = net.score(data.get_testset())
