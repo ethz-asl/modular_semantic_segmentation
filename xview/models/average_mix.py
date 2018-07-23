@@ -13,7 +13,7 @@ class AverageFusion(FusionModel):
     """
 
     def __init__(self, output_dir=None, **config):
-        FusionModel.__init__(self, 'AverageFusion', output_dir=output_dir, **config)
+        FusionModel.__init__(self, name='AverageFusion', output_dir=output_dir, **config)
 
     def _fusion(self, expert_outputs):
         average_prob = tf.reduce_mean(tf.stack([expert_outputs[m]['prob']

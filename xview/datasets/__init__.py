@@ -13,7 +13,7 @@ def get_dataset(name):
         return SynthiaRaw
     elif name == 'synthia_cityscapes':
         return SynthiaCityscapes
-    elif name == 'cityscapes':
+    elif name in ['cityscapes', 'cityscapes_c']:
         return Cityscapes
     elif name == 'synthiarand':
         return SynthiaRand

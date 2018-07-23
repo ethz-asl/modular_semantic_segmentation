@@ -71,14 +71,12 @@ def encoder(inputs, prefix, num_units, dropout_rate, trainable=True, batchnorm=T
         if 'conv4_3' in dropout_layers:
             conv4_3 = dropout(conv4_3, rate=dropout_rate, training=True,
                               name='conv4_3_dropout')
-        score_conv4 = conv2d(conv4_3, num_units, [1, 1], name='%s_score_conv4' % prefix,
-                             **params)
+        score_conv4 = conv2d(conv4_3, num_units, [1, 1], name='score_conv4', **params)
         conv5_3 = l['conv5_3']
         if 'conv5_3' in dropout_layers:
             conv5_3 = dropout(conv5_3, rate=dropout_rate, training=True,
                               name='conv5_3_dropout')
-        score_conv5 = conv2d(conv5_3, num_units, [1, 1], name='%s_score_conv5' % prefix,
-                             **params)
+        score_conv5 = conv2d(conv5_3, num_units, [1, 1], name='score_conv5', **params)
         # The deconvolution is always set static.
         params['trainable'] = False
         upscore_conv5 = deconv2d(score_conv5, num_units, [4, 4], strides=[2, 2],

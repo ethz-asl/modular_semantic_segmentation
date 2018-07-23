@@ -74,8 +74,8 @@ class ExperimentData:
                               for artifact in self.record['artifacts']]
         elif hasattr(settings, 'EXPERIMENT_STORAGE_FOLDER') \
                 and settings.EXPERIMENT_STORAGE_FOLDER:
-            if exp_id in listdir(settings.EXPERIMENT_STORAGE_FOLDER):
-                self.exp_path = path.join(settings.EXPERIMENT_STORAGE_FOLDER, exp_id)
+            if str(exp_id) in listdir(settings.EXPERIMENT_STORAGE_FOLDER):
+                self.exp_path = path.join(settings.EXPERIMENT_STORAGE_FOLDER, str(exp_id))
                 with open(path.join(self.exp_path, 'run.json')) as run_json:
                     record = json.load(run_json)
                 with open(path.join(self.exp_path, 'info.json')) as info_json:
@@ -96,7 +96,7 @@ class ExperimentData:
                 archive.close()
                 self.artifacts = archive.namelist()
             else:
-                raise UserWarning('Specified experiment not found.')
+                raise UserWarning('Specified experiment %s not found.' % exp_id)
             self.record = record
 
     def get_record(self):
@@ -116,14 +116,12 @@ class ExperimentData:
         elif hasattr(self, 'exp_path'):
             if name not in self.artifacts:
                 raise UserWarning('ERROR: Artifact {} not found'.format(name))
-            with open(path.join(self.exp_path, name)) as artifact:
-                return artifact
+            return open(path.join(self.exp_path, name))
         else:
             if name not in self.artifacts:
                 raise UserWarning('ERROR: Artifact {} not found'.format(name))
             archive = zipfile.ZipFile(self.zipfile)
-            with archive.open(name) as artifact:
-                return artifact
+            return archive.open(name)
 
     def get_summary(self, tag):
         """Return pd.Series of scalar summary value with given tag."""
@@ -147,8 +145,14 @@ class ExperimentData:
         return Series(value, index=step)
 
     def get_weights(self):
+        if not hasattr(self, 'fs') and not hasattr(self, 'exp_path'):
+            raise UserWarning('cannot load weights out of zipfile, please extract first')
         filename = next(artifact for artifact in self.artifacts if 'weights' in artifact)
-        return self.get_artifact(filename)
+        if hasattr(self, 'exp_path'):
+            # better return the path than an opened file
+            return path.join(self.exp_path, filename)
+        else:
+            return self.get_artifact(filename)
 
     def dump(self, path):
         """Dump the entire record and it's artifacts as a zip archieve."""
