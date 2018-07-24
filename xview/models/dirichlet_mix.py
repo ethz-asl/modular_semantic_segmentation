@@ -75,7 +75,7 @@ class DirichletFusion(BaseModel):
             print('WARNING: Could not yet import measurements, you need to fit this '
                   'model first.')
 
-        BaseModel.__init__(self, 'DirichletFusion', output_dir=output_dir,
+        BaseModel.__init__(self, name='DirichletFusion', output_dir=output_dir,
                            custom_training=True, **config)
 
     def _build_graph(self, train_data, test_data):
@@ -95,10 +95,10 @@ class DirichletFusion(BaseModel):
         # The following part can only be build if measurements are already present.
         if hasattr(self, 'dirichlet_params'):
 
-            probs = {modality: test_pipeline(test_data[modality], modality)['prob']
+            probs = {modality: test_pipeline(test_data[modality], modality, **self.config)['prob']
                      for modality in self.modalities}
             self.probs = {modality: probs[modality] /
-                          tf.reduce_sum(probs[modality], axis=3, keep_dims=True)
+                          tf.reduce_sum(probs[modality], axis=3, keepdims=True)
                           for modality in self.modalities}
 
             # Create all the Dirichlet distributions conditional on ground-truth class
@@ -128,7 +128,8 @@ class DirichletFusion(BaseModel):
                 prior = weight * uniform_prior + (1 - weight) * data_prior
                 prior = prior / prior.sum()
 
-            self.fused_score = dirichlet_fusion(self.probs.values(), dirichlets.values(),
+            self.fused_score = dirichlet_fusion(list(self.probs.values()),
+                                                list(dirichlets.values()),
                                                 prior)
 
             label = tf.argmax(self.fused_score, 3, name='label_2d')
@@ -139,7 +140,7 @@ class DirichletFusion(BaseModel):
         else:
             # Build a training pipeline for measuring the differnet classifiers
             def train_pipeline(inputs, modality, labels):
-                prob = test_pipeline(inputs, modality)['prob']
+                prob = test_pipeline(inputs, modality, **self.config)['prob']
 
                 stacked_labels = tf.stack([labels for _ in range(num_classes)], axis=3)
 

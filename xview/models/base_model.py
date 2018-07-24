@@ -406,6 +406,8 @@ class BaseModel(object):
                 them unassigned
         """
         initializers = []
+        if warnings:
+            print(filepath)
         weights = np.load(filepath, mmap_mode='w+')
         import_prefix = weights.keys()[0].split('/')[0].split('_')[0]
 
@@ -430,10 +432,9 @@ class BaseModel(object):
             # Optimizers like Adagrad have their own variables, do not load these
             if 'grad' in name or 'Adam' in name or 'RMS' in name:
                 continue
-            if name not in weights:
-                if warnings:
-                    print('WARNING: {} not found in saved weights'.format(name))
-            else:
+            if name in weights or name.replace('/', '_', 1) in weights:
+                if name.replace('/', '_', 1) in weights:
+                    name = name.replace('/', '_', 1)
                 if not variable.shape == weights[name].shape:
                     if warnings:
                         print('WARNING: wrong shape found for {}, but ignored in '
@@ -444,4 +445,7 @@ class BaseModel(object):
                         initializers.append(variable.assign(weights[name]))
                 else:
                     initializers.append(variable.assign(weights[name]))
+            else:
+                if warnings:
+                    print('WARNING: {} not found in saved weights'.format(name))
         self.sess.run(initializers)

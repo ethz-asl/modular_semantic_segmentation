@@ -34,10 +34,10 @@ class FusionModel(BaseModel):
         prefixes: dict, prefix of the variable names for the corresponding experts
     """
 
-    def __init__(self, name, output_dir=None, **config):
+    def __init__(self, name=None, output_dir=None, **config):
         self.modalities = list(config['prefixes'].keys())
 
-        BaseModel.__init__(self, name, output_dir=output_dir, custom_training=True,
+        BaseModel.__init__(self, name=name, output_dir=output_dir, custom_training=True,
                            **config)
 
     def _fusion(self, expert_outputs):
@@ -60,7 +60,7 @@ class FusionModel(BaseModel):
         # Network for testing / evaluation
         # As before, we define placeholders for the input. These here now can be fed
         # directly, e.g. with a feed_dict created by _evaluation_food
-        self.expert_outputs = {m: test_pipeline(train_data[m], self.config['prefixes'][m],
+        self.expert_outputs = {m: test_pipeline(test_data[m], self.config['prefixes'][m],
                                                 **self.config)
                                for m in self.modalities}
         self.prediction = self._fusion(self.expert_outputs)
