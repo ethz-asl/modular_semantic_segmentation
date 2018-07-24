@@ -10,6 +10,7 @@ import json
 import zipfile
 from os import path, listdir
 from numpy import array, nan, inf
+from copy import deepcopy
 
 
 def load_data(data_config):
@@ -43,7 +44,10 @@ def reverse_convert_datatypes(data):
         if 'py/tuple' in data and len(data) == 1:
             return reverse_convert_datatypes(data['py/tuple'])
         if 'py/object' in data and data['py/object'] == 'numpy.ndarray':
-            return array(data['values'])
+            if 'dtype' in data:
+                return array(data['values'], dtype=data['dtype'])
+            else:
+                return array(data['values'])
         for key in data:
             data[key] = reverse_convert_datatypes(data[key])
         return data
@@ -101,7 +105,7 @@ class ExperimentData:
 
     def get_record(self):
         """Get sacred record for experiment."""
-        return reverse_convert_datatypes(self.record)
+        return reverse_convert_datatypes(deepcopy(self.record))
 
     def get_artifact(self, name):
         """Return the produced outputfile with given name as file-like object."""
@@ -159,7 +163,7 @@ class ExperimentData:
             archive.writestr(artifact['name'], self.fs.get(artifact['file_id']).read())
         # following the FileStorageObserver, we need to create different files for config,
         # output, info and the rest of the record
-        record = self.get_record()
+        record = deepcopy(self.record)
         archive.writestr('config.json', dumps(record['config']))
         archive.writestr('cout.txt', record['captured_out'])
         archive.writestr('info.json', dumps(record['info']))
