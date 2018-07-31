@@ -3,7 +3,7 @@ Corresponding implementations for the IROS 2018 paper ["Modular Sensor Fusion fo
 <table>
   <tr>
      <td>Fusion with Synthia RAND</td>
-     <td>Fusion wuth Cityscapes</td>
+     <td>Fusion with Cityscapes</td>
   </tr>
   <tr>
     <td>
