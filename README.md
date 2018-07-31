@@ -1,4 +1,4 @@
-Corresponding implementations for the IROS 2018 paper "Modular Sensor Fusion for Semantic Segmentation" by Hermann Blum, Abel Gawel, Roland Siegwart and Cesar Cadena.
+Corresponding implementations for the IROS 2018 paper ["Modular Sensor Fusion for Semantic Segmentation"](https://arxiv.org/abs/1807.11249) by Hermann Blum, Abel Gawel, Roland Siegwart and Cesar Cadena.
 
 <table>
   <tr>
